@@ -1,4 +1,4 @@
-# Durable policy and lifecycle telemetry (source/local-test only)
+# Durable policy, lifecycle and metric telemetry (source/local-test only)
 
 This is a bounded observer outbox, not an execution receipt, authority ledger,
 hosted monitoring system or production alert service. No endpoint, provider,
@@ -75,9 +75,11 @@ and optional exact owner/role/ACL binding before writes and again after the shar
 clock lock. DB time cannot regress. Owner DDL/ACL maintenance requires draining;
 attestation is not protection from concurrent owner compromise.
 
-Runtime gets SELECT, payload-column INSERT, clock-column UPDATE and delivery-
-metadata UPDATE only: no payload UPDATE, DELETE, TRUNCATE, settings/ledger writes,
-DDL or grant authority. A stolen runtime credential can forge observer inserts or
+The v1/v2 runtime gets SELECT, payload-column INSERT, clock-column UPDATE and
+delivery-metadata UPDATE only: no source payload UPDATE, DELETE, TRUNCATE,
+settings/ledger writes, DDL or grant authority. Opt-in v3 additionally grants
+metric-window payload/hash and aggregate-total UPDATE, never source/alert payload
+UPDATE. A stolen runtime credential can forge observer inserts or
 delivery metadata; this trusted-host outbox is not hostile-host assurance.
 
 ## Replay, leases, retention and limits
@@ -231,6 +233,127 @@ history or silently restarting at genesis. The owner must monitor capacity and
 plan a separately reviewed custody migration. These are row-count ceilings,
 not measured byte, throughput or storage-cost guarantees.
 
+## Opt-in metric counts and threshold alert outbox
+
+This extends the **existing observer schema**, not the authority ledger or a new
+runtime. Set `lifecycle:true`, `metrics:true` and explicit `metricSettings` on the
+owner migration and **every** store sharing the v3 schema. Defaults remain v1;
+v2/v1 callers reject a v3 catalog. Drain old runtimes before upgrading. Additive
+`007_managed_metrics_alerts` preserves frozen `005`/`006`. Apply the existing
+telemetry and lifecycle role templates, then the
+[v3 metric grants](./ops/postgres/metrics-grants.sql.template). Supply
+`expectedOwner` for distinct least-privilege runtime assurance; catalog-only
+initialization is not role qualification.
+
+Rules count accepted, committed observer packets by tenant and DB **ingestion**
+time, not the source event's occurrence time or all real traffic:
+
+| Rule | Exact recorded evidence | Not established |
+| --- | --- | --- |
+| `rate_denied` | policy rate rejection | budget pressure or expenditure |
+| `control_disabled` | intentional policy disable rejection | dependency failure |
+| `control_failed` | failed-closed control rejection | the root cause of failure |
+| `policy_timeout` | recorded policy timeout | remote cancellation/termination |
+| `policy_failure` | recorded failed-closed policy error | typed DB/provider/audit failure |
+| `lease_expiry_observed` | execution/cleanup/recovery `*_lease_expired` audit label | actual lease age, backlog size, provider destruction |
+
+Unknown rules, request-supplied formulas, duplicate rule IDs and accessor fields
+are rejected. Configure 1–6 rules, each with threshold 1–1,000,000 and fixed
+window 1,000–86,400,000 ms. Rules are canonically sorted and immutable settings
+and all three migration/catalog hashes must match. Changing thresholds or
+capacities is a separately reviewed migration, not a hot reload.
+
+```js
+// Trusted checkout-only composition, not an npm-installed managed runtime.
+const metricSettings = {
+  maxSources: 10000, maxSourcesPerTenant: 1000,
+  maxWindows: 1000, maxWindowsPerTenant: 100,
+  maxAlerts: 1000, maxAlertsPerTenant: 100,
+  rules: [
+    { rule_id: 'rate_denied', threshold: 10, window_ms: 60000 },
+    { rule_id: 'lease_expiry_observed', threshold: 1, window_ms: 60000 },
+  ],
+};
+const metricsOptions = {
+  ...hostTelemetryOptions, lifecycle: true, metrics: true, metricSettings,
+};
+const policyStore = await createPostgresManagedTelemetryStore(metricsOptions);
+const lifecycleStore = await createPostgresManagedTelemetryStore({
+  ...metricsOptions, eventKind: 'lifecycle',
+});
+const alertStore = await createPostgresManagedTelemetryStore({
+  ...metricsOptions, eventKind: 'alert',
+});
+const alertDrainer = createManagedTelemetryDrainer({
+  store: alertStore, eventKind: 'alert', deliver: hostReviewedRedactedAlertSink,
+  deliveryTimeoutMs: 1000, storeTimeoutMs: 1000, maxBatch: 16,
+});
+// Bind policy/lifecycle recorders to the corresponding original stores. Supply
+// alertDrainer to the explicitly enabled local host; it schedules only after
+// startup and closes after ingress/effect capabilities and source recorders.
+// Close all stores afterwards. No sink, credentials or network calls are built.
+```
+
+One clock-serialized transaction inserts the original policy/lifecycle source,
+updates fixed-window counts, creates at most one threshold alert and records
+permanent exact-source custody. Lifecycle checkpoints advance in that same
+commit. A failure rolls back all parts. Concurrent/exact replay matches the
+original source identity/hash and retained contributions without double-counting;
+retained lifecycle-batch replay also verifies metric custody. Different policy
+attempts have different random IDs and can count separately. This is not
+cross-request exactly-once telemetry.
+
+The aggregate hash covers **source/window row counts**, not their identities or
+complete contents. Initialization and `stats()` check catalog/settings, totals
+and retained window/alert relationships; they do not authenticate every custody
+row. Exact append/batch replay validates its source packet and contributions,
+and touched/read windows and delivered alerts validate their closed payloads and
+hashes. Same-count source replacement or a window hash change can pass aggregate
+health until that row is exercised. A schema owner or stolen runtime credential
+capable of consistently forging observer state is not defeated by these hashes.
+They are trusted-host replay/corruption checks, not signed independent evidence
+or a global tamper-proof audit. Observer health never authorizes execution.
+
+At `count === threshold`, one deterministic alert ID binds tenant, rule, window
+and rules hash. Further packets in that window increase count without emitting
+another alert. Adjacent windows can each emit an alert: there is **no global
+cooldown, hysteresis or severity-escalation policy**. The closed alert includes
+hash-only identity, rule/window/threshold/count, `ingested_observations_only`
+coverage, source-specific self-attestation and `production_qualified:false`.
+It grants no authority and contains no raw arguments, errors or credentials.
+
+Delivery reuses the original bounded at-least-once drainer, lease/generation
+fences and retry codes. The host sink must deduplicate `event_ref`. A committed
+alert ACK records its exact existing acknowledgement hash/time in the permanent
+window **atomically** with the outbox ACK. Missing pending alerts, orphan alerts,
+altered alert packets and inconsistent retained ACKs fail closed. Owner retention
+can prune only old acknowledged delivery rows. Exact replay after legitimate
+pruning does not recreate an event or alert. No integrity failure self-repairs.
+
+Upgrade baselines every surviving v1/v2 policy and lifecycle delivery row as
+`legacy_uncounted`, preserving its exact identity/hash and validating stored
+lifecycle metadata. It creates no historical windows or alerts. Already-pruned
+history is unavailable and is not reconstructed. A later new source projection
+of that unavailable history is a new ingestion, not complete historical metrics.
+Upgrade rolls back if retained history exceeds the explicit custody cap; plan
+capacity for the combined surviving policy/lifecycle rows first.
+
+`readMetrics({tenant_hash,signal})` is a trusted checkout-only read, not an HTTP
+endpoint, authentication decision or receipt. It returns the latest 64 validated
+windows, a truthful `truncated` flag and retained/legacy source counts. It is not
+a complete history, cursor or sink-delivery proof. The host owns tenant access.
+
+Each global and tenant source/window/alert cap is 1–1,000,000. Source custody,
+windows and aggregate totals are **lifetime retained**, not periodically pruned.
+ACK pruning frees delivery capacity only. At lifetime capacity new observations
+fail closed; exact retained replay remains possible. Monitor both row count and
+drift, and plan a separately reviewed custody migration. Deleting custody,
+starting a replacement schema or changing observer IDs is not a safe automatic
+reset. These ceilings do not promise sustained operation, bytes, cost or scale.
+Integrity verification scans retained state on each transaction under bounded
+SQL waits; maximum-capacity throughput/SLOs and safe long-term custody management
+require separate operational measurement and qualification.
+
 ## Evidence and remaining Gate 5 work
 
 Focused deterministic tests and guarded real PostgreSQL tests cover capacity,
@@ -240,7 +363,9 @@ and CA TLS on Node 20/22/24. Standalone subprocess tests exercise hung deadlines
 without test-only keep-alive timers, late settlement/no acknowledgement, idle
 process exit and listener disposal. Local tests cannot establish hosted sink custody,
 monitoring SLOs, HA/restore/rotation, WAF, real alert delivery or an observed
-operator response drill. Accurate historical budget/cost/lease measurements,
-dependency-failure alerts, threshold rules, hosted sink custody and an observed
+operator response drill. Opt-in v3 adds source-count thresholds and an alert
+outbox, not a hosted alert service. Accurate historical budget/cost/lease
+measurements, cleanup backlog/failure, typed dependency/provider/audit/DB-failure
+events, broader cooldown policy, hosted sink custody and an observed
 alert/response drill remain separate work. No provider or live agent traffic is
 protected by this tranche. See [OPERATIONAL_QUALIFICATION.md](./OPERATIONAL_QUALIFICATION.md).

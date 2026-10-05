@@ -1,0 +1,19 @@
+-- Explicit v3 additions AFTER telemetry and lifecycle grants, dedicated owner.
+BEGIN;
+GRANT SELECT ON __TELEMETRY_SCHEMA__.telemetry_metric_alerts,
+  __TELEMETRY_SCHEMA__.telemetry_metric_settings,__TELEMETRY_SCHEMA__.telemetry_metric_sources,
+  __TELEMETRY_SCHEMA__.telemetry_metric_totals,__TELEMETRY_SCHEMA__.telemetry_metric_windows TO __TELEMETRY_RUNTIME__;
+GRANT INSERT (event_ref,event_hash,tenant_hash,payload,created_ms)
+  ON __TELEMETRY_SCHEMA__.telemetry_metric_alerts TO __TELEMETRY_RUNTIME__;
+GRANT UPDATE (state,generation,attempts,claim_hash,lease_expires_ms,next_attempt_ms,acknowledged_ms,acknowledgement_hash,last_error_code)
+  ON __TELEMETRY_SCHEMA__.telemetry_metric_alerts TO __TELEMETRY_RUNTIME__;
+GRANT INSERT (source_kind,event_ref,event_hash,tenant_hash,payload,state_hash)
+  ON __TELEMETRY_SCHEMA__.telemetry_metric_sources TO __TELEMETRY_RUNTIME__;
+GRANT INSERT (tenant_hash,rule_id,window_start_ms,payload,state_hash)
+  ON __TELEMETRY_SCHEMA__.telemetry_metric_windows TO __TELEMETRY_RUNTIME__;
+GRANT UPDATE (payload,state_hash) ON __TELEMETRY_SCHEMA__.telemetry_metric_windows TO __TELEMETRY_RUNTIME__;
+GRANT UPDATE (source_count,window_count,state_hash)
+  ON __TELEMETRY_SCHEMA__.telemetry_metric_totals TO __TELEMETRY_RUNTIME__;
+COMMIT;
+-- No DELETE/TRUNCATE, immutable alert/source payload updates, settings/ledger
+-- writes, DDL, grants or execution/cleanup/recovery credentials.

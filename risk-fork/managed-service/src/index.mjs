@@ -48,6 +48,7 @@ export { createManagedTelemetryDrainer } from './telemetry-drainer.mjs';
 export { createManagedLifecycleObserver } from './lifecycle-observer.mjs';
 export { normalizeManagedLifecycleEvent } from './lifecycle-event.mjs';
 export { createManagedTelemetryEvent, normalizeManagedTelemetryEvent } from './telemetry-event.mjs';
+export { createManagedMetricAlert, normalizeManagedMetricAlert } from './metric-event.mjs';
 export { createManagedProviderRegistry } from './provider-registry.mjs';
 export { MemoryManagedServiceStore } from './memory-store.mjs';
 export {

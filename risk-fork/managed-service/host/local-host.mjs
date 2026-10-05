@@ -48,7 +48,7 @@ export function createManagedRiskForkLocalHost(options = {}) {
     'providerRegistry', 'executionPrincipal', 'cleanupPrincipal', 'recoveryPrincipal',
     'workerId', 'deliveryStore', 'deliveryEncryptionKey', 'deliveryKeyId', 'deliveryRetiredDecryptionKeys',
     'deliveryNamespace', 'workerOptions', 'reaperOptions', 'publicPort', 'workerPort',
-    'maxBodyBytes', 'maxConnections', 'deadlineMs', 'requestPolicy', 'telemetryDrainer','lifecycleObserver','lifecycleDrainer',
+    'maxBodyBytes', 'maxConnections', 'deadlineMs', 'requestPolicy', 'telemetryDrainer','lifecycleObserver','lifecycleDrainer','alertDrainer',
   ], 'local host options');
   if (options.enabled !== undefined && typeof options.enabled !== 'boolean') {
     throw new TypeError('enabled must be boolean');
@@ -56,6 +56,8 @@ export function createManagedRiskForkLocalHost(options = {}) {
   if (options.enabled !== true) return disabledHost();
   const requestPolicy = options.requestPolicy, telemetryDrainer = options.telemetryDrainer;
   const lifecycleObserver = options.lifecycleObserver, lifecycleDrainer = options.lifecycleDrainer;
+  const alertDrainer = options.alertDrainer;
+  if (alertDrainer !== undefined && !isManagedTelemetryDrainer(alertDrainer)) throw new TypeError('An original managed alert drainer is required');
   if (lifecycleObserver !== undefined && !isManagedLifecycleObserver(lifecycleObserver)) throw new TypeError('An original managed lifecycle observer is required');
   if (lifecycleDrainer !== undefined && !isManagedTelemetryDrainer(lifecycleDrainer)) throw new TypeError('An original managed lifecycle drainer is required');
   const requestPolicyTimeoutMs = options.deadlineMs;
@@ -187,12 +189,13 @@ export function createManagedRiskForkLocalHost(options = {}) {
       // Revoke effect capabilities before waiting on observational callbacks.
       // Store lifetime remains owned by the caller. Settled:false is preserved,
       // never reported as callback termination or durable delivery proof.
-      let recording, observer, lifecycle, lifecycleDelivery;
+      let recording, observer, lifecycle, lifecycleDelivery, alertDelivery;
       try { lifecycle = await lifecycleObserver?.close({ timeoutMs: 1000 }); } catch (error) { errors.push(error); }
       try { recording = await requestPolicy?.flushTelemetry({ timeoutMs: 1000 }); } catch (error) { errors.push(error); }
       try { observer = await telemetryDrainer?.close({ timeoutMs: 1000 }); } catch (error) { errors.push(error); }
       try { lifecycleDelivery = await lifecycleDrainer?.close({ timeoutMs: 1000 }); } catch (error) { errors.push(error); }
-      telemetryClose = Object.freeze({ recording,observer,lifecycle,lifecycle_delivery: lifecycleDelivery });
+      try { alertDelivery = await alertDrainer?.close({ timeoutMs: 1000 }); } catch (error) { errors.push(error); }
+      telemetryClose = Object.freeze({ recording,observer,lifecycle,lifecycle_delivery: lifecycleDelivery,alert_delivery: alertDelivery });
       if (errors.length) throw errors[0];
     })();
     return closePromise;
@@ -214,6 +217,7 @@ export function createManagedRiskForkLocalHost(options = {}) {
         reaper.start();
         telemetryDrainer?.start();
         lifecycleDrainer?.start();
+        alertDrainer?.start();
         lifecycleObserver?.start();
         started = true;
         return Object.freeze({
@@ -244,6 +248,7 @@ export function createManagedRiskForkLocalHost(options = {}) {
         telemetry_delivery: telemetryDrainer?.health(),
         lifecycle_observer: lifecycleObserver?.health(),
         lifecycle_delivery: lifecycleDrainer?.health(),
+        alert_delivery: alertDrainer?.health(),
         telemetry_close: telemetryClose,
         production_qualified: false,
         live_traffic_protected: false,

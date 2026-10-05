@@ -1,8 +1,9 @@
 import { readFile } from 'node:fs/promises';
-import { sha256Ref } from '../../src/canonical.mjs';
+import { canonicalize, sha256Ref } from '../../src/canonical.mjs';
 import { quotePostgresAuthorityIdentifier } from '../../src/adapters/postgres-authority-migrator.mjs';
 import { assertAllowedKeys, assertPlainRecord, deepFreeze, managedError, requireInteger } from './validation.mjs';
 import { policyDbInteger, checkPolicySignal } from './postgres-request-policy-config.mjs';
+import { metricSettingsHash, normalizeMetricSettings } from './metric-event.mjs';
 
 export { policyDbInteger as telemetryDbInteger, checkPolicySignal as checkTelemetrySignal };
 export const TELEMETRY_TABLES = Object.freeze(['telemetry_clock','telemetry_events','telemetry_schema_migrations','telemetry_settings']);
@@ -12,6 +13,10 @@ export const TELEMETRY_UPDATE_COLUMNS = Object.freeze(['state','generation','att
   'next_attempt_ms','acknowledged_ms','acknowledgement_hash','last_error_code']);
 export const LIFECYCLE_TABLES = Object.freeze(['telemetry_lifecycle_checkpoints','telemetry_lifecycle_events','telemetry_lifecycle_sweeps']);
 export const LIFECYCLE_INSERT_COLUMNS = Object.freeze(['event_ref','event_hash','tenant_hash','invocation_hash','source_sequence','payload','created_ms']);
+export const METRIC_TABLES = Object.freeze(['telemetry_metric_alerts','telemetry_metric_settings','telemetry_metric_sources','telemetry_metric_totals','telemetry_metric_windows']);
+export const METRIC_ALERT_INSERT_COLUMNS = Object.freeze(['event_ref','event_hash','tenant_hash','payload','created_ms']);
+export const METRIC_SOURCE_INSERT_COLUMNS = Object.freeze(['source_kind','event_ref','event_hash','tenant_hash','payload','state_hash']);
+export const METRIC_WINDOW_INSERT_COLUMNS = Object.freeze(['tenant_hash','rule_id','window_start_ms','payload','state_hash']);
 
 export function normalizeTelemetryLimits(value) {
   assertPlainRecord(value, 'telemetry limits');
@@ -27,10 +32,12 @@ export function normalizeTelemetryLimits(value) {
 export function normalizeTelemetryOptions(options, extraKeys = []) {
   assertPlainRecord(options, 'PostgreSQL telemetry options');
   assertAllowedKeys(options, ['pool','connectionString','schemaName','requireTls','tls','maxConnections',
-    'connectionTimeoutMs','statementTimeoutMs','deploymentMode','disposableDb','limits','expectedOwner','lifecycle','eventKind', ...extraKeys], 'PostgreSQL telemetry options');
-  const lifecycle = options.lifecycle ?? false, eventKind = options.eventKind ?? 'policy';
-  if (typeof lifecycle !== 'boolean' || !['policy','lifecycle'].includes(eventKind)
-    || (eventKind === 'lifecycle' && !lifecycle)) throw new TypeError('Invalid telemetry lifecycle selection');
+    'connectionTimeoutMs','statementTimeoutMs','deploymentMode','disposableDb','limits','expectedOwner','lifecycle','eventKind','metrics','metricSettings', ...extraKeys], 'PostgreSQL telemetry options');
+  const lifecycle = options.lifecycle ?? false, metrics = options.metrics ?? false, eventKind = options.eventKind ?? 'policy';
+  if (typeof lifecycle !== 'boolean' || typeof metrics !== 'boolean' || !['policy','lifecycle','alert'].includes(eventKind)
+    || (eventKind === 'lifecycle' && !lifecycle) || (metrics && !lifecycle) || (eventKind === 'alert' && !metrics)) throw new TypeError('Invalid telemetry version selection');
+  if (!metrics && options.metricSettings !== undefined) throw new TypeError('Metric settings require explicit metrics=true');
+  const metricSettings = metrics ? normalizeMetricSettings(options.metricSettings) : undefined;
   if ((options.deploymentMode ?? 'local_test') !== 'local_test') {
     throw managedError('Telemetry is source-only local_test', 'TELEMETRY_NOT_QUALIFIED', 503);
   }
@@ -43,7 +50,7 @@ export function normalizeTelemetryOptions(options, extraKeys = []) {
   const quotedSchema = quotePostgresAuthorityIdentifier(schemaName);
   if (options.expectedOwner !== undefined) quotePostgresAuthorityIdentifier(options.expectedOwner);
   const limits = normalizeTelemetryLimits(options.limits);
-  return Object.freeze({ schemaName, quotedSchema, limits, settingsHash: sha256Ref(limits), requireTls,lifecycle,eventKind,
+  return Object.freeze({ schemaName, quotedSchema, limits, settingsHash: sha256Ref(limits), requireTls,lifecycle,eventKind,metrics,metricSettings,
     expectedOwner: options.expectedOwner,
     statementTimeoutMs: requireInteger(options.statementTimeoutMs ?? 2000, 'statementTimeoutMs', { min: 100, max: 30_000 }) });
 }
@@ -56,18 +63,30 @@ export async function lifecycleMigration(schemaName) {
   const source = (await readFile(new URL('../migrations/006_managed_lifecycle.pg.sql', import.meta.url), 'utf8')).replace(/\r\n?/g, '\n');
   return Object.freeze({ hash: sha256Ref(source),sql: source.replaceAll('__RISK_FORK_TELEMETRY_SCHEMA__',quotePostgresAuthorityIdentifier(schemaName)) });
 }
+export async function metricsMigration(schemaName) {
+  const source = (await readFile(new URL('../migrations/007_managed_metrics_alerts.pg.sql',import.meta.url),'utf8')).replace(/\r\n?/g,'\n');
+  return Object.freeze({ hash: sha256Ref(source),sql: source.replaceAll('__RISK_FORK_TELEMETRY_SCHEMA__',quotePostgresAuthorityIdentifier(schemaName)) });
+}
 
 export async function verifyTelemetrySettings(client, config, hash) {
   const settings = await client.query(`SELECT version,migration_hash FROM ${config.quotedSchema}.telemetry_schema_migrations ORDER BY version`);
   const extension = config.lifecycle ? await lifecycleMigration(config.schemaName) : null;
-  if (settings.rowCount !== (extension ? 2 : 1) || settings.rows[0].version !== 1 || settings.rows[0].migration_hash !== hash
-    || (extension && (settings.rows[1].version !== 2 || settings.rows[1].migration_hash !== extension.hash))) throw new TypeError('Telemetry migration drift');
+  const metrics = config.metrics ? await metricsMigration(config.schemaName) : null;
+  if (settings.rowCount !== (metrics ? 3 : extension ? 2 : 1) || settings.rows[0].version !== 1 || settings.rows[0].migration_hash !== hash
+    || (extension && (settings.rows[1].version !== 2 || settings.rows[1].migration_hash !== extension.hash))
+    || (metrics && (settings.rows[2].version !== 3 || settings.rows[2].migration_hash !== metrics.hash))) throw new TypeError('Telemetry migration drift');
   const result = await client.query(`SELECT settings_hash,max_events,max_events_per_tenant,lease_ms,retry_ms,retention_ms
     FROM ${config.quotedSchema}.telemetry_settings WHERE singleton=true`);
   const row = result.rows[0], l = config.limits;
   if (result.rowCount !== 1 || row.settings_hash !== config.settingsHash || row.max_events !== l.maxEvents
     || row.max_events_per_tenant !== l.maxEventsPerTenant || row.lease_ms !== l.leaseMs
     || row.retry_ms !== l.retryMs || row.retention_ms !== l.retentionMs) throw new TypeError('Telemetry settings drift');
+  if (config.metrics) {
+    const bound = await client.query(`SELECT settings_hash,payload FROM ${config.quotedSchema}.telemetry_metric_settings WHERE singleton=true`);
+    const state = bound.rows[0], normalized = state ? normalizeMetricSettings(state.payload) : null;
+    if (bound.rowCount !== 1 || state.settings_hash !== metricSettingsHash(config.metricSettings)
+      || metricSettingsHash(normalized) !== state.settings_hash || canonicalize(normalized) !== canonicalize(state.payload)) throw new TypeError('Metric settings drift');
+  }
 }
 
 export function telemetryClaimHash(value) {

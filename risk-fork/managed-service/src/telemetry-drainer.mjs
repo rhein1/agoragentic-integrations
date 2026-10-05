@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { assertAllowedKeys, assertPlainRecord, requireInteger } from './validation.mjs';
 import { normalizeManagedTelemetryEvent } from './telemetry-event.mjs';
 import { normalizeManagedLifecycleEvent } from './lifecycle-event.mjs';
+import { normalizeManagedMetricAlert } from './metric-event.mjs';
 import { createManagedDeadline } from './deadline.mjs';
 
 const branded = new WeakSet();
@@ -20,8 +21,8 @@ export function createManagedTelemetryDrainer(options) {
   assertPlainRecord(options,'telemetry drainer options');
   assertAllowedKeys(options,['store','deliver','deliveryTimeoutMs','storeTimeoutMs','intervalMs','maxBatch','eventKind'],'telemetry drainer options');
   const kind = options.eventKind ?? 'policy';
-  if (!['policy','lifecycle'].includes(kind)) throw new TypeError('Invalid telemetry eventKind');
-  const normalize = kind === 'lifecycle' ? normalizeManagedLifecycleEvent : normalizeManagedTelemetryEvent;
+  if (!['policy','lifecycle','alert'].includes(kind)) throw new TypeError('Invalid telemetry eventKind');
+  const normalize = kind === 'alert' ? normalizeManagedMetricAlert : kind === 'lifecycle' ? normalizeManagedLifecycleEvent : normalizeManagedTelemetryEvent;
   const store = options.store;
   if (!store || typeof options.deliver !== 'function') throw new TypeError('Telemetry drainer requires trusted store and sink');
   const storeMethods = {};
