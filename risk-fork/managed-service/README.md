@@ -384,4 +384,43 @@ capabilities, never HTTP routes. No public demo or hosted protection is activate
 
 ## Evidence truth
 
+### Bounded observer audit reads
+
+Trusted checkout-only callers with a current `audit:read` principal can use
+`controlPlane.listAuditInvocations(principal, { after_ref, upper_ref, limit })`
+and `controlPlane.readAuditWindow(principal, invocationRef,
+{ after_sequence, prior_event_hash, limit })`. These add no HTTP route, provider
+callback, writer lock, migration, authority or receipt schema. Limits are 1–64.
+Stores without the new methods remain constructible; attempting these reads
+fails with `AUDIT_PROJECTION_UNSUPPORTED`, never an unbounded fallback.
+
+An initial invocation page pins the tenant's current highest ASCII invocation
+reference and rejects a caller-supplied `upper_ref`. Continuations must retain
+that returned `upper_ref`; SQL explicitly uses
+`COLLATE "C"`, matching the memory fixture's byte order. Pages return only
+invocation references and audit count/head anchors, not operations, resource
+references, credentials or payloads. A cursor is **sweep-local**, not a permanent
+watermark. After a finite sweep completes, start again with no cursor: a new
+invocation or append behind the previous cursor is found on a later sweep.
+These are tenant-authenticated reads; there is no cross-tenant discovery API.
+
+Audit windows read the invocation anchor, checkpoint row and at most 64 following
+events in one read-only repeatable-read snapshot. Genesis requires sequence zero
+and a null hash. A continuation requires the exact previously verified event
+hash; gaps, crossing, altered hashes, time regression, ahead checkpoints and
+truncated windows fail. `complete` is relative to that snapshot only, and its
+tail must equal the invocation count/head. A later append remains discoverable.
+A later window validates extension of a known prefix, not all historical rows
+before that checkpoint. Re-verify from genesis if the checkpoint is not trusted.
+The unchanged full-chain reader remains available.
+
+Each bounded PostgreSQL read sets a transaction-local five-second statement
+timeout; it changes no server/pool-wide policy. Result size is bounded, but
+collated scan cost, connection acquisition, sweep cadence and historical audit
+retention still require host capacity/deadline policy and operational testing.
+No automatic projector, durable checkpoint, sink, alert or lifecycle metrics
+producer is enabled by these reader APIs. The observer must append deterministic
+events before advancing a durable checkpoint, rescan all configured tenants
+fairly, and never make cleanup/recovery wait for observer success.
+
 The audit reader takes the invocation anchor and event list from one atomic store snapshot, then rejects empty/truncated chains by comparing the count and tail hash. Every mutation also rejects an audit timestamp earlier than the prior event before committing; PostgreSQL performs the predecessor/hash/time predicate in the decisive insert so a failed append rolls back the surrounding state change. The chain still proves only that one control-plane store produced a consistent sequence of hashes. It is `control_plane_self_attested`; it is not an independent signature, isolation proof, deployment receipt, or live-traffic proof. Every invocation read recomputes the tenant/idempotency/provider-binding recovery key. Before execution, the control plane also recomputes the stored operation and client-request hashes. Before cleanup, it requires the cleanup plan to be an exact bijection with the recorded resources. Terminal cleanup additionally requires an immutable normalized snapshot of the existing Risk Fork cleanup-evidence contract and the exact provider binding's verifier callback. Its absolute freshness deadline is enforced again inside the store transaction against the authoritative store clock, including after PostgreSQL lock waits. In this source tranche those callbacks are demonstrated only by local fixtures, so they are not qualified external provider observations.

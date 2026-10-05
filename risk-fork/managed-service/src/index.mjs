@@ -26,6 +26,7 @@ export {
 export {
   createManagedAuditEvent,
   verifyManagedAuditChain,
+  verifyManagedAuditWindow,
 } from './audit.mjs';
 export {
   createManagedAuthenticator,

@@ -128,6 +128,20 @@ not a measured byte, throughput or managed-storage cost guarantee.
 
 ## Evidence and remaining Gate 5 work
 
+The control plane now provides tenant-authenticated bounded invocation pages
+and verified audit windows for a future lifecycle producer; see
+[bounded observer audit reads](./README.md#bounded-observer-audit-reads).
+Windows preserve the existing self-attested audit schema and expose only its
+hash-bearing metadata, not discarded historical details. Sweep cursors must
+reset after each pinned finite cycle so behind-cursor commits are rediscovered.
+This read path adds no checkpoint migration, automatic producer, sink or alert
+and never runs inside authoritative mutations or provider/cleanup callbacks.
+The existing policy outbox remains policy-only. Lifecycle integration requires
+its own reviewed observer-schema migration, deterministic event identities,
+checkpoint-last persistence, fair bounded scheduling and outage/retention tests;
+mapping an audit transition to `policy_allowed` or `provider_succeeded` is not
+permitted evidence.
+
 Focused deterministic tests and guarded real PostgreSQL tests cover capacity,
 replay/restart, unknown/late commits, stale claims, roles, retention, drift, abort,
 backoff and factory TLS positive/wrong-CA rejection. CI supplies disposable PG16
