@@ -47,7 +47,7 @@ const store = await createPostgresManagedRequestPolicyStore({
 const requestPolicy = createManagedRequestPolicy({
   readControl: (signal) => store.readControl(signal),
   consumeRateLimit: (request) => store.consumeRateLimit(request),
-  emitTelemetry: hostRedactedTelemetry,
+  emitTelemetry: hostRedactedTelemetry, // Best-effort compatibility, not durability.
 });
 // Supply requestPolicy to both HTTP factories and the explicit local host.
 // Shut ingress before awaiting store.close(); never expose these callbacks as
@@ -166,6 +166,13 @@ not deployed-role qualification. Hosted TLS/key custody/rotation, restore/
 HA/failover, durable alert delivery, overload SLOs and an atomic effect-time
 broker fence/cancellation remain separate qualification work. This backend is
 not coupled atomically to an execution ledger or provider call.
+
+The wrapper also accepts an optional, mutually exclusive `recordTelemetry`
+callback. The [independent observer outbox](./TELEMETRY.md) implements exact event
+append/replay, bounded capacity and lease-fenced delivery without changing this
+frozen policy ledger. Critical requests record a candidate and recheck control
+after the append wait; cleanup/recovery never inherit telemetry availability.
+This does not qualify hosted monitoring or alert delivery.
 
 ## Verification
 

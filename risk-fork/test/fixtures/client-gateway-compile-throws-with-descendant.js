@@ -1,7 +1,7 @@
 'use strict';
 
 const { spawn } = require('node:child_process');
-const { existsSync, writeFileSync } = require('node:fs');
+const { existsSync, renameSync, writeFileSync } = require('node:fs');
 const path = require('node:path');
 
 const readyFile = path.join(__dirname, 'compile-descendant.ready');
@@ -20,7 +20,9 @@ const descendant = spawn(process.execPath, [
   },
   stdio: 'ignore',
 });
-writeFileSync(path.join(__dirname, 'compile-descendant.pid'), String(descendant.pid));
+if (!Number.isSafeInteger(descendant.pid) || descendant.pid <= 0) {
+  throw new Error('synthetic descendant spawn failure');
+}
 
 const waitState = new Int32Array(new SharedArrayBuffer(4));
 const readyDeadline = Date.now() + 2000;
@@ -28,6 +30,12 @@ while (!existsSync(readyFile) && Date.now() < readyDeadline) {
   Atomics.wait(waitState, 0, 0, 10);
 }
 if (!existsSync(readyFile)) throw new Error('synthetic descendant readiness failure');
+
+// Publish a complete PID only after its SIGTERM-resistant child is ready.
+// A successful read of a newly opened/truncated file is not readiness evidence.
+const pidFile = path.join(__dirname, 'compile-descendant.pid');
+writeFileSync(`${pidFile}.pending`, String(descendant.pid));
+renameSync(`${pidFile}.pending`, pidFile);
 
 process.exit = () => {};
 process.kill = () => false;

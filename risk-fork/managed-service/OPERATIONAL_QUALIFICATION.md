@@ -74,8 +74,12 @@ instances, fail-closed backend loss, bounded 429 retry, deadlines and retry
 storms. Reserve cleanup/recovery capacity. Test disable changes while requests
 wait; prove an effect-time broker fence rejects late execution and can stop
 in-flight work. The source policy's pre-call decision cannot prove that last
-property. Bounded policy telemetry is not a durable audit or alert delivery
-system. Connect durable redacted metrics/alerts for budget pressure, lease
+property. Optional [durable policy telemetry](./TELEMETRY.md) now has a source-only
+PostgreSQL observer outbox, bounded recording and lease-fenced delivery. This is
+not an authority audit or provisioned alert delivery system. Qualify the exact
+dedicated telemetry roles/TLS, sink custody, capacity/retention, recovery and
+observed operator response; preserve failed/hung/unknown outcomes. Connect
+durable redacted metrics/alerts for budget pressure, lease
 expiry, provider errors, cleanup backlog/failure, audit failures and DB health,
 and retain an observed alert/response drill without raw tokens or arguments.
 

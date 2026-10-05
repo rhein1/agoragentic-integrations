@@ -229,6 +229,67 @@ jobs:
         run: |
           npm --prefix risk-fork ci --ignore-scripts --no-audit --no-fund
           npm --prefix risk-fork/managed-service ci --ignore-scripts --no-audit --no-fund
+      - name: Enable CA-verified TLS on the ephemeral PostgreSQL service
+        shell: bash
+        env:
+          POSTGRES_CONTAINER_ID: ${{ job.services.postgres.id }}
+        run: |
+          set -euo pipefail
+          tls_dir="$(mktemp -d)"
+          trap 'rm -rf -- "$tls_dir"' EXIT
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+            -keyout "$tls_dir/ca.key" \
+            -out "$tls_dir/ca.crt" \
+            -subj '/CN=Risk Fork CI CA'
+          openssl req -newkey rsa:2048 -nodes \
+            -keyout "$tls_dir/server.key" \
+            -out "$tls_dir/server.csr" \
+            -subj '/CN=localhost'
+          cat > "$tls_dir/server.ext" <<'EOF'
+          subjectAltName=DNS:localhost,IP:127.0.0.1
+          extendedKeyUsage=serverAuth
+          EOF
+          openssl x509 -req -days 1 \
+            -in "$tls_dir/server.csr" \
+            -CA "$tls_dir/ca.crt" \
+            -CAkey "$tls_dir/ca.key" \
+            -CAcreateserial \
+            -out "$tls_dir/server.crt" \
+            -extfile "$tls_dir/server.ext"
+          chmod 0600 "$tls_dir/server.key"
+          docker cp "$tls_dir/ca.crt" "$POSTGRES_CONTAINER_ID:/var/lib/postgresql/ca.crt"
+          docker cp "$tls_dir/server.crt" "$POSTGRES_CONTAINER_ID:/var/lib/postgresql/server.crt"
+          docker cp "$tls_dir/server.key" "$POSTGRES_CONTAINER_ID:/var/lib/postgresql/server.key"
+          docker exec --user root "$POSTGRES_CONTAINER_ID" \
+            chown postgres:postgres \
+              /var/lib/postgresql/ca.crt \
+              /var/lib/postgresql/server.crt \
+              /var/lib/postgresql/server.key
+          docker exec --user root "$POSTGRES_CONTAINER_ID" \
+            chmod 0600 /var/lib/postgresql/server.key
+          docker exec "$POSTGRES_CONTAINER_ID" psql \
+            -U risk_fork_managed -d risk_fork_managed_test -v ON_ERROR_STOP=1 \
+            -c "ALTER SYSTEM SET ssl = 'on'" \
+            -c "ALTER SYSTEM SET ssl_ca_file = '/var/lib/postgresql/ca.crt'" \
+            -c "ALTER SYSTEM SET ssl_cert_file = '/var/lib/postgresql/server.crt'" \
+            -c "ALTER SYSTEM SET ssl_key_file = '/var/lib/postgresql/server.key'"
+          docker restart "$POSTGRES_CONTAINER_ID"
+          for attempt in $(seq 1 30); do
+            if docker exec "$POSTGRES_CONTAINER_ID" pg_isready \
+              -U risk_fork_managed -d risk_fork_managed_test >/dev/null 2>&1; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              echo 'PostgreSQL did not become ready after TLS restart' >&2
+              exit 1
+            fi
+            sleep 1
+          done
+          {
+            echo 'RISK_FORK_TEST_POSTGRES_TLS_CA<<RISK_FORK_TLS_CA_EOF'
+            cat "$tls_dir/ca.crt"
+            echo 'RISK_FORK_TLS_CA_EOF'
+          } >> "$GITHUB_ENV"
       - name: Check and test managed-service source against disposable PostgreSQL
         working-directory: risk-fork/managed-service
         run: |

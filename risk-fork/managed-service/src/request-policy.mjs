@@ -4,10 +4,11 @@ import {
   assertDataArray, requireOpaqueRef, requireTenantId, requireInvocationRef, requireInteger,
 } from './validation.mjs';
 import { MANAGED_SCOPES } from './constants.mjs';
+import { assertManagedTelemetryAppend, createManagedTelemetryEvent } from './telemetry-event.mjs';
 
 const ROUTES = Object.freeze(['admission', 'execution', 'cleanup', 'recovery', 'read']);
-const EVENTS = Object.freeze(['control_denied', 'rate_denied', 'policy_error', 'policy_allowed']);
-const OUTCOMES = Object.freeze(['allowed', 'disabled', 'rate_limited', 'failed_closed', 'timeout']);
+const EVENTS = Object.freeze(['control_denied', 'rate_denied', 'policy_error', 'policy_allowed', 'policy_candidate']);
+const OUTCOMES = Object.freeze(['allowed', 'disabled', 'rate_limited', 'failed_closed', 'timeout', 'candidate']);
 const POLICIES = new WeakSet();
 
 // Clean-host capability identity only. Serialized decisions and lookalike
@@ -74,28 +75,64 @@ function closedRate(value) {
 
 export function createManagedRequestPolicy(options = {}) {
   assertPlainRecord(options, 'request policy options');
-  assertAllowedKeys(options, ['readControl', 'consumeRateLimit', 'emitTelemetry', 'clock'], 'request policy options');
-  const { readControl, consumeRateLimit, emitTelemetry, clock = () => Date.now() } = options;
-  if (typeof readControl !== 'function' || typeof consumeRateLimit !== 'function' || typeof emitTelemetry !== 'function') {
+  assertAllowedKeys(options, ['readControl', 'consumeRateLimit', 'emitTelemetry', 'recordTelemetry', 'telemetryTimeoutMs', 'clock'], 'request policy options');
+  const { readControl, consumeRateLimit, emitTelemetry, recordTelemetry, clock = () => Date.now() } = options;
+  if (typeof readControl !== 'function' || typeof consumeRateLimit !== 'function'
+    || (typeof emitTelemetry !== 'function' && typeof recordTelemetry !== 'function')) {
     throw new TypeError('host-owned policy callbacks are required');
   }
+  if (emitTelemetry !== undefined && recordTelemetry !== undefined) throw new TypeError('Choose best-effort emission or durable recording, not both');
+  const telemetryTimeoutMs = requireInteger(options.telemetryTimeoutMs ?? 1000, 'telemetryTimeoutMs', { min: 100, max: 5000 });
   if (typeof clock !== 'function') throw new TypeError('clock must be a function');
-  let telemetryPending = false;
+  const pending = new Set();
+  const queue = [];
+  let emitting = false;
+  let recorded = 0; let failed = 0; let dropped = 0;
+  const increment = (value) => Math.min(2_147_483_647, value + 1);
   const decisions = new WeakMap();
   const readClock = () => {
     const value = Number(clock());
     if (!Number.isSafeInteger(value) || value < 0) throw new TypeError('clock must return a non-negative integer');
     return value;
   };
-  const telemetry = (event, p, routeClass, status, outcome, started) => {
-    if (!EVENTS.includes(event) || !OUTCOMES.includes(outcome)) return;
-    if (telemetryPending) return;
-    telemetryPending = true;
-    let durationMs;
-    try { durationMs = Math.max(0, Math.min(2_147_483_647, readClock() - started)); }
-    catch { telemetryPending = false; return; }
-    Promise.resolve().then(() => emitTelemetry(Object.freeze({ event, route_class: routeClass, status, outcome, duration_ms: durationMs,
-      tenant_hash: hashRef('tenant', p.tenant_id), key_hash: hashRef('key', p.key_id) }))).catch(() => {}).finally(() => { telemetryPending = false; });
+  const drain = () => {
+    if (emitting || queue.length === 0) return;
+    emitting = true;
+    const event = queue.shift();
+    const work = Promise.resolve().then(() => emitTelemetry(event)).then(
+      () => { recorded = increment(recorded); }, () => { failed = increment(failed); },
+    ).finally(() => { pending.delete(work); emitting = false; drain(); });
+    pending.add(work);
+  };
+  const unavailable = () => managedError('Durable policy telemetry unavailable', 'POLICY_TELEMETRY_UNAVAILABLE', 503);
+  const telemetry = async (event, p, routeClass, status, outcome, started, signal, required = false) => {
+    if (!EVENTS.includes(event) || !OUTCOMES.includes(outcome)) return false;
+    let data;
+    try {
+      const durationMs = Math.max(0, Math.min(2_147_483_647, readClock() - started));
+      data = createManagedTelemetryEvent({ event, route_class: routeClass, status, outcome, duration_ms: durationMs,
+        tenant_hash: hashRef('tenant', p.tenant_id), key_hash: hashRef('key', p.key_id) });
+    }
+    catch { failed = increment(failed); if (required) throw unavailable(); return false; }
+    if (pending.size + queue.length >= 64) {
+      dropped = increment(dropped); if (required) throw unavailable(); return false;
+    }
+    if (!recordTelemetry) { queue.push(data); drain(); return false; }
+    // Keep actual callback work bounded even if it ignores cancellation. Never
+    // free a slot merely because the caller stopped waiting for its commit.
+    const boundedSignal = signal === undefined ? AbortSignal.timeout(telemetryTimeoutMs)
+      : AbortSignal.any([signal, AbortSignal.timeout(telemetryTimeoutMs)]);
+    const work = Promise.resolve().then(() => recordTelemetry(data, Object.freeze({ signal: boundedSignal }))).then((result) => {
+      assertManagedTelemetryAppend(result, data); recorded = increment(recorded); return true;
+    }).catch(() => { failed = increment(failed); return false; }).finally(() => { pending.delete(work); });
+    pending.add(work);
+    if (!required) return false; // Cleanup, recovery and denials never await telemetry.
+    try {
+      if (!await awaitWithSignal(work, boundedSignal)) throw unavailable();
+      checkSignal(signal); return true;
+    } catch {
+      checkSignal(signal); throw unavailable();
+    }
   };
   const policy = Object.freeze({
     async beforeMutation({ principal: supplied, routeClass, signal } = {}) {
@@ -143,10 +180,40 @@ export function createManagedRequestPolicy(options = {}) {
         telemetry('control_denied', p, routeClass, 503, 'disabled', started);
         throw managedError('Managed service is disabled', 'MANAGED_SERVICE_DISABLED', 503);
       }
-      telemetry('policy_allowed', p, routeClass, 200, 'allowed', started);
+      const durableRequired = recordTelemetry !== undefined && ['admission', 'execution'].includes(routeClass);
+      await telemetry(durableRequired ? 'policy_candidate' : 'policy_allowed', p, routeClass, 200,
+        durableRequired ? 'candidate' : 'allowed', started, signal, durableRequired);
+      if (durableRequired) {
+        // Durable append introduced a new wait. It records the policy candidate,
+        // not authority, so disable/epoch state must be checked again afterward.
+        let final;
+        try { final = closedControl(await awaitWithSignal(readControl(signal), signal)); checkSignal(signal); }
+        catch (error) {
+          telemetry('policy_error', p, routeClass, 503, error?.code === 'REQUEST_TIMEOUT' ? 'timeout' : 'failed_closed', started);
+          if (error?.code === 'REQUEST_TIMEOUT' || signal?.aborted) throw managedError('Request deadline expired', 'REQUEST_TIMEOUT', 408);
+          throw managedError('Policy control unavailable', 'POLICY_UNAVAILABLE', 503);
+        }
+        if (final.epoch !== current.epoch || !final.enabled) {
+          telemetry('control_denied', p, routeClass, 503, final.enabled ? 'failed_closed' : 'disabled', started);
+          throw managedError('Policy control changed during telemetry append', final.enabled ? 'POLICY_EPOCH_CHANGED' : 'MANAGED_SERVICE_DISABLED', 503);
+        }
+        current = final;
+      }
       const decision = Object.freeze({ tenant_id: p.tenant_id, key_id: p.key_id, epoch: current.epoch, route_class: routeClass });
       decisions.set(decision, p);
       return decision;
+    },
+    telemetryHealth() {
+      return Object.freeze({ mode: recordTelemetry ? 'durable_append' : 'best_effort', recorded, failed, dropped,
+        in_flight: pending.size, queued: queue.length, production_qualified: false });
+    },
+    async flushTelemetry(options = {}) {
+      assertPlainRecord(options, 'telemetry flush options'); assertAllowedKeys(options, ['timeoutMs'], 'telemetry flush options');
+      const timeoutMs = requireInteger(options.timeoutMs ?? telemetryTimeoutMs, 'timeoutMs', { min: 100, max: 30_000 });
+      const signal = AbortSignal.timeout(timeoutMs);
+      try { while (pending.size || queue.length) await awaitWithSignal(Promise.all([...pending]), signal); }
+      catch { /* A bounded flush is not proof that callbacks stopped or rows committed. */ }
+      return Object.freeze({ settled: pending.size === 0 && queue.length === 0, pending: pending.size + queue.length });
     },
     createDispatchFence(decision, options = {}) {
       assertPlainRecord(options, 'dispatch fence options');

@@ -14,6 +14,7 @@ import { PostgresManagedServiceStore } from '../src/postgres-store.mjs';
 import { verifyPostgresControlPlaneAttestation } from '../src/postgres-control-plane-attestation.mjs';
 import { createManagedProviderRegistry } from '../src/provider-registry.mjs';
 import { invocationRequest, testLeaseToken, TestProvider, TEST_TOKEN } from './helpers.mjs';
+import { waitForDisposableDatabaseDrain } from './disposable-database-drain.mjs';
 
 const connectionString = process.env.RISK_FORK_MANAGED_TEST_POSTGRES_URL;
 let skip = 'An explicit disposable loopback risk_fork_managed_test database is required';
@@ -56,9 +57,10 @@ test('managed control-plane runtime role uses owner lock helpers without credent
       await attempt('close runtime pool', () => runtimePool.end());
       await attempt('close admin pool', () => admin.end());
       if (childCreated) {
-        await attempt('terminate child database sessions', () => root.query(
-          'SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname=$1', [database]));
-        await attempt('drop child database', () => root.query(`DROP DATABASE ${qid(database)}`));
+        await attempt('drain and drop child database', async () => {
+          await waitForDisposableDatabaseDrain(root, database);
+          await root.query(`DROP DATABASE ${qid(database)}`);
+        });
       }
       await attempt('drop runtime role', () => root.query(`DROP ROLE IF EXISTS ${qid(runtime)}`));
       await attempt('drop migrator role', () => root.query(`DROP ROLE IF EXISTS ${qid(migrator)}`));

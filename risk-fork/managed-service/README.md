@@ -176,7 +176,13 @@ Authenticated routes check it before control-plane access; local host
 bounded `Retry-After`. Callback failure is redacted and fails closed. Control
 is read again after the rate await; disabling blocks admission/execution but
 does not by itself block cleanup/recovery/reads. Telemetry is best-effort with
-one pending sink and drops overlap; it is not a durable audit or alert service.
+a bounded FIFO behind one pending sink, explicit failure/overflow counters and
+no silent overlap drop; it is not a durable audit or alert service. Alternatively,
+`recordTelemetry(event, { signal })` requires a durable append acknowledgement
+for admission/execution candidates, then rechecks enable/epoch after that wait.
+Cleanup/recovery/reads and denials never await telemetry. The separate
+[observer outbox](./TELEMETRY.md) supplies source-only PostgreSQL retention and
+lease-fenced at-least-once delivery. It does not provision a hosted alert service.
 AbortSignal rejects waiting policy checks; it does not cancel committed work.
 Direct local-host policy waits use the host's `deadlineMs` (default 30 seconds).
 

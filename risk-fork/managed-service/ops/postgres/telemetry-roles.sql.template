@@ -1,0 +1,50 @@
+-- Source-only trusted-host template. Dedicated disposable telemetry database only.
+-- Replace every placeholder with an independently validated quoted identifier.
+-- Provision distinct LOGIN NOINHERIT migrator/runtime roles separately; never
+-- share these identities with control-plane or ciphertext delivery schemas.
+-- Database owner BEFORE the independent telemetry migration:
+REVOKE ALL ON DATABASE __TELEMETRY_DATABASE__ FROM PUBLIC;
+GRANT CONNECT, CREATE ON DATABASE __TELEMETRY_DATABASE__ TO __TELEMETRY_MIGRATOR__;
+GRANT CONNECT ON DATABASE __TELEMETRY_DATABASE__ TO __TELEMETRY_RUNTIME__;
+-- Dedicated migrator AFTER migratePostgresManagedTelemetry:
+BEGIN;
+REVOKE ALL ON SCHEMA __TELEMETRY_SCHEMA__ FROM PUBLIC;
+GRANT USAGE ON SCHEMA __TELEMETRY_SCHEMA__ TO __TELEMETRY_RUNTIME__;
+REVOKE ALL ON ALL TABLES IN SCHEMA __TELEMETRY_SCHEMA__ FROM PUBLIC, __TELEMETRY_RUNTIME__;
+REVOKE ALL ON ALL SEQUENCES IN SCHEMA __TELEMETRY_SCHEMA__ FROM PUBLIC, __TELEMETRY_RUNTIME__;
+REVOKE ALL ON ALL FUNCTIONS IN SCHEMA __TELEMETRY_SCHEMA__ FROM PUBLIC, __TELEMETRY_RUNTIME__;
+-- Table REVOKE does not remove separate column grants. The validated quoted
+-- placeholders also work as regnamespace/regrole text (no raw interpolation).
+DO $telemetry_column_acl$
+DECLARE target record;
+BEGIN
+  FOR target IN
+    SELECT c.relname, string_agg(format('%I', a.attname), ', ' ORDER BY a.attnum) AS columns
+    FROM pg_catalog.pg_class c JOIN pg_catalog.pg_attribute a ON a.attrelid=c.oid
+    WHERE c.relnamespace='__TELEMETRY_SCHEMA__'::regnamespace AND c.relkind='r'
+      AND a.attnum>0 AND NOT a.attisdropped GROUP BY c.relname
+  LOOP
+    EXECUTE format('REVOKE ALL PRIVILEGES (%s) ON TABLE %s.%I FROM PUBLIC, %s',
+      target.columns, '__TELEMETRY_SCHEMA__', target.relname, '__TELEMETRY_RUNTIME__');
+  END LOOP;
+END
+$telemetry_column_acl$;
+GRANT SELECT ON ALL TABLES IN SCHEMA __TELEMETRY_SCHEMA__ TO __TELEMETRY_RUNTIME__;
+GRANT UPDATE (last_seen_ms) ON __TELEMETRY_SCHEMA__.telemetry_clock TO __TELEMETRY_RUNTIME__;
+GRANT INSERT (event_ref,event_hash,event,route_class,status,outcome,duration_ms,tenant_hash,key_hash,created_ms)
+  ON __TELEMETRY_SCHEMA__.telemetry_events TO __TELEMETRY_RUNTIME__;
+GRANT UPDATE (state,generation,attempts,claim_hash,lease_expires_ms,next_attempt_ms,acknowledged_ms,acknowledgement_hash,last_error_code)
+  ON __TELEMETRY_SCHEMA__.telemetry_events TO __TELEMETRY_RUNTIME__;
+-- Observer delivery state is trusted-host metadata, not execution authority.
+-- Runtime cannot mutate event payloads, delete events, truncate, change settings,
+-- change the ledger, create schema objects or grant privileges.
+-- Retention uses the distinct owner-only prunePostgresManagedTelemetry function.
+ALTER DEFAULT PRIVILEGES IN SCHEMA __TELEMETRY_SCHEMA__ REVOKE ALL ON TABLES FROM PUBLIC, __TELEMETRY_RUNTIME__;
+ALTER DEFAULT PRIVILEGES IN SCHEMA __TELEMETRY_SCHEMA__ REVOKE ALL ON SEQUENCES FROM PUBLIC, __TELEMETRY_RUNTIME__;
+ALTER DEFAULT PRIVILEGES IN SCHEMA __TELEMETRY_SCHEMA__ REVOKE ALL ON FUNCTIONS FROM PUBLIC, __TELEMETRY_RUNTIME__;
+-- Schema defaults add to global defaults; only a global revoke removes PG's
+-- built-in PUBLIC function EXECUTE. This role must be dedicated to this DB.
+ALTER DEFAULT PRIVILEGES REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
+COMMIT;
+-- Owner-only acknowledged retention is explicit and bounded. Unresolved pending
+-- or claimed obligations are never retention-deleted. No automatic pruner runs.
