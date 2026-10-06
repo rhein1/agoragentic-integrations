@@ -19,7 +19,8 @@ test('new execution failure rule requires explicit v4 and counts only its exact 
   assert.throws(() => normalizeTelemetryOptions({ ...options, metricVersion: 3 }));
   assert.equal(normalizeTelemetryOptions({ ...options, metricVersion: 4 }).metricVersion, 4);
   assert.equal(normalizeTelemetryOptions({ ...options, metricVersion: 5 }).metricVersion, 5);
-  for (const version of [0, 2, 6, '4', true]) assert.throws(() => normalizeTelemetryOptions({ ...options, metricVersion: version }));
+  assert.equal(normalizeTelemetryOptions({ ...options, metricVersion: 6 }).metricVersion, 6);
+  for (const version of [0, 2, 7, '4', true]) assert.throws(() => normalizeTelemetryOptions({ ...options, metricVersion: version }));
   assert.throws(() => normalizeTelemetryOptions({ limits, metricVersion: 4 }));
   const source = (event_type) => projectManagedLifecycleEvent({ tenant_id: 'tenant_alpha', invocation_ref: 'rfi_metric',
     sequence: 1, event_type, occurred_at: '2026-10-06T00:00:00.000Z', event_hash: sha256Ref(event_type),
