@@ -74,9 +74,9 @@ const EXPECTED_PACKAGE_JSON = Object.freeze({
     prepublishOnly: 'node -e "throw new Error(\'RISK_FORK_HOSTED_MCP_PUBLISH_DISABLED\')"',
   },
   devDependencies: {
-    '@modelcontextprotocol/client': '2.0.0',
+    '@modelcontextprotocol/client': '2.2.0',
     '@modelcontextprotocol/node': '2.0.0',
-    '@modelcontextprotocol/sdk': '1.30.0',
+    '@modelcontextprotocol/sdk': '1.31.0',
     '@modelcontextprotocol/server': '2.0.0',
     ajv: '8.20.0',
     'ajv-formats': '3.0.1',

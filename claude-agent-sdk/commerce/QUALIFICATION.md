@@ -23,6 +23,14 @@ Python dependencies follow the upstream requirements pins (including anthropic
 are resolved during setup; this is not a fully hash-locked Python supply chain.
 The npm dependency closure is committed in `../package-lock.json`.
 
+The development closure now explicitly overrides the transitive
+`@modelcontextprotocol/sdk` to `1.31.0` for
+[GHSA-6qxp-vccf-f47h](https://github.com/advisories/GHSA-6qxp-vccf-f47h).
+This does not change the Claude SDK or CLI pin, enable OAuth/MCP, or qualify a
+live host. Use the exact-head type, wire, CLI, and dependency-audit results when
+evaluating this newer closure; the historical September 8 results above are not
+evidence for a changed lockfile.
+
 The older TypeScript SDK 0.2.141 had unresolved names in its published declarations.
 The tested 0.3.263 pin passes strict checking without `skipLibCheck`, local declaration
 patches, or copied SDK types. Its installed npm closure reports zero vulnerabilities

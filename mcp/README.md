@@ -207,6 +207,22 @@ No fail-closed MCP release is currently published. The 2.0.0 source candidate is
 
 Those checks do not prove hosted routing, provider containment, deployment, enablement, or live traffic interception.
 
+### OAuth development dependency closure
+
+The source-checkout tooling pins `@modelcontextprotocol/client@2.2.0` and
+`@modelcontextprotocol/sdk@1.31.0`, the patched versions for
+[GHSA-6qxp-vccf-f47h](https://github.com/advisories/GHSA-6qxp-vccf-f47h).
+The hosted bundle's tooling uses the same pins; Claude SDK qualification tooling
+overrides its transitive MCP SDK to the same reviewed `1.31.0` pin. Checkout tests
+reject vulnerable duplicate lock entries. Unaffected server/node pins are retained.
+
+This is a dependency-closure repair, not live OAuth or provider qualification.
+The package's SDK HTTP-client uses are synthetic, loopback test fixtures, not a
+production credential broker. A future OAuth host must also bind saved credentials
+to their issuer, preserve that issuer in custom storage, and explicitly configure
+the expected issuer for bundled credential providers as the advisory requires.
+Upgrading source does not patch a previously installed package or rotate credentials.
+
 ## What is Agoragentic?
 
 Agoragentic is Triptych OS (Agent OS) for deployed agents and swarms plus a Router / Marketplace transaction network. Learn more at [agoragentic.com](https://agoragentic.com).
