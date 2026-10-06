@@ -11,6 +11,7 @@ import { sha256Ref } from '../../src/canonical.mjs';
 import { validateChildOperation } from '../../src/child-operation.mjs';
 import { verifyPostgresControlPlaneAttestation } from './postgres-control-plane-attestation.mjs';
 import { createManagedAuditEvent } from './audit.mjs';
+import { createManagedBacklogSnapshot, MANAGED_BACKLOG_COUNT_FIELDS, normalizeBacklogRead } from './backlog-snapshot.mjs';
 import { cancellationAuditDetails, normalizeCancellationFields, planCancellation,
   verifyCancellationObservation } from './cancellation.mjs';
 import { normalizeAuditPageRequest, normalizeAuditWindowRequest, verifyAuditInvocationPage } from './audit-read.mjs';
@@ -1809,6 +1810,37 @@ export class PostgresManagedServiceStore {
         [tenantId, invocationRef],
       );
       return deepFreeze(normalizeAuditRows(result.rows));
+    });
+  }
+
+  async readCleanupRecoveryBacklog(inputValue) {
+    const input = normalizeBacklogRead(inputValue);
+    return this.#withReadSnapshot(async (client) => {
+      await client.query("SET LOCAL statement_timeout = '5000ms'");
+      // One SQL snapshot, one DB clock, one tenant. The aggregate never derives
+      // state from retained telemetry or exposes invocation/credential details.
+      const result = await client.query(`WITH source_clock AS MATERIALIZED (
+        SELECT clock_timestamp() AS authority_at
+      ), observation_clock AS MATERIALIZED (
+        SELECT authority_at, date_trunc('milliseconds', authority_at) AS snapshot_at FROM source_clock
+      ), backlog AS (
+        SELECT count(*) FILTER (WHERE state = 'cleanup_pending') AS cleanup_pending_count,
+          count(*) FILTER (WHERE state = 'recovery_required') AS recovery_required_count,
+          count(*) FILTER (WHERE lease_kind = 'execution' AND lease_expires_at <= observation_clock.snapshot_at) AS expired_execution_lease_count,
+          count(*) FILTER (WHERE lease_kind = 'cleanup' AND lease_expires_at <= observation_clock.snapshot_at) AS expired_cleanup_lease_count,
+          count(*) FILTER (WHERE lease_kind = 'recovery' AND lease_expires_at <= observation_clock.snapshot_at) AS expired_recovery_lease_count
+        FROM ${this.#schema}.managed_invocations CROSS JOIN observation_clock WHERE tenant_id = $1
+      ) SELECT observation_clock.snapshot_at, backlog.* FROM backlog CROSS JOIN observation_clock
+        WHERE EXISTS (SELECT 1 FROM ${this.#schema}.managed_api_keys AS credential
+          WHERE credential.tenant_id = $1 AND credential.key_id = $2
+            AND credential.revoked_at IS NULL AND credential.not_before <= observation_clock.authority_at
+            AND credential.expires_at > observation_clock.authority_at AND credential.scopes ? 'audit:read')`,
+      [input.tenant_id, input.claimant_key_id]);
+      if (result.rowCount !== 1) throw managedError('Backlog observation credential is not active', 'AUTHENTICATION_FAILED', 401);
+      const row = result.rows[0], counts = {};
+      for (const field of MANAGED_BACKLOG_COUNT_FIELDS) counts[field] = pgInteger(row[field], field);
+      return createManagedBacklogSnapshot({ tenant_id: input.tenant_id,
+        snapshot_at: pgIso(row.snapshot_at, 'backlog snapshot_at'), ...counts });
     });
   }
 

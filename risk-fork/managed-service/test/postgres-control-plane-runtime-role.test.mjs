@@ -228,6 +228,12 @@ test('managed control-plane runtime role uses owner lock helpers without credent
       store, providerRegistry, requirePrincipal: auth.requirePrincipal,
     });
     const principal = await auth.authenticate(`Bearer ${TEST_TOKEN}`, 'invocations:write');
+    const backlog = await control.readCleanupRecoveryBacklog(principal);
+    assert.equal(backlog.tenant_id, 'tenant_alpha');
+    assert.equal(backlog.cleanup_pending_count, 0);
+    assert.equal(backlog.recovery_required_count, 0);
+    assert.equal(backlog.production_qualified, false);
+    assert.equal((await store.initialize()).runtime_privileges_verified, true);
     const admitted = await control.admitInvocation(principal, invocationRequest());
     const leaseToken = testLeaseToken('runtime-role');
     const claim = await control.claimExecution(principal, {
@@ -263,5 +269,6 @@ test('managed control-plane runtime role uses owner lock helpers without credent
     await assert.rejects(control.renewLease(principal, {
       invocation_ref: admitted.invocation.invocation_ref, lease_token: leaseToken, lease_ms: 30_000,
     }), (error) => error.code === 'AUTHORIZATION_DENIED');
+    await assert.rejects(control.readCleanupRecoveryBacklog(principal), { code: 'AUTHORIZATION_DENIED' });
     await store.close();
   });
