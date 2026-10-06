@@ -9,6 +9,8 @@ import { sha256Ref } from '../../src/canonical.mjs';
 import { validateChildOperation } from '../../src/child-operation.mjs';
 import { verifyPostgresControlPlaneAttestation } from './postgres-control-plane-attestation.mjs';
 import { createManagedAuditEvent } from './audit.mjs';
+import { cancellationAuditDetails, normalizeCancellationFields, planCancellation,
+  verifyCancellationObservation } from './cancellation.mjs';
 import { normalizeAuditPageRequest, normalizeAuditWindowRequest, verifyAuditInvocationPage } from './audit-read.mjs';
 import {
   ACTIVE_INVOCATION_STATES,
@@ -73,7 +75,7 @@ const expectedMigrationHashPromises = new Map();
 function expectedMigrationHash(version) {
   if (!expectedMigrationHashPromises.has(version)) {
     const file = ['001_managed_control_plane.pg.sql', '002_journal_purpose.pg.sql',
-      '003_control_plane_lock_helpers.pg.sql'][version - 1];
+      '003_control_plane_lock_helpers.pg.sql', '008_managed_cancellation.pg.sql'][version - 1];
     expectedMigrationHashPromises.set(version, readFile(new URL(`../migrations/${file}`, import.meta.url),
       'utf8').then((source) => sha256Ref(source.replace(/\r\n?/g, '\n'))));
   }
@@ -163,6 +165,8 @@ function normalizeInvocationRow(row, includeOperation = false) {
     actual_cost_micros: actualCostMicros,
     budget_day_utc: pgDay(row.budget_day_utc, 'budget_day_utc'),
     state,
+    ...normalizeCancellationFields({ ...row,
+      cancel_requested_at: row.cancel_requested_at == null ? null : pgIso(row.cancel_requested_at, 'cancel_requested_at') }),
     lease_kind: leaseKind,
     lease_owner: leaseOwner,
     lease_expires_at: leaseExpiresAt,
@@ -431,7 +435,8 @@ export class PostgresManagedServiceStore {
   }
 
   async #isClaimantCredentialActive(client, tenantId, claimantKeyId, requiredScope) {
-    if (!/^worker:(execution|cleanup|recovery):(claim|write)$/.test(requiredScope)) {
+    if (requiredScope !== 'invocations:cancel'
+      && !/^worker:(execution|cleanup|recovery):(claim|write)$/.test(requiredScope)) {
       throw new TypeError('claimant scope must be purpose-specific');
     }
     // Hold the credential row through the enclosing mutation transaction.
@@ -1301,6 +1306,9 @@ export class PostgresManagedServiceStore {
         result_hash: patch.result_hash ?? row.result_hash,
       };
       const terminal = ['completed', 'failed_closed'].includes(input.next_state);
+      if (row.cancel_request_hash != null && input.next_state === 'completed') {
+        throw managedError('Canceled invocation cannot import a completed result', 'INVOCATION_CANCELED', 409);
+      }
       const verificationNotAfter = terminal
         ? requireIso(input.verification_not_after, 'verification_not_after')
         : null;
@@ -1413,6 +1421,102 @@ export class PostgresManagedServiceStore {
       }
       return response;
     }, input.now);
+  }
+
+  async requestCancellation(input) {
+    assertPlainRecord(input, 'stored cancellation request');
+    assertAllowedKeys(input, ['tenant_id', 'invocation_ref', 'claimant_key_id',
+      'cancel_request_hash', 'cancel_reason_hash', 'now', 'expected_request_hash',
+      'expected_operation_hash', 'expected_provider_binding_hash', 'expected_provider_recovery_key'], 'stored cancellation request');
+    return this.#withTransaction(async (client) => {
+      const tenantId = requireTenantId(input.tenant_id);
+      const ref = requireInvocationRef(input.invocation_ref);
+      const claimant = requireOpaqueRef(input.claimant_key_id, 'claimant_key_id');
+      // Same lock order and persisted credential boundary as worker mutations.
+      // Tenant suspension does not prohibit cancellation or historical cleanup.
+      await this.#lockTenantStatus(client, tenantId);
+      const row = await this.#selectInvocation(client, tenantId, ref, true);
+      if (!row) throw managedError('Invocation was not found', 'INVOCATION_NOT_FOUND', 404);
+      await this.#assertClaimantCredentialActive(client, tenantId, claimant, 'invocations:cancel');
+      const now = await this.#databaseNow(client);
+      const plan = planCancellation(normalizeInvocationRow(row), input, now);
+      if (plan === null) return normalizeInvocationRow(row);
+      const reserved = plan.release_reservation ? pgInteger(row.estimated_cost_micros, 'estimated cost') : 0;
+      const usage = await client.query(
+        `UPDATE ${this.#schema}.managed_usage_buckets
+            SET reserved_micros = reserved_micros - $3,
+                spent_micros = spent_micros + $4, updated_at = clock_timestamp()
+          WHERE tenant_id = $1 AND budget_day_utc = $2::date AND reserved_micros >= $3`,
+        [tenantId, pgDay(row.budget_day_utc, 'budget day'), reserved, plan.additional_spent_micros],
+      );
+      if (usage.rowCount !== 1) throw new Error('Budget reservation invariant failed');
+      const updated = await client.query(
+        `WITH cancel_clock AS (SELECT clock_timestamp() AS now)
+         UPDATE ${this.#schema}.managed_invocations AS target
+            SET cancel_requested_at = cancel_clock.now, cancel_requested_by = $3,
+                cancel_request_hash = $4, cancel_reason_hash = $5,
+                state = $6, execution_outcome = $7, actual_cost_micros = $8,
+                terminal_at = CASE WHEN $6 = 'failed_closed' THEN cancel_clock.now ELSE terminal_at END,
+                lease_kind = CASE WHEN $9 THEN NULL ELSE lease_kind END,
+                lease_owner = CASE WHEN $9 THEN NULL ELSE lease_owner END,
+                lease_token_hash = CASE WHEN $9 THEN NULL ELSE lease_token_hash END,
+                lease_expires_at = CASE WHEN $9 THEN NULL ELSE lease_expires_at END,
+                updated_at = cancel_clock.now
+           FROM cancel_clock
+          WHERE target.tenant_id = $1 AND target.invocation_ref = $2
+            AND target.admitted_key_id = $3 AND target.cancel_requested_at IS NULL
+            AND EXISTS (SELECT 1 FROM ${this.#schema}.managed_api_keys AS claimant
+              WHERE claimant.tenant_id = $1 AND claimant.key_id = $3
+                AND claimant.revoked_at IS NULL AND claimant.not_before <= cancel_clock.now
+                AND claimant.expires_at > cancel_clock.now AND claimant.scopes ? 'invocations:cancel')
+          RETURNING *`,
+        [tenantId, ref, claimant, plan.cancel_request_hash, plan.cancel_reason_hash, plan.state,
+          plan.execution_outcome, plan.actual_cost_micros, plan.revoke_execution],
+      );
+      if (updated.rowCount !== 1) {
+        throw managedError('Cancellation credential changed before mutation', 'AUTHENTICATION_FAILED', 401);
+      }
+      const next = updated.rows[0];
+      await this.#appendAudit(client, next, 'cancellation_requested', pgIso(next.updated_at, 'cancellation time'),
+        cancellationAuditDetails(row, plan));
+      return normalizeInvocationRow(next);
+    }, input.now);
+  }
+
+  async observeCancellation(input) {
+    assertPlainRecord(input, 'cancellation observation');
+    assertAllowedKeys(input, ['tenant_id', 'claimant_key_id', 'invocation_ref', 'lease_token_hash',
+      'lease_generation', 'now'], 'cancellation observation');
+    const tenantId = requireTenantId(input.tenant_id);
+    const ref = requireInvocationRef(input.invocation_ref);
+    const claimant = requireOpaqueRef(input.claimant_key_id, 'claimant_key_id');
+    return this.#withClient(async (client) => {
+      await this.#databaseNow(client, input.now);
+      const result = await client.query(`SELECT target.*, tenant.status AS tenant_status,
+        clock_timestamp() AS observed_at,
+        EXISTS (SELECT 1 FROM ${this.#schema}.managed_api_keys AS credential
+          WHERE credential.tenant_id = target.tenant_id AND credential.key_id = $3
+            AND credential.revoked_at IS NULL AND credential.not_before <= clock_timestamp()
+            AND credential.expires_at > clock_timestamp() AND credential.scopes ? $4) AS claimant_active,
+        (SELECT count(*)::integer FROM ${this.#schema}.managed_audit_events AS event
+          WHERE event.tenant_id = target.tenant_id AND event.invocation_ref = target.invocation_ref
+            AND event.event_type = 'cancellation_requested') AS cancellation_audit_count,
+        (SELECT details_hash FROM ${this.#schema}.managed_audit_events AS event
+          WHERE event.tenant_id = target.tenant_id AND event.invocation_ref = target.invocation_ref
+            AND event.event_type = 'cancellation_requested' ORDER BY sequence DESC LIMIT 1) AS cancellation_details_hash
+        FROM ${this.#schema}.managed_invocations AS target
+        JOIN ${this.#schema}.managed_tenants AS tenant ON tenant.tenant_id = target.tenant_id
+        WHERE target.tenant_id = $1 AND target.invocation_ref = $2`,
+      [tenantId, ref, claimant, workerWriteScope('execution')]);
+      if (result.rowCount !== 1) throw managedError('Invocation was not found', 'INVOCATION_NOT_FOUND', 404);
+      const row = result.rows[0];
+      if (row.claimant_active !== true) throw managedError('Execution observation credential is not active', 'AUTHENTICATION_FAILED', 401);
+      return verifyCancellationObservation({ ...normalizeInvocationRow(row),
+        lease_token_hash: row.lease_token_hash, tenant_status: row.tenant_status }, input,
+      pgIso(row.observed_at, 'cancellation observation time'), {
+        count: pgInteger(row.cancellation_audit_count, 'cancellation audit count'), details_hash: row.cancellation_details_hash,
+      });
+    });
   }
 
   async settleExecutionOutcome(input) {
@@ -1825,6 +1929,9 @@ export class PostgresManagedServiceStore {
              (SELECT migration_hash
                 FROM ${this.#schema}.managed_schema_migrations
                WHERE version = 3) AS lock_migration_hash,
+             (SELECT migration_hash
+                FROM ${this.#schema}.managed_schema_migrations
+               WHERE version = 4) AS cancellation_migration_hash,
              (SELECT count(*)::integer
                 FROM ${this.#schema}.managed_schema_migrations) AS migration_count,
              (SELECT count(*)::integer
@@ -1837,10 +1944,11 @@ export class PostgresManagedServiceStore {
         );
         const stateRow = state.rows[0] ?? {};
         migrationCount = Number(stateRow.migration_count);
-        migrationVerified = migrationCount === 3
+        migrationVerified = migrationCount === 4
           && stateRow.migration_hash === await expectedMigrationHash(1)
           && stateRow.purpose_migration_hash === await expectedMigrationHash(2)
-          && stateRow.lock_migration_hash === await expectedMigrationHash(3);
+          && stateRow.lock_migration_hash === await expectedMigrationHash(3)
+          && stateRow.cancellation_migration_hash === await expectedMigrationHash(4);
         recoveryRequiredCount = Number(stateRow.recovery_required_count);
         expiredExecutionLeaseCount = Number(stateRow.expired_execution_lease_count);
       }

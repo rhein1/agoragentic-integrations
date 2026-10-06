@@ -21,6 +21,7 @@ import { createManagedDeadline } from '../src/deadline.mjs';
 const WORKER_OPTIONS = [
   'leaseMs', 'maxAttempts', 'clock', 'loadPrepareInput', 'invokeProvider',
   'lookupResources', 'measureCostMicros',
+  'cancellationPollMs',
 ];
 const REAPER_OPTIONS = ['batchSize', 'intervalMs'];
 
@@ -159,6 +160,7 @@ export function createManagedRiskForkLocalHost(options = {}) {
   let closed = false;
   let closePromise = null;
   let telemetryClose;
+  let workerClose;
   function active() {
     if (!started || closed) throw managedError('Local host is not active', 'HOST_DISABLED', 503);
   }
@@ -184,7 +186,7 @@ export function createManagedRiskForkLocalHost(options = {}) {
         try { await server.close(); } catch (error) { errors.push(error); }
       }
       reaper.stop();
-      worker.close();
+      workerClose = worker.close();
       delivery.close();
       // Revoke effect capabilities before waiting on observational callbacks.
       // Store lifetime remains owned by the caller. Settled:false is preserved,
@@ -236,6 +238,7 @@ export function createManagedRiskForkLocalHost(options = {}) {
     execute(ref) { active(); return runWorker(principals.execution, 'execution', (decision) => worker.execute(ref, decision)); },
     cleanup(ref) { active(); return runWorker(principals.cleanup, 'cleanup', () => worker.cleanup(ref)); },
     recover(ref) { active(); return runWorker(principals.recovery, 'recovery', () => worker.recover(ref)); },
+    stopExecution() { active(); return worker.stopExecution(); },
     listPendingDeliveries(limit) { active(); return delivery.listPending(limit); },
     resumeDelivery(ref) { active(); return delivery.resumeDelivery(ref); },
     health() {
@@ -243,6 +246,8 @@ export function createManagedRiskForkLocalHost(options = {}) {
         enabled: true,
         started,
         closed,
+        worker: worker.status(),
+        worker_close: workerClose,
         reaper: reaper.health(),
         telemetry: requestPolicy?.telemetryHealth(),
         telemetry_delivery: telemetryDrainer?.health(),

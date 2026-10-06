@@ -9,6 +9,7 @@ import {
 import { verifyManagedAuditChain, verifyManagedAuditWindow } from './audit.mjs';
 import { normalizeAuditPageRequest, normalizeAuditWindowRequest, verifyAuditInvocationPage } from './audit-read.mjs';
 import { assertManagedPrincipalVerifier } from './auth.mjs';
+import { cancellationRequest } from './cancellation.mjs';
 import {
   assertManagedServiceConfig,
   assertManagedServiceEnabled,
@@ -55,6 +56,8 @@ const REQUIRED_STORE_METHODS = Object.freeze([
   'renewLease',
   'transitionInvocation',
   'settleExecutionOutcome',
+  'requestCancellation',
+  'observeCancellation',
   'listExpiredLeases',
   'releaseExpiredLease',
   'listStaleAdmissions',
@@ -406,6 +409,33 @@ export function createManagedRiskForkControlPlane(options = {}) {
         now,
         limits: config.limits,
       });
+    },
+
+    async requestCancellation(principalValue, input = {}) {
+      enabled();
+      const principal = await normalizePrincipal(principalValue, 'invocations:cancel', requirePrincipal);
+      assertPlainRecord(input, 'cancellation request');
+      assertAllowedKeys(input, ['invocation_ref', 'idempotency_key', 'reason_hash'], 'cancellation request');
+      const invocation = await ownedInvocation(principal, input.invocation_ref);
+      const request = cancellationRequest(invocation, principal.key_id, input);
+      // No provider eligibility requirement: disabling execution must not stop
+      // cancellation or identity-bound cleanup of the historical binding.
+      return store.requestCancellation({ ...request, now: requireIso(clock(), 'clock result') });
+    },
+
+    async observeExecutionCancellation(principalValue, input = {}) {
+      enabled();
+      const principal = await normalizePrincipal(principalValue, workerWriteScope('execution'), requirePrincipal);
+      assertPlainRecord(input, 'cancellation observation');
+      assertAllowedKeys(input, ['invocation_ref', 'lease_token', 'lease_generation'], 'cancellation observation');
+      // Observation is not a lease/capability. It reveals no operation, tokens
+      // or resource refs and cannot authorize a provider effect. The store binds
+      // its snapshot to the current credential and original interrupted attempt.
+      return store.observeCancellation({ tenant_id: principal.tenant_id, claimant_key_id: principal.key_id,
+        invocation_ref: requireInvocationRef(input.invocation_ref),
+        lease_token_hash: hashOpaque('agoragentic-risk-fork-managed-lease-v1', requireLeaseToken(input.lease_token)),
+        lease_generation: requireInteger(input.lease_generation, 'lease_generation', { min: 1, max: 2_147_483_647 }),
+        now: requireIso(clock(), 'clock result') });
     },
 
     async getInvocation(principalValue, invocationRefValue) {
@@ -828,7 +858,7 @@ export function createManagedRiskForkControlPlane(options = {}) {
           }),
         }));
       }
-      const successful = invocation.execution_outcome === 'succeeded';
+      const successful = invocation.execution_outcome === 'succeeded' && invocation.cancel_request_hash == null;
       const transitionNow = requireIso(clock(), 'clock result');
       for (const pair of verifiedPairs) {
         verifyCleanupVerificationEvidence(pair.evidence, pair.request, {

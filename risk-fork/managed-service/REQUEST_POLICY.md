@@ -139,6 +139,13 @@ Disable
 blocks admission/execution through the wrapper but leaves bounded cleanup,
 recovery and reads available. It does **not** terminate in-flight provider work.
 
+Public original-owner cancellation uses the existing `recovery` route class,
+not an execution enable ticket or new quota ledger. Disable therefore leaves
+bounded cancellation available under current `invocations:cancel` authority.
+This shares recovery quota: hosts must size/test that capacity so cancellation
+bursts do not starve recovery obligations. The worker's cancellation watcher is
+an internal authenticated observation, not a public endpoint or provider kill.
+
 The wrapper now also retains original execution decisions in process-local
 host-owned identity state. `createDispatchFence(decision, { principal,
 invocationRef, timeoutMs })` accepts only that policy instance's original,
@@ -162,7 +169,8 @@ provider API. Missing broker fencing fails closed with unknown outcome retained.
 Cleanup/verification and resource journaling are not blocked by execution epoch
 changes; a policy decision never substitutes for their current authenticated
 lease/binding checks. This does not make separate databases/provider effects
-atomic or establish in-flight cancellation. See [WORKER.md](./WORKER.md).
+atomic or prove in-flight provider termination. The worker's durable invocation
+cancellation and advisory abort are described in [WORKER.md](./WORKER.md).
 
 `initialize()` explicitly reports `configuration_verified: true`,
 `exact_catalog_verified: true`, `runtime_privileges_verified: true` only when

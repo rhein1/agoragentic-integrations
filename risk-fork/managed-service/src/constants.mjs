@@ -49,6 +49,7 @@ export const TERMINAL_INVOCATION_STATES = Object.freeze([
 export const MANAGED_SCOPES = Object.freeze([
   'invocations:write',
   'invocations:read',
+  'invocations:cancel',
   'worker:execution:claim',
   'worker:execution:write',
   'worker:cleanup:claim',

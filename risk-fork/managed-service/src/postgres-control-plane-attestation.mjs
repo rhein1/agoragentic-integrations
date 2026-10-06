@@ -19,6 +19,7 @@ const HELPERS = Object.freeze([
 const MIGRATIONS = Object.freeze([
   '001_managed_control_plane.pg.sql', '002_journal_purpose.pg.sql',
   '003_control_plane_lock_helpers.pg.sql',
+  '008_managed_cancellation.pg.sql',
 ]);
 // Schema-bounded read-only probes compare complete deparsed definitions.
 const CATALOG_QUERIES = Object.freeze({
@@ -107,10 +108,10 @@ async function verifyCatalog(client, schema) {
   const version = await client.query("SELECT pg_catalog.current_setting('server_version_num') AS version");
   expect(version.rowCount === 1 && Number(version.rows[0].version) >= 160000
     && Number(version.rows[0].version) < 170000, 'postgres_version');
-  const manifest = JSON.parse(await readFile(new URL('./postgres-control-plane-catalog.json', import.meta.url), 'utf8'));
+  const manifest = JSON.parse(await readFile(new URL('./postgres-control-plane-catalog-v2.json', import.meta.url), 'utf8'));
   const sources = await Promise.all(MIGRATIONS.map(async (file) => (
     await readFile(new URL(`../migrations/${file}`, import.meta.url), 'utf8')).replace(/\r\n?/g, '\n')));
-  expect(manifest.schema === 'agoragentic.risk-fork.managed-postgres-catalog.v1'
+  expect(manifest.schema === 'agoragentic.risk-fork.managed-postgres-catalog.v2'
     && manifest.postgres_major === 16
     && canonicalize(manifest.migration_hashes) === canonicalize(sources.map(sha256Ref)), 'manifest_source');
   const observed = await readManagedPostgresCatalog(client, schema);

@@ -288,7 +288,13 @@ for (const corrupt of [false, true]) {
       await f.pool.query(`DROP FUNCTION ${f.schema}.lock_managed_tenant_share(text)`);
       await f.pool.query(`DROP FUNCTION ${f.schema}.lock_managed_api_key_share(text,text)`);
       await f.pool.query(`DROP FUNCTION ${f.schema}.lock_managed_tenant_update(text)`);
-      await f.pool.query(`DELETE FROM ${f.schema}.managed_schema_migrations WHERE version IN (2,3)`);
+      await f.pool.query(`DROP TRIGGER managed_invocations_no_cancellation_rearm ON ${f.schema}.managed_invocations`);
+      await f.pool.query(`DROP FUNCTION ${f.schema}.reject_managed_cancellation_rearm()`);
+      await f.pool.query(`ALTER TABLE ${f.schema}.managed_invocations
+        DROP CONSTRAINT managed_cancellation_marker,
+        DROP COLUMN cancel_requested_at, DROP COLUMN cancel_requested_by,
+        DROP COLUMN cancel_request_hash, DROP COLUMN cancel_reason_hash`);
+      await f.pool.query(`DELETE FROM ${f.schema}.managed_schema_migrations WHERE version IN (2,3,4)`);
       if (corrupt) await f.pool.query(
         `UPDATE ${f.schema}.managed_resource_journal_receipts
           SET response_json = jsonb_set(response_json, '{audit_head_hash}', to_jsonb($1::text))`,
@@ -299,7 +305,7 @@ for (const corrupt of [false, true]) {
         await assert.rejects(migrate(), (error) => error.code === '55000');
         assert.equal((await f.pool.query(`SELECT count(*)::int AS n FROM ${f.schema}.managed_schema_migrations`)).rows[0].n, 1);
       } else {
-        assert.equal((await migrate()).migration_version, 3);
+        assert.equal((await migrate()).migration_version, 4);
         assert.equal((await f.pool.query(`SELECT lease_kind FROM ${f.schema}.managed_resource_journal_receipts`)).rows[0].lease_kind, 'execution');
         assert.equal((await f.store.health()).ready, true);
         await migrate(); // exact rerun applies no DDL
