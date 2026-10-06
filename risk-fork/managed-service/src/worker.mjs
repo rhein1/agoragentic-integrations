@@ -106,17 +106,28 @@ export function createManagedRiskForkWorker(options = {}) {
     const attempt = { kind, leaseToken, invocation: response.invocation, uncertain: false,
       claimGeneration: requireInteger(response.invocation.lease_generation, 'claim generation', { min: 1, max: 2_147_483_647 }),
       watchingCancellation: false,
-      abort, done: false, timer: null, onShutdown };
+      abort, done: false, timer: null, onShutdown, providerCalls: new Set() };
     activeAttempts.add(attempt);
     return attempt;
   }
 
-  function finishAttempt(attempt) {
-    attempt.done = true;
-    attempt.watchingCancellation = false;
-    clearTimeout(attempt.timer);
+  function releaseAttemptLinkage(attempt) {
+    if (!attempt.done || attempt.providerCalls.size !== 0) return;
     shutdown.signal.removeEventListener('abort', attempt.onShutdown);
     activeAttempts.delete(attempt);
+  }
+
+  function finishAttempt(attempt) {
+    if (!attempt.done) {
+      attempt.done = true;
+      attempt.watchingCancellation = false;
+      clearTimeout(attempt.timer);
+      // Logical retirement is not provider settlement. Signal a dropped call
+      // immediately, and retain shutdown linkage until every actual call settles.
+      // A provider that ignores abort remains counted and requires recovery.
+      if (attempt.providerCalls.size !== 0) attempt.abort.abort();
+    }
+    releaseAttemptLinkage(attempt);
   }
 
   function watchCancellation(attempt) {
@@ -237,7 +248,14 @@ export function createManagedRiskForkWorker(options = {}) {
             throw invalidFence();
           }
           dispatched = true;
-          const fresh = await effectPreflight(attempt, method);
+          let fresh;
+          try { fresh = await effectPreflight(attempt, method); }
+          catch (error) {
+            // Retirement can also abort a suspended renewal. Classify the
+            // retired capability using private state, not the provider's code.
+            if (finished) throw invalidFence();
+            throw error;
+          }
           if (finished) throw invalidFence();
           assertAttemptOpen(attempt);
           const returned = await fresh.provider[method](boundInput, fresh.context);
@@ -249,7 +267,13 @@ export function createManagedRiskForkWorker(options = {}) {
         // Even a broker that drops this promise cannot manufacture settlement
         // or turn the rejected callback into an unhandled background rejection.
         pendingProviderCalls.add(call);
-        call.then(() => pendingProviderCalls.delete(call), () => pendingProviderCalls.delete(call));
+        attempt.providerCalls.add(call);
+        const releaseCall = () => {
+          pendingProviderCalls.delete(call);
+          attempt.providerCalls.delete(call);
+          releaseAttemptLinkage(attempt);
+        };
+        call.then(releaseCall, releaseCall);
         return call;
       },
     }));

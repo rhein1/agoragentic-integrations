@@ -268,6 +268,15 @@ be imported. These counters settle only when their respective promises settle;
 verified resource absence does not fabricate callback settlement. Original
 attempt promises remain retained tombstones bounded by `maxAttempts`.
 
+If a broker drops a bound provider promise and the logical attempt retires,
+retirement immediately aborts the broker's advisory signal. The attempt keeps
+its shutdown linkage until all its actual provider promises settle; neither
+stop/close nor a timer removes a still-pending callback from the count. This
+also covers cleanup/recovery provider calls. Cancellation observation retires
+with logical authority, rather than polling a lease that no longer authorizes
+work. A provider already dispatched may ignore the broker's signal: retained
+linkage and truthful counters are not remote termination or absence evidence.
+
 After successful outcome handoff, the execution watcher is retired before the
 fresh cleanup claim. Late observer snapshots/errors cannot misclassify cleanup's
 new generation as execution failure. Cancellation after handoff still preserves
