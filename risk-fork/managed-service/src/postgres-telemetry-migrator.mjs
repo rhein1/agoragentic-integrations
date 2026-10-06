@@ -1,5 +1,5 @@
 import { acquirePostgresAuthorityClient, createPostgresAuthorityPool } from '../../src/adapters/postgres-authority-migrator.mjs';
-import { lifecycleMigration, metricsMigration, normalizeTelemetryOptions, telemetryDbInteger, telemetryMigration, verifyTelemetrySettings } from './postgres-telemetry-config.mjs';
+import { executionMetricsMigration, lifecycleMigration, metricsMigration, normalizeTelemetryOptions, telemetryDbInteger, telemetryMigration, verifyTelemetrySettings } from './postgres-telemetry-config.mjs';
 import { verifyPostgresManagedTelemetryAttestation } from './postgres-telemetry-attestation.mjs';
 import { managedError } from './validation.mjs';
 import { metricSettingsHash } from './metric-event.mjs';
@@ -39,7 +39,7 @@ export async function migratePostgresManagedTelemetry(options = {}) {
             // Attest the complete old catalog/ledger/settings BEFORE upgrade.
             // Neither frozen source nor drifted fixtures are repaired in place.
             await verifyPostgresManagedTelemetryAttestation(client,{ schemaName: config.schemaName });
-            await verifyTelemetrySettings(client,{ ...config,lifecycle: false,metrics: false },migration.hash);
+            await verifyTelemetrySettings(client,{ ...config,lifecycle: false,metrics: false,metricVersion: undefined },migration.hash);
             const extension = await lifecycleMigration(config.schemaName);
             await client.query(extension.sql);
             await client.query(`INSERT INTO ${s}.telemetry_schema_migrations VALUES (2,$1)`,[extension.hash]);
@@ -49,7 +49,7 @@ export async function migratePostgresManagedTelemetry(options = {}) {
           const ledger = await client.query(`SELECT version FROM ${s}.telemetry_schema_migrations ORDER BY version`);
           if (ledger.rowCount === 2) {
             await verifyPostgresManagedTelemetryAttestation(client,{ schemaName: config.schemaName,lifecycle: true });
-            await verifyTelemetrySettings(client,{ ...config,metrics: false },migration.hash);
+            await verifyTelemetrySettings(client,{ ...config,metrics: false,metricVersion: undefined },migration.hash);
             const extension = await metricsMigration(config.schemaName);
             await client.query(extension.sql);
             await client.query(`INSERT INTO ${s}.telemetry_schema_migrations VALUES (3,$1)`,[extension.hash]);
@@ -63,12 +63,25 @@ export async function migratePostgresManagedTelemetry(options = {}) {
             await client.query(`UPDATE ${s}.telemetry_clock SET last_seen_ms=$1 WHERE singleton=true`,[now]);
           }
         }
-        await verifyPostgresManagedTelemetryAttestation(client, { schemaName: config.schemaName,lifecycle: config.lifecycle,metrics: config.metrics });
+        if (config.metricVersion === 4) {
+          const ledger = await client.query(`SELECT version FROM ${s}.telemetry_schema_migrations ORDER BY version`);
+          if (ledger.rowCount === 3) {
+            // The settings hash also binds every retained contribution/window.
+            // Never rewrite it to enable a new rule in an existing v3 history.
+            await verifyPostgresManagedTelemetryAttestation(client,{ schemaName: config.schemaName,lifecycle: true,metrics: true });
+            await verifyTelemetrySettings(client,{ ...config,metricVersion: 3 },migration.hash);
+            await verifyMetricTotals(client,config);
+            const extension = await executionMetricsMigration(config.schemaName);
+            await client.query(extension.sql);
+            await client.query(`INSERT INTO ${s}.telemetry_schema_migrations VALUES (4,$1)`,[extension.hash]);
+          }
+        }
+        await verifyPostgresManagedTelemetryAttestation(client, { schemaName: config.schemaName,lifecycle: config.lifecycle,metrics: config.metrics,metricVersion: config.metricVersion });
         await verifyTelemetrySettings(client, config, migration.hash);
         await verifyMetricTotals(client,config);
         await client.query('COMMIT');
       } catch (error) { await client.query('ROLLBACK').catch(() => {}); throw error; }
-      return Object.freeze({ schema_name: config.schemaName, migration_version: config.metrics ? 3 : config.lifecycle ? 2 : 1, migration_hash: migration.hash,
+      return Object.freeze({ schema_name: config.schemaName, migration_version: config.metrics ? config.metricVersion : config.lifecycle ? 2 : 1, migration_hash: migration.hash,
         settings_hash: config.settingsHash, runtime_privileges_verified: false, production_qualified: false });
     } finally { client.release(); }
   } catch { throw managedError('Telemetry migration unavailable or drifted', 'TELEMETRY_MIGRATION_FAILED', 503); }

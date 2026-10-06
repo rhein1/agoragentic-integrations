@@ -26,6 +26,7 @@ The package is deliberately marked `private: true`. An explicit, default-off loc
 - exact PostgreSQL 16 control-plane catalog attestation and a separate-runtime locking interface that grants no tenant/API-key table UPDATE;
 - an opt-in asynchronous lifecycle observer with deterministic redacted events, permanent per-invocation prefix checkpoints and finite cyclic tenant sweeps in the separate telemetry schema; see [TELEMETRY.md](./TELEMETRY.md).
 - opt-in v3 committed-observation metric counts, permanent exact-source/alert-ACK custody and a bounded threshold alert outbox, using the existing telemetry drainer and explicit `alertDrainer` local-host composition. Lifetime caps, legacy uncounted upgrade, partial coverage and missing operational qualification are explicit in [TELEMETRY.md](./TELEMETRY.md#opt-in-metric-counts-and-threshold-alert-outbox).
+- explicit opt-in v4 `execution_failure_observed` counts for control-plane-accepted failed outcomes, not provider root-cause, cleanup or cost proof. Fresh/v1-v2 schemas may enable it; existing v3 settings cannot be rewritten to add the rule. See [v4 compatibility and rollout](./TELEMETRY.md#opt-in-v4-failed-execution-observations).
 
 ## Architecture
 

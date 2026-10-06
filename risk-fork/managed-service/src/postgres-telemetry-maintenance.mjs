@@ -32,11 +32,11 @@ export async function prunePostgresManagedTelemetry(options) {
           SELECT 1 FROM pg_catalog.pg_class c WHERE c.relnamespace=n.oid AND c.relowner<>n.nspowner) AS allowed
           FROM pg_catalog.pg_namespace n WHERE n.nspname=$1`,[config.schemaName,config.expectedOwner]);
         if (ownership.rowCount !== 1 || ownership.rows[0].allowed !== true) throw new TypeError('Retention owner mismatch');
-        await verifyPostgresManagedTelemetryAttestation(client,{ schemaName: config.schemaName,lifecycle: config.lifecycle,metrics: config.metrics });
+        await verifyPostgresManagedTelemetryAttestation(client,{ schemaName: config.schemaName,lifecycle: config.lifecycle,metrics: config.metrics,metricVersion: config.metricVersion });
         const s = config.quotedSchema;
         const clock = await client.query(`SELECT last_seen_ms FROM ${s}.telemetry_clock WHERE singleton=true FOR UPDATE`);
         if (clock.rowCount !== 1) throw new TypeError('Missing telemetry clock');
-        await verifyPostgresManagedTelemetryAttestation(client,{ schemaName: config.schemaName,lifecycle: config.lifecycle,metrics: config.metrics });
+        await verifyPostgresManagedTelemetryAttestation(client,{ schemaName: config.schemaName,lifecycle: config.lifecycle,metrics: config.metrics,metricVersion: config.metricVersion });
         await verifyTelemetrySettings(client,config,migration.hash);
         await verifyMetricTotals(client,config);
         const sample = await client.query('SELECT floor(extract(epoch FROM clock_timestamp()) * 1000)::bigint AS now_ms');

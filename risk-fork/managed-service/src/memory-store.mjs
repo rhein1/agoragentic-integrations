@@ -938,7 +938,8 @@ export class MemoryManagedServiceStore {
       next.lease_token_hash = null;
       next.lease_expires_at = null;
       next.updated_at = now;
-      const prepared = this.#prepareAuditedRecord(next, 'execution_outcome_recorded', now, {
+      const eventType = input.execution_outcome === 'failed' ? 'execution_failure_observed' : 'execution_outcome_recorded';
+      const prepared = this.#prepareAuditedRecord(next, eventType, now, {
         from_state: 'running',
         to_state: 'cleanup_pending',
         outcome: input.execution_outcome,

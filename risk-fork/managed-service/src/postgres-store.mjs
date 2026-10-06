@@ -1604,7 +1604,7 @@ export class PostgresManagedServiceStore {
       await this.#appendAudit(
         client,
         updatedRow,
-        'execution_outcome_recorded',
+        input.execution_outcome === 'failed' ? 'execution_failure_observed' : 'execution_outcome_recorded',
         pgIso(updatedRow.updated_at, 'execution outcome time'),
         {
           from_state: 'running',
