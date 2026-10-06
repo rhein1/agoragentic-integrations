@@ -1209,21 +1209,32 @@ export class MemoryManagedServiceStore {
 
   async health(nowValue = new Date()) {
     const now = requireIso(nowValue, 'health.now');
-    const recoveryRequiredCount = [...this.#invocations.values()].filter(
-      (record) => record.state === 'recovery_required',
-    ).length;
-    const expiredExecutionLeaseCount = [...this.#invocations.values()].filter(
-      (record) => record.lease_kind === 'execution'
-        && record.lease_expires_at !== null
-        && Date.parse(record.lease_expires_at) <= Date.parse(now),
-    ).length;
+    const nowMs = Date.parse(now);
+    let cleanupPendingCount = 0;
+    let recoveryRequiredCount = 0;
+    let expiredExecutionLeaseCount = 0;
+    let expiredCleanupLeaseCount = 0;
+    let expiredRecoveryLeaseCount = 0;
+    // No await or mutation: all counters observe the same in-process state.
+    for (const record of this.#invocations.values()) {
+      if (record.state === 'cleanup_pending') cleanupPendingCount += 1;
+      if (record.state === 'recovery_required') recoveryRequiredCount += 1;
+      if (record.lease_expires_at === null || Date.parse(record.lease_expires_at) > nowMs) continue;
+      if (record.lease_kind === 'execution') expiredExecutionLeaseCount += 1;
+      if (record.lease_kind === 'cleanup') expiredCleanupLeaseCount += 1;
+      if (record.lease_kind === 'recovery') expiredRecoveryLeaseCount += 1;
+    }
     return deepFreeze({
       ready: recoveryRequiredCount === 0 && expiredExecutionLeaseCount === 0,
       backend: 'memory_local_test',
       durable: false,
       tenant_count: this.#tenants.size,
+      snapshot_at: now,
+      cleanup_pending_count: cleanupPendingCount,
       recovery_required_count: recoveryRequiredCount,
       expired_execution_lease_count: expiredExecutionLeaseCount,
+      expired_cleanup_lease_count: expiredCleanupLeaseCount,
+      expired_recovery_lease_count: expiredRecoveryLeaseCount,
     });
   }
 }
