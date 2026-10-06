@@ -371,12 +371,13 @@ test('birth watcher rejects file, symlink, and symlink-parent runtime targets', 
   );
 });
 
-test('birth watcher rejects hard-linked request state before collecting evidence', async (t) => {
+test('birth watcher rejects hard-linked request state before collecting evidence', { timeout: 10_000 }, async (t) => {
   const root = await canonicalFixtureRoot('risk-fork-e2b-hardlink-');
   const runtimeDirectory = path.join(root, 'fresh-birth');
-  t.after(() => rm(root, { recursive: true, force: true }));
   const request = birthRequest();
   let collectCalls = 0;
+  let resumePoll;
+  const fixtureReady = new Promise((resolve) => { resumePoll = resolve; });
   const watcher = runBirthWatcher({
     runtimeDirectory,
     clock: () => new Date('2030-01-01T00:00:01.000Z'),
@@ -385,8 +386,17 @@ test('birth watcher rejects hard-linked request state before collecting evidence
       return bootEvidenceForRequest(request);
     },
     requestWaitTimeoutMs: 1_000,
+    // This is a hard-link test, not a race against filesystem setup latency.
+    // Keep the real request bound; release the existing poll seam only after
+    // the malicious request and its trigger are both present.
+    delay: () => fixtureReady,
   });
-  const watcherRejection = assert.rejects(watcher, /bounded regular file|hard link/i);
+  const outcome = watcher.then((value) => ({ value }), (error) => ({ error }));
+  t.after(async () => {
+    resumePoll();
+    await outcome;
+    await rm(root, { recursive: true, force: true });
+  });
   await waitForPath(path.join(runtimeDirectory, 'template-build-ready'));
   const remotePaths = e2bBirthRequestPaths(request.request_hash);
   const sourcePath = path.join(root, 'request-source.json');
@@ -394,9 +404,14 @@ test('birth watcher rejects hard-linked request state before collecting evidence
   const triggerPath = path.join(runtimeDirectory, path.posix.basename(remotePaths.trigger));
   await writeFile(sourcePath, `${canonicalize(request)}\n`);
   await link(sourcePath, requestPath);
+  assert.equal((await lstat(requestPath)).nlink, 2, 'the fixture must really be hard-linked');
   await writeFile(triggerPath, `${request.request_hash}\n`);
-  await watcherRejection;
+  resumePoll();
+  const observed = await outcome;
+  assert.ok(observed.error, 'the hard-linked request must be rejected');
+  assert.match(observed.error.message, /bounded regular file|hard link/i);
   assert.equal(collectCalls, 0);
+  await assert.rejects(readFile(path.join(runtimeDirectory, 'birth-ready')), { code: 'ENOENT' });
 });
 
 test('birth watcher rejects replacement of its one-use runtime directory', async (t) => {
