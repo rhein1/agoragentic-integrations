@@ -14,6 +14,8 @@ import {
   workerWriteScope,
 } from './constants.mjs';
 import { normalizeApiKeyRecord } from './auth.mjs';
+import { cancellationAuditDetails, normalizeCancellationFields, planCancellation,
+  verifyCancellationObservation } from './cancellation.mjs';
 import {
   assertManagedRecoveryKeyIntegrity,
   createManagedResourceJournalReceipt,
@@ -99,6 +101,7 @@ function normalizeTenant(value) {
 
 function publicInvocation(record) {
   assertManagedRecoveryKeyIntegrity(record);
+  normalizeCancellationFields(record);
   const copy = cloneJson(record, 'invocation');
   delete copy.operation;
   delete copy.lease_claim_audit_hash;
@@ -408,6 +411,10 @@ export class MemoryManagedServiceStore {
           'provider_recovery_key',
         ),
         execution_outcome: null,
+        cancel_requested_at: null,
+        cancel_requested_by: null,
+        cancel_request_hash: null,
+        cancel_reason_hash: null,
         execution_evidence_hash: null,
         result_hash: null,
         admitted_at: now,
@@ -684,7 +691,8 @@ export class MemoryManagedServiceStore {
   }
 
   #requireActiveClaimant(tenantIdValue, claimantKeyIdValue, nowValue, requiredScope) {
-    if (!/^worker:(execution|cleanup|recovery):(claim|write)$/.test(requiredScope)) {
+    if (requiredScope !== 'invocations:cancel'
+      && !/^worker:(execution|cleanup|recovery):(claim|write)$/.test(requiredScope)) {
       throw new TypeError('claimant scope must be purpose-specific');
     }
     const tenantId = requireTenantId(tenantIdValue);
@@ -811,6 +819,9 @@ export class MemoryManagedServiceStore {
         throw managedError('Invocation transition is invalid', 'INVOCATION_TRANSITION_INVALID', 409);
       }
       const terminal = TERMINAL_INVOCATION_STATES.includes(input.next_state);
+      if (record.cancel_request_hash != null && input.next_state === 'completed') {
+        throw managedError('Canceled invocation cannot import a completed result', 'INVOCATION_CANCELED', 409);
+      }
       if (terminal) {
         const verificationNotAfter = requireIso(
           input.verification_not_after,
@@ -1076,6 +1087,51 @@ export class MemoryManagedServiceStore {
       return verifyAuditInvocationPage({ tenant_id: tenantId, upper_ref: upper,
         invocations, complete: rows.length <= request.limit,
         next_after_ref: invocations.at(-1)?.invocation_ref ?? request.after_ref }, tenantId, request);
+    });
+  }
+
+  async requestCancellation(input) {
+    return this.#exclusive(async () => {
+      assertPlainRecord(input, 'stored cancellation request');
+      assertAllowedKeys(input, ['tenant_id', 'invocation_ref', 'claimant_key_id',
+        'cancel_request_hash', 'cancel_reason_hash', 'now', 'expected_request_hash',
+        'expected_operation_hash', 'expected_provider_binding_hash', 'expected_provider_recovery_key'], 'stored cancellation request');
+      const tenantId = requireTenantId(input.tenant_id);
+      const ref = requireInvocationRef(input.invocation_ref);
+      const now = requireIso(input.now, 'cancellation time');
+      this.#requireActiveClaimant(tenantId, input.claimant_key_id, now, 'invocations:cancel');
+      const record = this.#invocations.get(invocationKey(tenantId, ref));
+      if (!record) throw managedError('Invocation was not found', 'INVOCATION_NOT_FOUND', 404);
+      const plan = planCancellation(record, input, now);
+      if (plan === null) return publicInvocation(record);
+      const { release_reservation: release, additional_spent_micros: spent,
+        revoke_execution: revoke, ...patch } = plan;
+      const key = usageKey(tenantId, record.budget_day_utc);
+      const usage = this.#usage.get(key);
+      const reserved = release ? record.estimated_cost_micros : 0;
+      if (!usage || usage.reserved_micros < reserved) throw new Error('Budget reservation invariant failed');
+      const next = { ...cloneJson(record, 'canceled invocation'), ...patch, updated_at: now };
+      if (revoke) Object.assign(next, { lease_kind: null, lease_owner: null,
+        lease_token_hash: null, lease_expires_at: null });
+      const prepared = this.#prepareAuditedRecord(next, 'cancellation_requested', now, cancellationAuditDetails(record, plan));
+      this.#usage.set(key, { reserved_micros: usage.reserved_micros - reserved,
+        spent_micros: usage.spent_micros + spent });
+      return this.#commitAuditedRecord(prepared);
+    });
+  }
+
+  async observeCancellation(input) {
+    return this.#exclusive(async () => {
+      const tenantId = requireTenantId(input.tenant_id);
+      const ref = requireInvocationRef(input.invocation_ref);
+      const now = requireIso(input.now, 'cancellation observation time');
+      this.#requireActiveClaimant(tenantId, input.claimant_key_id, now, workerWriteScope('execution'));
+      const key = invocationKey(tenantId, ref);
+      const record = this.#invocations.get(key);
+      if (!record) throw managedError('Invocation was not found', 'INVOCATION_NOT_FOUND', 404);
+      const events = (this.#audit.get(key) ?? []).filter((event) => event.event_type === 'cancellation_requested');
+      return verifyCancellationObservation({ ...record, tenant_status: this.#tenants.get(tenantId)?.status },
+        input, now, { count: events.length, details_hash: events[0]?.details_hash ?? null });
     });
   }
 

@@ -11,6 +11,9 @@ Supply `controlPlane`, `providerRegistry`, distinct `executionPrincipal`,
 `cleanupPrincipal`, and `recoveryPrincipal` slots, `workerId`, bounded `leaseMs`
 and `maxAttempts`.
 
+`cancellationPollMs` bounds the interval between observation attempts
+(20–5,000 ms; default 100). It is not a provider termination deadline.
+
 The worker, delivery journal and enabled local host reject overlapping stable
 `key_id` values and mixed tenants before retaining delivery keys or opening any
 listener. All three original principal objects and their scope arrays must be
@@ -76,24 +79,31 @@ disable fence. Known pre-effect policy denial therefore permits controller
 cleanup of already journaled resources; unknown create/journal outcomes remain
 uncertain and require the existing recovery path.
 
-With a configured policy, every successful broker response must have awaited
-its effect fence. A missing fence fails closed as an unknown broker outcome;
-the same applies to a rejected callback that never completed its required fence.
-If a broker starts a fence, it must finish successfully before its response is
-accepted even on the optional legacy local-test path. Failed or unfinished
+Every successful broker response must have awaited its one-use effect fence
+and exact driver-bound provider call, with or without optional request policy.
+A missing fence fails closed as an unknown broker outcome; the same applies to
+a rejected callback that never completed its required fence. The broker gets a
+frozen null-prototype facade exposing only the requested method plus immutable
+provider metadata, not a usable raw provider. Its method binds the exact frozen
+input, rechecks authority after callback waits, dispatches once with a fresh
+driver-owned context, and snapshots/hash-checks the actual provider result.
+Unawaited/dropped promises and fabricated results cannot journal/import a result.
+Failed or unfinished
 fences and propagated driver-issued invalid-fence errors retain private
 uncertainty and stop further callbacks. Classification does not trust provider
 error codes. A correctly completed first fence remains valid when a duplicate
 call is rejected and handled by the broker; a retained/late call is only a denied
-capability, not retroactive cancellation. None of this proves the broker used
-the fresh context at the actual effect or that no API call occurred. This capability is for a trusted broker,
+capability, not retroactive cancellation. The facade enforces those checks for
+its own dispatch, but does not prove the provider implementation enforced a
+remote effect fence or that no API call occurred. This capability is for a trusted broker,
 not isolation from a compromised host that already owns the provider object.
 Separate policy/control-plane reads are **not atomic with a provider effect**.
 Their order is lease/credential/binding renewal, then a policy read; credential
 revocation can race that policy read. These are ordered pre-effect checks, not
 a simultaneous principal/lease/policy snapshot. The worker also cannot prove
-whether a trusted callback actually fenced before its API call or honored the
-fresh context; arbitrary host callbacks are not qualified broker implementations.
+whether a trusted provider's internal API call honored that context; a host
+already retaining other raw provider references is not isolated by this facade.
+Arbitrary host callbacks/providers are not qualified broker implementations.
 A disable after the final check can still race a dispatched effect; it does not
 retroactively erase an effect or skip resource journaling/cleanup. Qualified
 effect-edge fencing, in-flight cancellation and independent observation remain
@@ -132,8 +142,8 @@ callback failure prevents `completeCleanup`: return only the generic redacted
 `WORKER_CLEANUP_FAILED` and retain `cleanup_pending`. Shutdown preserves the
 existing redacted `WORKER_CLOSED` error instead; it also stops further callbacks
 and cannot complete cleanup. Without configured policy, a callback that fails
-before starting its optional fence remains a resource-local legacy local-test
-failure; with policy, the same missing required fence makes the attempt uncertain.
+before starting its required fence makes the attempt uncertain too. The same
+mandatory broker protocol applies with and without optional request policy.
 Neither case grants production broker authority. The verify-only settlement
 path also attempts the other observation but never imports a partially verified
 result. Full success gets a final current-authority fence before the control
@@ -233,11 +243,52 @@ durable obligations before using this as an operational service.
 
 `close()` rejects new work and aborts the signal passed to provider/lookup
 callbacks. Late responses fail the next fence; they cannot report completion.
-The driver checks shutdown again after an awaited lease renewal and before each
-provider/lookup callback, so closing during that wait cannot dispatch new work.
+The driver checks shutdown again after an awaited claim, before host preparation,
+after lease renewal and before each provider/lookup callback, so closing during
+those waits cannot start new preparation or dispatch.
 Cancellation does not prove a provider resource stopped or was destroyed.
 Recovery is still mandatory for unfinished durable invocations, and a callback
 that never settles requires broker/operator recovery.
+
+### In-flight cancellation and truthful retirement
+
+The original admitted key may request durable cancellation through the public
+control-plane API; the worker does not impersonate that key or mint approval.
+The watcher supplies the original execution claim token and immutable generation
+under its current authenticated execution identity. The store checks the active
+lease or reconstructs the exact interrupted-attempt digest from the existing
+append-only cancellation event. Wrong identity/token/generation and takeover
+fail closed. The response contains no raw token, operation or resource data.
+
+Observation loss or a durable cancellation signals the execution attempt to
+stop. The signal is advisory: the driver keeps the logical promise pending and
+also tracks actual bound provider promises independently, including a promise
+the broker dropped before returning. Late results cannot revive execution or
+be imported. These counters settle only when their respective promises settle;
+verified resource absence does not fabricate callback settlement. Original
+attempt promises remain retained tombstones bounded by `maxAttempts`.
+
+After successful outcome handoff, the execution watcher is retired before the
+fresh cleanup claim. Late observer snapshots/errors cannot misclassify cleanup's
+new generation as execution failure. Cancellation after handoff still preserves
+settled outcome/cost and forces verified cleanup to `failed_closed`, never
+result import. No cancellation path claims to undo external effects.
+
+`stopExecution()` rejects new execution and aborts active execution signals while
+leaving the open worker's cleanup/recovery available. `status()` and stop/close
+snapshots expose `pending_attempts`, `pending_provider_callbacks` and
+`termination_proven: false`; status also exposes retained attempts. `close()` is
+full teardown: it disables cleanup/recovery on that instance and reports that
+recovery requires a fresh worker. The local host exposes `stopExecution()` and
+includes worker status in health/close observations. Neither method proves
+remote termination or independently observed absence.
+
+A successful database renewal/observation is not atomic with a later provider
+effect. Cancellation committed after the last checked snapshot may still race
+an already authorized/dispatched effect. Preserve ambiguity, resource identity
+and recovery rather than describing a cancellation acknowledgement as proof of
+zero allocation. Qualified effect-edge fencing and independent provider
+termination/absence evidence remain open production requirements.
 
 ## Source evidence versus remaining production work
 

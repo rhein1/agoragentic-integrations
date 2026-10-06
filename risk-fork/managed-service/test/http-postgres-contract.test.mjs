@@ -489,7 +489,7 @@ test('PostgreSQL source schema binds tenant state, hashes credentials, and makes
 
 test('PostgreSQL health probe is local-pool injectable and reports durability truth', async () => {
   let released = false;
-  let migrationCount = 3;
+  let migrationCount = 4;
   const migrationHash = sha256Ref((await readFile(
     new URL('../migrations/001_managed_control_plane.pg.sql', import.meta.url),
     'utf8',
@@ -499,6 +499,9 @@ test('PostgreSQL health probe is local-pool injectable and reports durability tr
   )).replace(/\r\n?/g, '\n'));
   const lockMigrationHash = sha256Ref((await readFile(
     new URL('../migrations/003_control_plane_lock_helpers.pg.sql', import.meta.url), 'utf8',
+  )).replace(/\r\n?/g, '\n'));
+  let cancellationMigrationHash = sha256Ref((await readFile(
+    new URL('../migrations/008_managed_cancellation.pg.sql', import.meta.url), 'utf8',
   )).replace(/\r\n?/g, '\n'));
   const pool = {
     async connect() {
@@ -523,6 +526,7 @@ test('PostgreSQL health probe is local-pool injectable and reports durability tr
               migration_hash: migrationHash,
               purpose_migration_hash: purposeMigrationHash,
               lock_migration_hash: lockMigrationHash,
+              cancellation_migration_hash: cancellationMigrationHash,
               migration_count: migrationCount,
               recovery_required_count: 0,
               expired_execution_lease_count: 0,
@@ -549,16 +553,22 @@ test('PostgreSQL health probe is local-pool injectable and reports durability tr
     exact_catalog_verified: false,
     runtime_privileges_verified: false,
     migration_verified: true,
-    migration_count: 3,
+    migration_count: 4,
     recovery_required_count: 0,
     expired_execution_lease_count: 0,
   });
   assert.equal(released, true);
-  migrationCount = 4;
+  migrationCount = 5;
   const unreviewedMigration = await store.health();
   assert.equal(unreviewedMigration.ready, false);
   assert.equal(unreviewedMigration.migration_verified, false);
-  assert.equal(unreviewedMigration.migration_count, 4);
+  assert.equal(unreviewedMigration.migration_count, 5);
+  migrationCount = 4;
+  cancellationMigrationHash = sha256Ref({ unreviewed_cancellation_migration: true });
+  const tamperedCancellationMigration = await store.health();
+  assert.equal(tamperedCancellationMigration.ready, false);
+  assert.equal(tamperedCancellationMigration.migration_verified, false);
+  assert.equal(tamperedCancellationMigration.migration_count, 4);
   assert.throws(
     () => new PostgresManagedServiceStore({ pool, requireTls: true }),
     (error) => error.code === 'MANAGED_POSTGRES_TLS_POOL_UNTRUSTED',

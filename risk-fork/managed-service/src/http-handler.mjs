@@ -138,6 +138,17 @@ function createHandler(controlPlane, authenticator, allowPublicRoutes, allowWork
       }
 
       const invocationMatch = /^\/v1\/invocations\/([A-Za-z0-9][A-Za-z0-9._:@-]{0,199})$/.exec(path);
+      const cancellationMatch = /^\/v1\/invocations\/([A-Za-z0-9][A-Za-z0-9._:@-]{0,199})\/cancel$/.exec(path);
+      if (allowPublicRoutes && method === 'POST' && cancellationMatch) {
+        // Recovery-class policy keeps owner cancellation available when new
+        // admissions/execution are disabled. It grants no worker authority.
+        const principal = await authenticate('invocations:cancel', 'recovery');
+        if (Object.hasOwn(body, 'invocation_ref')) {
+          throw managedError('Cancellation target must be supplied only by the URL path', 'AMBIGUOUS_INVOCATION_TARGET', 400);
+        }
+        return response(200, await controlPlane.requestCancellation(principal,
+          { ...cloneJson(body, 'cancellation request'), invocation_ref: cancellationMatch[1] }));
+      }
       if (allowPublicRoutes && method === 'GET' && invocationMatch) {
         const principal = await authenticate('invocations:read', 'read');
         return response(200, await controlPlane.getInvocation(principal, invocationMatch[1]));

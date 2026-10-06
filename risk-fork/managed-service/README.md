@@ -11,6 +11,7 @@ The package is deliberately marked `private: true`. An explicit, default-off loc
 - authority-free operation validation using the parent Risk Fork `validateChildOperation` boundary;
 - tenant-scoped idempotency with same-key/different-request rejection and exact replay across provider-binding rotation or tighter restart policy;
 - hard per-invocation cost, UTC-day budget, and concurrent-invocation admission limits;
+- permanent owner-key cancellation on the original invocation, exact request replay, conservative in-flight accounting, and lease-generation-bound worker observation;
 - versioned, locally qualified provider bindings keyed by an immutable capability snapshot, exact adapter digest, qualification-receipt hash, and canonical tenant allowlist, with source-adapter drift rechecked before use;
 - execution, cleanup, and recovery leases that require a caller-generated URL-safe CSPRNG token, persist only its domain-separated hash in a tenant-wide uniqueness tombstone, and support tightly bounded delivery replays;
 - an explicit invocation state machine with fail-closed accounting and a blocking recovery path for untracked resources;
@@ -107,6 +108,40 @@ Expired cleanup and recovery leases are reaped and remain retryable in their exi
 
 An admitted item that is never claimed expires to `failed_closed` after the configured maximum age and releases its unused reservation. The execution-claim transaction independently enforces the same age boundary, so a delayed sweeper cannot revive stale authority. Execution authority is also tied to the invocation's admission UTC budget day: a claim on a later day fails, and an execution claim or renewal cannot extend past the next UTC midnight. At that boundary the expired execution fence requires reconciliation before new authority can overlap it. This prevents abandoned admissions from executing late, carrying prior-day reserved authority into a fresh daily allowance, or consuming tenant concurrency and budget forever.
 
+## Cancellation of the original invocation
+
+`requestCancellation(principal, { invocation_ref, idempotency_key, reason_hash })`
+requires the current original admitted key and `invocations:cancel`. The public
+`POST /v1/invocations/:ref/cancel` body contains only `idempotency_key` and a
+canonical SHA-256 `reason_hash`; the URL owns the target. No body-supplied tenant,
+provider/resource reference, lease or approval field is accepted. The worker
+HTTP surface exposes no cancellation endpoint. With request policy configured,
+this operation uses bounded recovery quota and remains available when new
+execution is disabled; it does not bypass authentication or quota.
+
+Cancellation is a permanent marker on the original invocation, not a new state,
+receipt or authorization capability. The transaction rechecks request/operation/
+provider/recovery bindings, locks the original credential, and rechecks its scope
+and database-clock expiry after budget waits. A pre-effect admitted item becomes
+`failed_closed` and releases its reservation without a spend. Execution-leased
+or running work records `ambiguous`, settles the reservation at its conservative
+estimate, clears the execution lease and retains `recovery_required` for unknown
+resources or `cleanup_pending` for two known resources. This accounting bound is
+not an observed provider charge. An existing cleanup/recovery lease and already
+settled cost/outcome remain intact. Exact cancellation replay returns current
+state without another audit or budget movement; a different permanent request
+fails with `CANCELLATION_CONFLICT`. Terminal uncanceled work cannot be canceled
+retroactively. Canceled work can never enter `completed`; verified exact cleanup
+or recovery absence instead ends in `failed_closed`.
+
+The host worker observes cancellation with its current execution principal,
+raw claim token and original generation, checked against the live lease or the
+original cancellation audit digest. Takeover retires this observation. The
+token never appears in the response/audit. This is observation, not a locked
+dispatch fence or independently signed provider evidence. Abort acknowledgement,
+timeout, and terminal bookkeeping do not prove an in-flight callback stopped or
+undo an external effect. See [WORKER.md](./WORKER.md).
+
 ## Authentication and tenant boundary
 
 `createManagedAuthenticator()` looks up a domain-separated SHA-256 key hash. PostgreSQL stores `key_hash`, never a raw bearer token, and filters not-before, expiry, and revocation using its own clock before returning a record; the application check remains an additional fail-closed check. Each principal and verifier are bound to that exact authenticator/store instance; another authenticator's principal and caller-created verifier functions are rejected. Every control-plane call re-resolves the key record and rechecks its hash, expiry, revocation, tenant, key id, and requested scope. Every tenant-visible invocation and audit query includes both `tenant_id` and `invocation_ref`.
@@ -130,6 +165,7 @@ The current source scopes separate tenant APIs, worker mutation, and audit reads
 
 - `invocations:write`
 - `invocations:read`
+- `invocations:cancel`
 - `worker:execution:claim`, `worker:execution:write`
 - `worker:cleanup:claim`, `worker:cleanup:write`
 - `worker:recovery:claim`, `worker:recovery:write`
@@ -193,8 +229,11 @@ the worker's invocation. New savepoint/fork creation and execution recheck the
 durable enabled/epoch state after preparation and lease waits without consuming
 quota again. The trusted provider broker must also await its one-use
 `effectFence()` immediately before the API call after any broker-owned wait.
-Policy-enabled workers reject a response that omitted that fence as an unknown
-outcome, not proof of no effect. Destruction/verification and durable recovery
+Every worker requires that fence and an awaited exact bound provider call,
+whether optional request policy is configured or not. The callback receives a
+one-method frozen facade, not the usable raw provider. Missing/unfinished fencing
+or a fabricated result fails as an unknown outcome, not proof of no effect.
+Destruction/verification and durable recovery
 bookkeeping remain available when execution is disabled. These separate reads
 are not atomic with external effects or termination proof; see
 [WORKER.md](./WORKER.md) for the exact capability and ambiguity contract.
@@ -279,16 +318,34 @@ as the database owner for separately provisioned migrator/runtime roles. It
 revokes PUBLIC database CONNECT/CREATE/TEMPORARY, grants migrator CONNECT/CREATE,
 and grants runtime CONNECT only. Apply the separate
 [control-plane grants](./ops/postgres/control-plane-roles.sql.template) using
-the dedicated migration owner after all three control-plane migrations.
+the dedicated migration owner after all four control-plane migrations.
 It is not the worker-delivery schema/template. Runtime SELECT covers all eight
 tables; INSERT covers usage, invocations, lease tombstones, journal receipts
 and audits; UPDATE covers usage/invocations only; helper EXECUTE covers only
 the three locking functions. Tenant/key provisioning and credential changes
 remain administrator duties.
 
+Explicit `008_managed_cancellation.pg.sql` is logical version **4** of this
+control-plane ledger: four nullable marker columns, a closed consistency CHECK,
+and a no-rearm trigger whose direct PUBLIC EXECUTE is revoked. The earlier
+`001`/`002`/`003` sources and v1 catalog remain unchanged. The v2 catalog is
+captured from a disposable PG16 schema and binds this exact four-file set;
+`004` through `007` remain independent request-policy/telemetry migrations,
+not automatic control-plane versions. The new trigger prevents changing an
+already-written marker. Existing runtime table UPDATE on invocations remains:
+catalog attestation and the app transaction do not establish protection against
+a compromised privileged host forging an initial marker directly in SQL.
+
+`test/postgres-cancellation.test.mjs` uses real disposable transactions, exact
+COMMIT-then-lost-reply injection, concurrent replay, credential/budget row-lock
+expiry, restart/recovery, interrupted-token observation, immutable markers and
+audit anchors. Its provider callbacks are explicit fixtures, not live isolation
+or destruction proof. It obeys the same mandatory database guard as the other
+control-plane integration tests.
+
 `verifyPostgresControlPlaneAttestation` compares complete relation, column,
 constraint, index, trigger, function, type, policy, rule and inheritance
-catalogs against the source-owned PostgreSQL 16 manifest, and binds all three
+catalogs against the source-owned PostgreSQL 16 manifest, and binds all four
 migration hashes. Other PostgreSQL majors fail closed until independently
 reviewed. The factory verifies the catalog before returning; a direct store
 must call `initialize()`. Set `expectedOwner` to additionally attest a distinct
@@ -354,6 +411,7 @@ a separately supplied worker authenticator and exposes internal routes only.
 | `GET` | `/healthz` | none | process liveness only; always reports deployed/live protection false |
 | `GET` | `/readyz` | none | local-test readiness, never production readiness |
 | `POST` | `/v1/invocations` | `invocations:write` | tenant-bound admission |
+| `POST` | `/v1/invocations/:ref/cancel` | `invocations:cancel` | permanent original-owner cancellation; not termination proof |
 | `GET` | `/v1/invocations/:ref` | `invocations:read` | same-tenant state |
 | `GET` | `/v1/invocations/:ref/audit` | `audit:read` | same-tenant self-attested audit chain |
 | `POST` | `/internal/v1/invocations/:ref/claim-execution` | `worker:execution:claim` | claim execution lease |

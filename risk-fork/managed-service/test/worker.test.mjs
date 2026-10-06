@@ -31,7 +31,7 @@ class WorkerTestProvider extends TestProvider {
 }
 
 async function fixture(overrides = {}) {
-  const provider = new WorkerTestProvider();
+  const provider = overrides.fixture?.provider ?? new WorkerTestProvider();
   const current = await createFixture({ provider, verifyResourceBinding: () => true,
     verifyCleanupEvidence: () => true, ...overrides.fixture });
   const { invocation: admitted } = await current.controlPlane.admitInvocation(current.principal, invocationRequest({
@@ -238,7 +238,7 @@ test('policy-enabled broker cannot return an importable result without awaiting 
   await host.start();
   try {
     await assert.rejects(host.execute(current.admitted.invocation_ref), { code: 'WORKER_PREPARATION_FAILED' });
-    assert.deepEqual(current.provider.created, ['savepoint']);
+    assert.deepEqual(current.provider.created, [], 'an unfenced broker now cannot allocate at all');
     const state = await current.controlPlane.getInvocation(current.principal, current.admitted.invocation_ref);
     assert.equal(state.savepoint_ref, null, 'unfenced broker response requires resource recovery, not trusted journaling');
     assert.notEqual(state.state, 'completed');
@@ -268,7 +268,8 @@ test('broker passes the renewed effect-time context after its queue wait', { tim
     assert.equal(freshContext.invocation_ref, originalContext.invocation_ref);
     assert.equal(freshContext.provider_binding_hash, originalContext.provider_binding_hash);
     assert.equal(freshContext.provider_recovery_key, originalContext.provider_recovery_key);
-    assert.equal(current.provider.savepointContext, freshContext);
+    assert.notEqual(current.provider.savepointContext, freshContext, 'the raw provider gets a new driver-owned dispatch context');
+    assert.deepEqual(current.provider.savepointContext, freshContext);
     assert.ok(Object.isFrozen(freshContext));
     assert.equal('lease_token' in freshContext, false); assert.equal('principal' in freshContext, false);
   } finally { release(); await host.close(); current.worker.close(); }
@@ -344,7 +345,8 @@ test('worker rejects changed admitted bytes before provider creation', async () 
 test('worker rechecks expiry after a provider response and never continues the original effect', async () => {
   const current = await fixture();
   const worker = createManagedRiskForkWorker({ ...current.options,
-    invokeProvider: async ({ provider, method, input }) => {
+    invokeProvider: async ({ provider, method, input, effectFence }) => {
+      await effectFence();
       const result = await provider[method](input);
       if (method === 'createSavepoint') current.setNow('2026-09-05T12:00:11.000Z');
       return result;
@@ -365,7 +367,8 @@ test('worker shutdown aborts the broker signal and rejects a delayed creation re
   const delay = new Promise((resolve) => { release = resolve; });
   let signal;
   const worker = createManagedRiskForkWorker({ ...current.options,
-    invokeProvider: async ({ provider, method, input, signal: brokerSignal }) => {
+    invokeProvider: async ({ provider, method, input, signal: brokerSignal, effectFence }) => {
+      await effectFence();
       signal = brokerSignal; started(); await delay; return provider[method](input);
     },
   });
@@ -374,8 +377,8 @@ test('worker shutdown aborts the broker signal and rejects a delayed creation re
   await ready;
   worker.close(); assert.equal(signal.aborted, true); release();
   await rejected;
-  assert.deepEqual(current.provider.created, ['savepoint']);
-  assert.equal(current.provider.destroyCalls.length, 0, 'unknown late creation is recovery-owned');
+  assert.deepEqual(current.provider.created, [], 'even a previously fenced callback cannot allocate after close');
+  assert.equal(current.provider.destroyCalls.length, 0, 'no allocation occurred; close itself still proves no absence');
 });
 
 test('shutdown during lease renewal cannot dispatch a new provider operation', { timeout: 5000 }, async () => {
@@ -766,8 +769,7 @@ for (const withPolicy of [true, false]) {
         assert.equal(error.code, 'WORKER_CLEANUP_FAILED');
         assert.doesNotMatch(error.message, /synthetic-private-preflight-detail/); return true;
       });
-      assert.deepEqual(calls, withPolicy ? ['destroyFork']
-        : ['destroyFork', 'destroySavepoint', 'verifySavepointDestroyed']);
+      assert.deepEqual(calls, ['destroyFork'], 'the mandatory broker boundary applies with or without optional policy');
       assert.equal((await current.controlPlane.getInvocation(current.principal,
         current.admitted.invocation_ref)).state, 'cleanup_pending');
     } finally { worker.close(); }
@@ -834,4 +836,269 @@ test('worker delivery journal persists ciphertext and restart replays no origina
   assert.deepEqual(current.methods, methods);
   assert.deepEqual(await current.controlPlane.listAuditEvents(current.principal, current.admitted.invocation_ref), before);
   restarted.close();
+});
+
+// Bare synthetic latch promises do not keep Node20's event loop alive. Model
+// the referenced listener/socket owned by the actual host, without changing
+// the worker's intentionally unref'd observer or claiming provider termination.
+function retainTestHost(t) {
+  const listener = setInterval(() => {}, 1000);
+  t.after(() => clearInterval(listener));
+}
+
+test('durable cancellation aborts a queued broker and forbids late allocation or re-execution', { timeout: 5000 }, async (t) => {
+  retainTestHost(t);
+  const current = await fixture();
+  let entered; let release; let brokerSignal;
+  const ready = new Promise((resolve) => { entered = resolve; });
+  const wait = new Promise((resolve) => { release = resolve; });
+  const worker = createManagedRiskForkWorker({ ...current.options,
+    invokeProvider: async (packet) => {
+      brokerSignal = packet.signal; entered(); await wait;
+      // A callback ignoring AbortSignal still cannot bypass the bound method.
+      return packet.provider[packet.method](packet.input);
+    },
+  });
+  const attempt = worker.execute(current.admitted.invocation_ref);
+  const rejected = assert.rejects(attempt, { code: 'WORKER_PREPARATION_FAILED' });
+  try {
+    await ready;
+    const canceled = await current.controlPlane.requestCancellation(current.principal, {
+      invocation_ref: current.admitted.invocation_ref, idempotency_key: 'cancel-queued-broker-0001',
+      reason_hash: sha256Ref('synthetic cancel'),
+    });
+    assert.equal(canceled.state, 'recovery_required');
+    await new Promise((resolve) => {
+      if (brokerSignal.aborted) resolve();
+      else brokerSignal.addEventListener('abort', resolve, { once: true });
+    });
+    assert.deepEqual(current.provider.created, []);
+    release(); await rejected;
+    assert.deepEqual(current.provider.created, [], 'retained callback cannot allocate after cancellation');
+    assert.equal(worker.execute(current.admitted.invocation_ref), attempt, 'retired execution is never retried');
+  } finally { release(); worker.close(); current.worker.close(); }
+});
+
+test('canceled in-flight callback retains its slot while exact cleanup destroys known resources', { timeout: 5000 }, async (t) => {
+  retainTestHost(t);
+  const current = await fixture();
+  let entered; let release;
+  const ready = new Promise((resolve) => { entered = resolve; });
+  const wait = new Promise((resolve) => { release = resolve; });
+  const worker = createManagedRiskForkWorker({ ...current.options, invokeProvider: async (packet) => {
+    const result = await current.options.invokeProvider(packet);
+    if (packet.method === 'executeInFork') { entered(); await wait; }
+    return result;
+  } });
+  const attempt = worker.execute(current.admitted.invocation_ref);
+  const rejected = assert.rejects(attempt, { code: 'WORKER_PREPARATION_FAILED' });
+  try {
+    await ready;
+    const canceled = await current.controlPlane.requestCancellation(current.principal, {
+      invocation_ref: current.admitted.invocation_ref, idempotency_key: 'cancel-in-flight-known-0001',
+      reason_hash: sha256Ref('synthetic cancel'),
+    });
+    assert.equal(canceled.state, 'cleanup_pending');
+    assert.equal(canceled.execution_outcome, 'ambiguous');
+    assert.equal(worker.status().pending_attempts, 1, 'an abort is not a settled provider callback');
+    const terminal = await worker.cleanup(current.admitted.invocation_ref);
+    assert.equal(terminal.state, 'failed_closed');
+    assert.equal(terminal.execution_outcome, 'ambiguous');
+    assert.deepEqual(current.provider.destroyCalls, ['fork', 'savepoint']);
+    assert.equal(worker.status().pending_attempts, 1, 'verified resource absence does not fabricate callback settlement');
+    release(); await rejected;
+    assert.equal(worker.status().pending_attempts, 0);
+    assert.equal(worker.execute(current.admitted.invocation_ref), attempt, 'no blind re-execution after cancellation');
+  } finally { release(); worker.close(); current.worker.close(); }
+});
+
+test('a dropped already-entered provider promise remains unresolved after broker rejection', { timeout: 5000 }, async (t) => {
+  retainTestHost(t);
+  let entered; let release; let actualCall;
+  const ready = new Promise((resolve) => { entered = resolve; });
+  const wait = new Promise((resolve) => { release = resolve; });
+  const provider = new class extends WorkerTestProvider {
+    async createSavepoint(...args) { const result = await super.createSavepoint(...args); entered(); await wait; return result; }
+  }();
+  const current = await fixture({ fixture: { provider } });
+  const worker = createManagedRiskForkWorker({ ...current.options, invokeProvider: async (packet) => {
+    await packet.effectFence();
+    actualCall = packet.provider[packet.method](packet.input);
+    await ready;
+    return { fabricated: true };
+  } });
+  try {
+    const attempt = worker.execute(current.admitted.invocation_ref);
+    await assert.rejects(attempt, { code: 'WORKER_PREPARATION_FAILED' });
+    assert.deepEqual(current.provider.created, ['savepoint']);
+    assert.equal(worker.status().pending_attempts, 0);
+    assert.equal(worker.status().pending_provider_callbacks, 1);
+    assert.equal(worker.status().retained_attempts, 1);
+    assert.equal(worker.status().termination_proven, false);
+    assert.equal(worker.execute(current.admitted.invocation_ref), attempt, 'unknown creation cannot be repeated');
+    const before = await current.controlPlane.getInvocation(current.principal, current.admitted.invocation_ref);
+    assert.equal(before.savepoint_ref, null);
+    assert.equal(before.execution_outcome, null);
+    release(); await actualCall;
+    assert.equal(worker.status().pending_provider_callbacks, 0, 'only actual settlement releases this count');
+    const after = await current.controlPlane.getInvocation(current.principal, current.admitted.invocation_ref);
+    assert.deepEqual(after, before, 'late settlement cannot journal or authorize import');
+    assert.deepEqual(current.provider.created, ['savepoint']);
+  } finally { release(); if (actualCall) await actualCall.catch(() => {}); worker.close(); current.worker.close(); }
+});
+
+test('signal-ignoring provider execution stays pending while stopped execution permits exact cleanup', { timeout: 5000 }, async (t) => {
+  retainTestHost(t);
+  let entered; let release; let signal;
+  const ready = new Promise((resolve) => { entered = resolve; });
+  const wait = new Promise((resolve) => { release = resolve; });
+  const provider = new class extends WorkerTestProvider {
+    async executeInFork(...args) { entered(); await wait; return super.executeInFork(...args); }
+  }();
+  const current = await fixture({ fixture: { provider } });
+  const worker = createManagedRiskForkWorker({ ...current.options, cancellationPollMs: 20,
+    invokeProvider: async (packet) => {
+      if (packet.method === 'executeInFork') signal = packet.signal;
+      return current.options.invokeProvider(packet);
+    },
+  });
+  const attempt = worker.execute(current.admitted.invocation_ref);
+  const rejected = assert.rejects(attempt, { code: 'WORKER_PREPARATION_FAILED' });
+  try {
+    await ready;
+    await current.controlPlane.requestCancellation(current.principal, {
+      invocation_ref: current.admitted.invocation_ref, idempotency_key: 'cancel-ignoring-provider-0001',
+      reason_hash: sha256Ref('signal ignoring provider fixture'),
+    });
+    await new Promise((resolve) => {
+      if (signal.aborted) resolve(); else signal.addEventListener('abort', resolve, { once: true });
+    });
+    const stopped = worker.stopExecution();
+    assert.equal(stopped.cleanup_recovery_available, true);
+    assert.equal(stopped.pending_provider_callbacks, 1);
+    assert.equal(stopped.termination_proven, false);
+    const terminal = await worker.cleanup(current.admitted.invocation_ref);
+    assert.equal(terminal.state, 'failed_closed');
+    assert.equal(terminal.execution_outcome, 'ambiguous');
+    assert.deepEqual(current.provider.destroyCalls, ['fork', 'savepoint']);
+    assert.equal(worker.status().pending_attempts, 1);
+    assert.equal(worker.status().pending_provider_callbacks, 1, 'resource absence is not promise settlement');
+    release(); await rejected;
+    assert.equal(worker.status().pending_provider_callbacks, 0);
+    assert.equal(worker.status().pending_attempts, 0);
+    assert.deepEqual(await current.controlPlane.getInvocation(current.principal, current.admitted.invocation_ref), terminal);
+  } finally { release(); await rejected; worker.close(); current.worker.close(); }
+});
+
+for (const shutdown of ['stopExecution', 'close']) {
+  test(`a delayed durable claim cannot start preparation after ${shutdown}`, { timeout: 5000 }, async (t) => {
+    retainTestHost(t);
+    const current = await fixture(); let entered; let release; let preparations = 0;
+    const ready = new Promise((resolve) => { entered = resolve; });
+    const wait = new Promise((resolve) => { release = resolve; });
+    const controlPlane = { ...current.controlPlane, async claimExecution(...args) {
+      const response = await current.controlPlane.claimExecution(...args); entered(); await wait; return response;
+    } };
+    const worker = createManagedRiskForkWorker({ ...current.options, controlPlane,
+      loadPrepareInput: (...args) => { preparations += 1; return current.options.loadPrepareInput(...args); },
+    });
+    const attempt = worker.execute(current.admitted.invocation_ref);
+    const rejected = assert.rejects(attempt, { code: shutdown === 'close' ? 'WORKER_CLOSED' : 'WORKER_EXECUTION_STOPPED' });
+    try {
+      await ready;
+      const status = worker[shutdown]();
+      assert.equal(status.pending_attempts, 1, 'unreceived claim remains unresolved');
+      assert.equal(status.pending_provider_callbacks, 0);
+      assert.equal(status.termination_proven, false);
+      assert.equal(preparations, 0);
+      release(); await rejected;
+      assert.equal(preparations, 0, 'no host preparation callback after shutdown across claim delivery');
+      assert.deepEqual(current.provider.created, []);
+      assert.equal(worker.status().pending_attempts, 0);
+      const state = await current.controlPlane.getInvocation(current.principal, current.admitted.invocation_ref);
+      assert.equal(state.state, 'execution_leased', 'shutdown is not durable absence proof');
+    } finally { release(); await rejected; worker.close(); current.worker.close(); }
+  });
+}
+
+test('a stale observer failure after normal outcome handoff cannot abort cleanup', { timeout: 5000 }, async (t) => {
+  retainTestHost(t);
+  const current = await fixture();
+  let releaseCreation; let observed; let releaseObserver; let observerFinished; let cleanupEntered; let releaseCleanup;
+  const creationWait = new Promise((resolve) => { releaseCreation = resolve; });
+  const observerReady = new Promise((resolve) => { observed = resolve; });
+  const observerWait = new Promise((resolve) => { releaseObserver = resolve; });
+  const observerDone = new Promise((resolve) => { observerFinished = resolve; });
+  const cleanupReady = new Promise((resolve) => { cleanupEntered = resolve; });
+  const cleanupWait = new Promise((resolve) => { releaseCleanup = resolve; });
+  const controlPlane = { ...current.controlPlane, async observeExecutionCancellation(...args) {
+    await current.controlPlane.observeExecutionCancellation(...args);
+    observed();
+    try { await observerWait; throw new Error('stale observation response after handoff'); }
+    finally { observerFinished(); }
+  } };
+  const worker = createManagedRiskForkWorker({ ...current.options, controlPlane, cancellationPollMs: 20,
+    invokeProvider: async (packet) => {
+      if (packet.method === 'createSavepoint') await creationWait;
+      if (packet.context.lease_kind === 'cleanup' && packet.method === 'verifyDestroyed') {
+        cleanupEntered(); await cleanupWait;
+      }
+      return current.options.invokeProvider(packet);
+    },
+  });
+  const pending = worker.execute(current.admitted.invocation_ref);
+  pending.catch(() => {});
+  try {
+    await observerReady; releaseCreation(); await cleanupReady;
+    releaseObserver(); await observerDone;
+    await new Promise((resolve) => setImmediate(resolve));
+    releaseCleanup();
+    const result = await pending;
+    assert.equal(result.invocation.state, 'completed');
+    assert.equal(result.invocation.execution_outcome, 'succeeded');
+    assert.equal(worker.status().pending_attempts, 0);
+    assert.equal(worker.status().pending_provider_callbacks, 0);
+  } finally { releaseCreation(); releaseObserver(); releaseCleanup(); await pending.catch(() => {}); worker.close(); current.worker.close(); }
+});
+
+test('detached provider facade is one-method and exact-input bound without exposing the raw provider', async () => {
+  const current = await fixture(); let invalidInputs = 0;
+  const worker = createManagedRiskForkWorker({ ...current.options, invokeProvider: async (packet) => {
+    assert.equal(Object.getPrototypeOf(packet.provider), null);
+    assert.ok(Object.isFrozen(packet.provider));
+    assert.ok(Object.isFrozen(packet.input));
+    assert.deepEqual(Object.keys(packet.provider).sort(), ['capabilities', 'id', packet.method].sort());
+    const detached = packet.provider[packet.method];
+    await packet.effectFence();
+    if (packet.method === 'createSavepoint') {
+      await assert.rejects(detached({ ...packet.input, forged_field: true }), { code: 'WORKER_BROKER_FENCE_INVALID' });
+      invalidInputs += 1;
+      assert.deepEqual(current.provider.created, [], 'modified input cannot enter the provider');
+    }
+    return detached(packet.input);
+  } });
+  try {
+    assert.equal((await worker.execute(current.admitted.invocation_ref)).invocation.state, 'completed');
+    assert.equal(invalidInputs, 1);
+    assert.deepEqual(current.provider.created, ['savepoint', 'fork']);
+  } finally { worker.close(); current.worker.close(); }
+});
+
+test('a fabricated broker result after valid provider settlement cannot be journaled or imported', async () => {
+  const current = await fixture();
+  const worker = createManagedRiskForkWorker({ ...current.options, invokeProvider: async (packet) => {
+    await packet.effectFence();
+    const actual = await packet.provider[packet.method](packet.input);
+    assert.ok(Object.isFrozen(actual));
+    return { ...actual, savepoint_ref: 'fabricated:resource' };
+  } });
+  try {
+    await assert.rejects(worker.execute(current.admitted.invocation_ref), { code: 'WORKER_PREPARATION_FAILED' });
+    assert.deepEqual(current.provider.created, ['savepoint']);
+    const state = await current.controlPlane.getInvocation(current.principal, current.admitted.invocation_ref);
+    assert.equal(state.savepoint_ref, null);
+    assert.equal(state.result_hash, null);
+    assert.equal(worker.status().pending_provider_callbacks, 0);
+    assert.equal(worker.status().termination_proven, false);
+  } finally { worker.close(); current.worker.close(); }
 });

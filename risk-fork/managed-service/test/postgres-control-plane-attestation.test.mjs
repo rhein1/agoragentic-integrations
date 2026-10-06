@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import manifest from '../src/postgres-control-plane-catalog.json' with { type: 'json' };
+import manifest from '../src/postgres-control-plane-catalog-v2.json' with { type: 'json' };
 import { verifyPostgresControlPlaneAttestation } from '../src/postgres-control-plane-attestation.mjs';
 
 const schema='risk_fork_managed'; const owner='managed_migrator'; const runtime='managed_runtime';
@@ -24,13 +24,13 @@ function fixture(){
     if(sql.includes('database_owner')) return {rowCount:1,rows:[{usage:true,schema_create:false,connect:true,db_create:false,temporary:false,database_owner:false}]};
     if(sql.includes('p.proacl')||sql.includes('a.attacl')||sql.includes('n.nspacl')||sql.includes('pg_database d')||sql.includes('pg_default_acl')||sql.includes('FROM pg_catalog.pg_roles o')) return {rowCount:0,rows:[]};
     if(sql.includes('has_schema_privilege')) return {rowCount:1,rows:[{usage:true,schema_create:false,connect:true,db_create:false,temporary:false,database_owner:false}]};
-    if(sql.includes('SELECT version,migration_hash,applied_at')){const rows=manifest.migration_hashes.map((migration_hash,index)=>({version:index+1,migration_hash,applied_at:new Date(0)}));if(state.mutation==='ledger')rows[0].migration_hash='sha256:'+'0'.repeat(64);return {rowCount:rows.length,rows};}
-    if(sql.includes('pg_catalog.pg_attribute')){const rows=clone(manifest.catalog.columns);if(state.mutation==='column')rows[0].attnotnull=!rows[0].attnotnull;return {rowCount:rows.length,rows};}
+    if(sql.includes('SELECT version,migration_hash,applied_at')){const rows=manifest.migration_hashes.map((migration_hash,index)=>({version:index+1,migration_hash,applied_at:new Date(0)}));if(state.mutation==='ledger')rows[0].migration_hash='sha256:'+'0'.repeat(64);if(state.mutation==='cancellation_ledger')rows.pop();return {rowCount:rows.length,rows};}
+    if(sql.includes('pg_catalog.pg_attribute')){const rows=clone(manifest.catalog.columns);if(state.mutation==='column')rows[0].attnotnull=!rows[0].attnotnull;if(state.mutation==='cancellation_column'){const row=rows.find((column)=>column.name==='cancel_request_hash');assert.ok(row);row.attnotnull=!row.attnotnull;}return {rowCount:rows.length,rows};}
     if(sql.includes('pg_catalog.pg_class c')&&sql.includes('relkind NOT IN')){const rows=clone(manifest.catalog.relations);if(state.mutation==='extra_object')rows.push({...rows[0],name:'unreviewed_extra'});return {rowCount:rows.length,rows};}
     if(sql.includes('pg_catalog.pg_constraint')){const rows=clone(manifest.catalog.constraints);if(state.mutation==='constraint')rows[0].definition+=' /* drift */';return {rowCount:rows.length,rows};}
     if(sql.includes('pg_catalog.pg_index')){const rows=clone(manifest.catalog.indexes);if(state.mutation==='index')rows[0].definition+=' WHERE false';return {rowCount:rows.length,rows};}
-    if(sql.includes('pg_catalog.pg_trigger')){const rows=clone(manifest.catalog.triggers);if(state.mutation==='trigger')rows[0].tgenabled='D';return {rowCount:rows.length,rows};}
-    if(sql.includes('pg_catalog.pg_proc p')&&sql.includes('pg_get_functiondef')){const rows=clone(manifest.catalog.functions);if(state.mutation==='function')rows[0].definition+='\n-- drift';if(state.mutation==='search_path')rows[1].proconfig=['search_path=public'];return {rowCount:rows.length,rows};}
+    if(sql.includes('pg_catalog.pg_trigger')){const rows=clone(manifest.catalog.triggers);if(state.mutation==='trigger')rows[0].tgenabled='D';if(state.mutation==='cancellation_trigger'){const row=rows.find((trigger)=>trigger.name==='managed_invocations_no_cancellation_rearm');assert.ok(row);row.tgenabled='D';}return {rowCount:rows.length,rows};}
+    if(sql.includes('pg_catalog.pg_proc p')&&sql.includes('pg_get_functiondef')){const rows=clone(manifest.catalog.functions);if(state.mutation==='function')rows[0].definition+='\n-- drift';if(state.mutation==='search_path')rows[1].proconfig=['search_path=public'];if(state.mutation==='cancellation_function'){const row=rows.find((fn)=>fn.name==='reject_managed_cancellation_rearm');assert.ok(row);row.definition+='\n-- drift';}return {rowCount:rows.length,rows};}
     if(sql.includes('pg_catalog.pg_type t'))return {rowCount:manifest.catalog.types.length,rows:clone(manifest.catalog.types)};
     if(sql.includes('pg_catalog.pg_policy')||sql.includes('pg_catalog.pg_rewrite')||sql.includes('pg_catalog.pg_inherits'))return {rowCount:0,rows:[]};
     throw new Error(`unmapped fixture query: ${sql}`);
@@ -45,7 +45,7 @@ test('control-plane attestation accepts provider-free reviewed baseline',async()
 });
 
 test('control-plane attestation rejects catalog, ledger, helper, and ACL drift',async()=>{
-  for(const mutation of ['constraint','index','function','search_path','column','trigger','extra_object','ledger','table_acl']){
+  for(const mutation of ['constraint','index','function','search_path','column','trigger','extra_object','ledger','table_acl','cancellation_column','cancellation_trigger','cancellation_function','cancellation_ledger']){
     const f=fixture(); f.mutate(mutation);
     await assert.rejects(verifyPostgresControlPlaneAttestation(f.client,{schemaName:schema,expectedOwner:owner}), { code: 'MANAGED_POSTGRES_ATTESTATION_FAILED' }, mutation);
   }
