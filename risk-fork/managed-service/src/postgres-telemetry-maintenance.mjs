@@ -4,6 +4,7 @@ import { verifyPostgresManagedTelemetryAttestation } from './postgres-telemetry-
 import { managedError, requireInteger } from './validation.mjs';
 import { verifyMetricTotals } from './postgres-metric-state.mjs';
 import { verifyBacklogCustody } from './postgres-backlog-gauge-state.mjs';
+import { pruneBacklogAlerts, verifyBacklogAlertCustody } from './postgres-backlog-alert-state.mjs';
 
 // Explicit owner maintenance, never scheduled by the runtime or exposed over
 // HTTP. Capacity retains unresolved obligations indefinitely; only terminal
@@ -41,13 +42,14 @@ export async function prunePostgresManagedTelemetry(options) {
         await verifyTelemetrySettings(client,config,migration.hash);
         await verifyMetricTotals(client,config);
         await verifyBacklogCustody(client,config);
+        await verifyBacklogAlertCustody(client,config);
         const sample = await client.query('SELECT floor(extract(epoch FROM clock_timestamp()) * 1000)::bigint AS now_ms');
         const now = telemetryDbInteger(sample.rows[0]?.now_ms), prior = telemetryDbInteger(clock.rows[0].last_seen_ms);
         if (sample.rowCount !== 1 || now < prior) throw new TypeError('Telemetry clock regressed');
         checkTelemetrySignal(signal);
         await client.query(`UPDATE ${s}.telemetry_clock SET last_seen_ms=$1 WHERE singleton=true`,[now]);
         const table = config.eventKind === 'alert' ? 'telemetry_metric_alerts' : config.eventKind === 'lifecycle' ? 'telemetry_lifecycle_events' : 'telemetry_events';
-        const removed = await client.query(`DELETE FROM ${s}.${table} WHERE event_ref IN (
+        const removed = config.eventKind === 'backlog_alert' ? { rowCount: await pruneBacklogAlerts(client,config,now,maxDelete) } : await client.query(`DELETE FROM ${s}.${table} WHERE event_ref IN (
           SELECT event_ref FROM ${s}.${table} WHERE state='acked' AND acknowledged_ms <= $1
           ORDER BY acknowledged_ms,event_ref LIMIT $2 FOR UPDATE) RETURNING event_ref`,[now-config.limits.retentionMs,maxDelete]);
         checkTelemetrySignal(signal); await client.query('COMMIT'); checkTelemetrySignal(signal);

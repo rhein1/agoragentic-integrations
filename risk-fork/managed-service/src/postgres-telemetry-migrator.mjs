@@ -1,11 +1,13 @@
 import { acquirePostgresAuthorityClient, createPostgresAuthorityPool } from '../../src/adapters/postgres-authority-migrator.mjs';
-import { backlogGaugesMigration, budgetMetricsMigration, cleanupIncompleteMetricsMigration, cleanupMetricsMigration, executionMetricsMigration, lifecycleMigration, metricsMigration, normalizeTelemetryOptions, telemetryDbInteger, telemetryMigration, verifyTelemetrySettings } from './postgres-telemetry-config.mjs';
+import { backlogAlertsMigration, backlogGaugesMigration, budgetMetricsMigration, cleanupIncompleteMetricsMigration, cleanupMetricsMigration, executionMetricsMigration, lifecycleMigration, metricsMigration, normalizeTelemetryOptions, telemetryDbInteger, telemetryMigration, verifyTelemetrySettings } from './postgres-telemetry-config.mjs';
 import { verifyPostgresManagedTelemetryAttestation } from './postgres-telemetry-attestation.mjs';
 import { managedError } from './validation.mjs';
 import { metricSettingsHash } from './metric-event.mjs';
 import { baselineMetricSources, metricTotalsHash, verifyMetricTotals } from './postgres-metric-state.mjs';
 import { backlogSettingsHash, backlogTotalsHash } from './backlog-gauge.mjs';
 import { verifyBacklogCustody } from './postgres-backlog-gauge-state.mjs';
+import { backlogAlertSettingsHash, backlogAlertTotalsHash } from './backlog-alert.mjs';
+import { baselineBacklogAlerts, verifyBacklogAlertCustody } from './postgres-backlog-alert-state.mjs';
 
 export async function migratePostgresManagedTelemetry(options = {}) {
   const config = normalizeTelemetryOptions(options), migration = await telemetryMigration(config.schemaName);
@@ -117,7 +119,7 @@ export async function migratePostgresManagedTelemetry(options = {}) {
             await client.query(`INSERT INTO ${s}.telemetry_schema_migrations VALUES (7,$1)`,[extension.hash]);
           }
         }
-        if (config.metricVersion === 8) {
+        if (config.metricVersion >= 8) {
           const ledger = await client.query(`SELECT version FROM ${s}.telemetry_schema_migrations ORDER BY version`);
           if (ledger.rowCount === 7) {
             await verifyPostgresManagedTelemetryAttestation(client,{ schemaName: config.schemaName,lifecycle: true,metrics: true,metricVersion: 7 });
@@ -130,10 +132,27 @@ export async function migratePostgresManagedTelemetry(options = {}) {
             await client.query(`INSERT INTO ${s}.telemetry_backlog_totals VALUES (true,0,$1)`,[backlogTotalsHash(0)]);
           }
         }
+        if (config.metricVersion === 9) {
+          const ledger = await client.query(`SELECT version FROM ${s}.telemetry_schema_migrations ORDER BY version`);
+          if (ledger.rowCount === 8) {
+            await verifyPostgresManagedTelemetryAttestation(client,{ schemaName: config.schemaName,lifecycle: true,metrics: true,metricVersion: 8 });
+            await verifyTelemetrySettings(client,{ ...config,metricVersion: 8 },migration.hash);
+            await verifyMetricTotals(client,config); await verifyBacklogCustody(client,config);
+            const extension = await backlogAlertsMigration(config.schemaName);
+            await client.query(extension.sql);
+            await client.query(`INSERT INTO ${s}.telemetry_schema_migrations VALUES (9,$1)`,[extension.hash]);
+            await client.query(`INSERT INTO ${s}.telemetry_backlog_alert_settings VALUES (true,$1,$2)`,[backlogAlertSettingsHash(config.backlogAlertSettings),config.backlogAlertSettings]);
+            await client.query(`INSERT INTO ${s}.telemetry_backlog_alert_totals VALUES (true,0,$1)`,[backlogAlertTotalsHash(0)]);
+            // Retain existing gauges exactly; no stale/historical alert backfill.
+            // Only the next successful new source view evaluates v9 conditions.
+            await baselineBacklogAlerts(client,config);
+          }
+        }
         await verifyPostgresManagedTelemetryAttestation(client, { schemaName: config.schemaName,lifecycle: config.lifecycle,metrics: config.metrics,metricVersion: config.metricVersion });
         await verifyTelemetrySettings(client, config, migration.hash);
         await verifyMetricTotals(client,config);
         await verifyBacklogCustody(client,config);
+        await verifyBacklogAlertCustody(client,config);
         await client.query('COMMIT');
       } catch (error) { await client.query('ROLLBACK').catch(() => {}); throw error; }
       return Object.freeze({ schema_name: config.schemaName, migration_version: config.metrics ? config.metricVersion : config.lifecycle ? 2 : 1, migration_hash: migration.hash,

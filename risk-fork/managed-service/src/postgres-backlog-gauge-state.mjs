@@ -5,7 +5,7 @@ import { backlogGaugeHash, backlogSettingsHash, backlogTotalsHash, normalizeBack
 const fail = (code = 'TELEMETRY_BACKLOG_DRIFT') => managedError('Backlog telemetry unavailable',code,503);
 
 export async function verifyBacklogCustody(client, config) {
-  if (config.metricVersion !== 8) return;
+  if (![8,9].includes(config.metricVersion)) return;
   const s = config.quotedSchema;
   const settings = await client.query(`SELECT settings_hash,payload FROM ${s}.telemetry_backlog_settings WHERE singleton=true`);
   const bound = settings.rows[0];
@@ -23,8 +23,11 @@ export async function readBacklogGauge(client, config, tenantHash) {
   const result = await client.query(`SELECT tenant_hash,payload,state_hash FROM ${config.quotedSchema}.telemetry_backlog_state WHERE tenant_hash=$1`,[tenantHash]);
   if (result.rowCount === 0) return null;
   if (result.rowCount !== 1) throw fail();
-  const row = result.rows[0], state = normalizeBacklogGauge(row.payload);
-  if (!state || state.tenant_hash !== tenantHash || row.tenant_hash !== tenantHash || state.settings_hash !== backlogSettingsHash(config.backlogSettings)
+  return readBacklogGaugeRow(result.rows[0],config);
+}
+export function readBacklogGaugeRow(row, config) {
+  const state = normalizeBacklogGauge(row.payload);
+  if (!state || state.tenant_hash !== row.tenant_hash || state.settings_hash !== backlogSettingsHash(config.backlogSettings)
     || backlogGaugeHash(state) !== row.state_hash || canonicalize(state) !== canonicalize(row.payload)) throw fail();
   return state;
 }
