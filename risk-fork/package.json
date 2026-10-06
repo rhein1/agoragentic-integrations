@@ -83,6 +83,7 @@
     "managed-service/ops/postgres/telemetry-roles.sql.template",
     "managed-service/ops/postgres/lifecycle-grants.sql.template",
     "managed-service/ops/postgres/metrics-grants.sql.template",
+    "managed-service/ops/postgres/backlog-grants.sql.template",
     "FRAMEWORK_ADAPTERS.md",
     "CITATION.cff",
     "AUTHORS.md",

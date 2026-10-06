@@ -3,6 +3,7 @@ import { checkTelemetrySignal, normalizeTelemetryOptions, telemetryDbInteger, te
 import { verifyPostgresManagedTelemetryAttestation } from './postgres-telemetry-attestation.mjs';
 import { managedError, requireInteger } from './validation.mjs';
 import { verifyMetricTotals } from './postgres-metric-state.mjs';
+import { verifyBacklogCustody } from './postgres-backlog-gauge-state.mjs';
 
 // Explicit owner maintenance, never scheduled by the runtime or exposed over
 // HTTP. Capacity retains unresolved obligations indefinitely; only terminal
@@ -39,6 +40,7 @@ export async function prunePostgresManagedTelemetry(options) {
         await verifyPostgresManagedTelemetryAttestation(client,{ schemaName: config.schemaName,lifecycle: config.lifecycle,metrics: config.metrics,metricVersion: config.metricVersion });
         await verifyTelemetrySettings(client,config,migration.hash);
         await verifyMetricTotals(client,config);
+        await verifyBacklogCustody(client,config);
         const sample = await client.query('SELECT floor(extract(epoch FROM clock_timestamp()) * 1000)::bigint AS now_ms');
         const now = telemetryDbInteger(sample.rows[0]?.now_ms), prior = telemetryDbInteger(clock.rows[0].last_seen_ms);
         if (sample.rowCount !== 1 || now < prior) throw new TypeError('Telemetry clock regressed');

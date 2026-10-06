@@ -365,7 +365,7 @@ process exit and listener disposal. Local tests cannot establish hosted sink cus
 monitoring SLOs, HA/restore/rotation, WAF, real alert delivery or an observed
 operator response drill. Opt-in v3 adds source-count thresholds and an alert
 outbox, not a hosted alert service. Accurate historical budget/cost/lease
-measurements, durable cleanup backlog, safe typed dependency/provider/audit/DB-failure
+measurements, durable backlog alerting, safe typed dependency/provider/audit/DB-failure
 root-cause events, broader cooldown policy, hosted sink custody and an observed
 alert/response drill remain separate work. No provider or live agent traffic is
 protected by this tranche. See [OPERATIONAL_QUALIFICATION.md](./OPERATIONAL_QUALIFICATION.md).
@@ -613,7 +613,7 @@ finalized cost, delivered external alert or live protection. The read-only
 current-obligation health snapshot is separate and is not a durable alert source.
 Actual disposable producer/observer/restart, replay/capacity/custody and PG16
 pinned-CA/restricted-role tests remain source/local evidence. Real external sink
-custody/delivery and response drill, durable backlog and safe typed dependency
+custody/delivery and response drill, gauge alerts and safe typed dependency
 failure classes, hosted qualification and activation remain separate gates.
 
 ### Tenant-authenticated cleanup/recovery snapshot source
@@ -653,6 +653,93 @@ leases, audit anchors or resources. No migration, catalog or grant change is
 needed; the existing control-plane runtime SELECT boundary applies. This is
 the source prerequisite for durable gauge/alert ingestion, **not that ingestion
 itself**: v1–v7 telemetry stores/drainers still reject this snapshot as an event,
-the lifecycle observer does not poll it, and no external alert delivery or
-operator response is established. Durable snapshot custody/gauge thresholds,
-safe typed dependency failure classes and production qualification remain open.
+and the lifecycle observer does not poll it. The explicit v8 collector below
+adds latest-snapshot custody without changing those event contracts. Gauge
+thresholds, external alert delivery/operator response, safe typed dependency
+failure classes and production qualification remain open.
+
+### Opt-in v8 durable latest backlog gauges
+
+V8 adds latest-state custody for the five source gauges, not event-count rules
+or a new receipt/authority family. Select `metricVersion:8`, `lifecycle:true`,
+`metrics:true`, the **unchanged** prior `metricSettings`, and separate closed
+`backlogSettings:{maxTenants:1000}` on the owner migration and every store in
+that telemetry schema. `maxTenants` is 1–10,000 and is immutable/hash-bound.
+Old stores reject the new catalog; defaults remain unchanged. Production mode
+still rejects, and every gauge reports `production_qualified:false`.
+
+Additive `managed-service/migrations/013_managed_backlog_gauges.pg.sql` is version
+8 of the existing telemetry ledger. Frozen versions 1–7 and their catalogs,
+counter settings, sources, windows, alert delivery and acknowledgement custody
+remain unchanged. The migration attests v7 before new DDL; no old hashes or
+counts are rewritten. Fresh schemas and upgrades may opt in. Apply the existing
+telemetry/lifecycle/metric role templates plus the separate
+[v8 column grants](./ops/postgres/backlog-grants.sql.template). Supply the exact
+`expectedOwner` for distinct runtime-role assurance. The new PG16 catalog is
+captured with `capture-metrics-catalog.mjs --v8` in the disposable loopback lab,
+never inferred or repaired by the runtime.
+
+```js
+// Trusted checkout-only composition, after explicit owner migration and grants.
+const backlogStore = await createPostgresManagedTelemetryStore({
+  ...hostTelemetryOptions, lifecycle: true, metrics: true, metricVersion: 8,
+  metricSettings: hostUnchangedMetricSettings, backlogSettings: { maxTenants: 1000 },
+});
+const backlogObserver = createManagedBacklogObserver({
+  controlPlane, store: backlogStore, auditPrincipals: hostAuditPrincipals,
+  observerId: 'host-backlog-v1', timeoutMs: 2000,
+  intervalMs: 1000, maxTenantsPerTick: 4,
+});
+// Inspect one bounded pass, or explicitly call start() after host startup.
+await backlogObserver.runOnce();
+const latest = await backlogStore.readBacklogGauge({ tenant_hash: hostTenantHash });
+// Stop the observer before closing stores. No local host auto-wiring or HTTP
+// endpoint is added: the host owns access, start/stop and pairing of these APIs.
+await backlogObserver.close({ timeoutMs: 1000 });
+await backlogStore.close();
+```
+
+The collector retains 1–64 immutable distinct-tenant original `audit:read`
+principals and captures source/store methods with their receivers. Source reads
+reauthorize the original credential/OAuth principal after their own waits. One
+tenant step reads the expected gauge **before** sampling; the clock-serialized
+telemetry transaction then compares that complete expected state and atomically
+updates one latest row. Competing/stale writers fail closed and reread on a
+later tick. No DB transaction is held across the source wait. Source timestamp
+rollback, equal-time/different snapshots and a changed expected state reject.
+The same source timestamp/hash leaves generation and recorded time unchanged.
+An exact latest committed packet may resolve an unknown COMMIT without another
+advancement; a superseded request cannot establish its earlier commit outcome.
+There is no automatic SQL or original-operation replay.
+
+The closed gauge stores only tenant/observer/source/settings/batch hashes,
+generation, the five safe counts, source `source_snapshot_at`, separate telemetry
+`recorded_ms`, `tenant_scoped_current_snapshot` coverage and self-attestation.
+It is the latest successful source view, **not necessarily current now**. The
+source and telemetry clocks are different; neither implies the other's freshness.
+`null` means no recorded sample, not zero. Failed reads, expired credentials,
+capacity, malformed data, conflicts, timeout and dependency loss retain the
+last successful gauge; they never synthesize a zero sample. A late source result
+after timeout/close cannot append. An abort-ignoring callback occupies its actual
+tenant slot until settlement; other tenants rotate fairly. A close timeout or
+unknown append result does not prove database cancellation/non-commit.
+
+`sampled`, `failed`, `timed_out` and `in_flight` are bounded process-local
+observer health, not durable event counts, unique samples, independent evidence,
+or source-cancellation proof. `sampled` counts confirmed collector passes,
+including an unchanged source view. Polls never add lifetime metric sources or
+windows, and never sum backlog counts. Latest custody retains one row per tenant
+plus immutable settings and a tenant-count/hash singleton. Repeated sampling does
+not grow row count; new tenants fail at capacity. Owner delivery retention does
+not delete these rows. Row count detects missing custody, while touched rows
+validate their closed payload/hash. Same-count replacement or an owner/runtime
+consistently rewriting observer state is not defeated: this is trusted-host
+custody, not independent signed or hostile-host assurance.
+
+**Gauge threshold episodes, gauge alert generation/delivery and a hosted
+alert/response drill remain unfinished.** V8 never inserts backlog snapshots
+into the policy/lifecycle/alert outboxes; their closed contracts remain unchanged.
+Event-count verification and incomplete-attempt alerts are still available with
+their earlier meanings. No provider call, money movement, provisioning, deployed
+monitoring, resource-absence proof, production qualification or activation is
+established by this source-only collector.

@@ -46,6 +46,7 @@ export { prunePostgresManagedTelemetry } from './postgres-telemetry-maintenance.
 export { verifyPostgresManagedTelemetryAttestation } from './postgres-telemetry-attestation.mjs';
 export { createManagedTelemetryDrainer } from './telemetry-drainer.mjs';
 export { createManagedLifecycleObserver } from './lifecycle-observer.mjs';
+export { createManagedBacklogObserver } from './backlog-observer.mjs';
 export { normalizeManagedLifecycleEvent } from './lifecycle-event.mjs';
 export { normalizeManagedBacklogSnapshot } from './backlog-snapshot.mjs';
 export { createManagedTelemetryEvent, normalizeManagedTelemetryEvent } from './telemetry-event.mjs';
