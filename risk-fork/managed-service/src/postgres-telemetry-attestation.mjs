@@ -3,7 +3,7 @@ import { canonicalize, sha256Ref } from '../../src/canonical.mjs';
 import { quotePostgresAuthorityIdentifier } from '../../src/adapters/postgres-authority-migrator.mjs';
 import { readRequestPolicyPostgresCatalog } from './postgres-request-policy-attestation.mjs';
 import { TELEMETRY_TABLES, TELEMETRY_INSERT_COLUMNS, TELEMETRY_UPDATE_COLUMNS, LIFECYCLE_TABLES, LIFECYCLE_INSERT_COLUMNS, lifecycleMigration,
-  METRIC_TABLES, METRIC_ALERT_INSERT_COLUMNS, METRIC_SOURCE_INSERT_COLUMNS, METRIC_WINDOW_INSERT_COLUMNS, metricsMigration, executionMetricsMigration, budgetMetricsMigration, cleanupMetricsMigration } from './postgres-telemetry-config.mjs';
+  METRIC_TABLES, METRIC_ALERT_INSERT_COLUMNS, METRIC_SOURCE_INSERT_COLUMNS, METRIC_WINDOW_INSERT_COLUMNS, metricsMigration, executionMetricsMigration, budgetMetricsMigration, cleanupMetricsMigration, cleanupIncompleteMetricsMigration } from './postgres-telemetry-config.mjs';
 import { assertAllowedKeys, assertPlainRecord } from './validation.mjs';
 
 const TABLES = TELEMETRY_TABLES;
@@ -37,22 +37,25 @@ async function verifyCatalog(client, schema, lifecycle, metrics, metricVersion) 
   const metricExtension = metrics ? await metricsMigration(schema) : null;
   const executionExtension = metricVersion >= 4 ? await executionMetricsMigration(schema) : null;
   const budgetExtension = metricVersion >= 5 ? await budgetMetricsMigration(schema) : null;
-  const cleanupExtension = metricVersion === 6 ? await cleanupMetricsMigration(schema) : null;
-  const manifest = JSON.parse(await readFile(new URL(cleanupExtension ? './postgres-cleanup-metrics-catalog.json' : budgetExtension ? './postgres-budget-metrics-catalog.json' : executionExtension ? './postgres-execution-metrics-catalog.json' : metrics ? './postgres-metrics-catalog.json' : lifecycle ? './postgres-lifecycle-catalog.json' : './postgres-telemetry-catalog.json', import.meta.url), 'utf8'));
-  expect(manifest.schema === (cleanupExtension ? 'agoragentic.risk-fork.telemetry-postgres-catalog.v6' : budgetExtension ? 'agoragentic.risk-fork.telemetry-postgres-catalog.v5' : executionExtension ? 'agoragentic.risk-fork.telemetry-postgres-catalog.v4' : metrics ? 'agoragentic.risk-fork.telemetry-postgres-catalog.v3' : lifecycle ? 'agoragentic.risk-fork.telemetry-postgres-catalog.v2' : MANIFEST_SCHEMA)
+  const cleanupExtension = metricVersion >= 6 ? await cleanupMetricsMigration(schema) : null;
+  const incompleteExtension = metricVersion === 7 ? await cleanupIncompleteMetricsMigration(schema) : null;
+  const manifest = JSON.parse(await readFile(new URL(incompleteExtension ? './postgres-cleanup-incomplete-metrics-catalog.json' : cleanupExtension ? './postgres-cleanup-metrics-catalog.json' : budgetExtension ? './postgres-budget-metrics-catalog.json' : executionExtension ? './postgres-execution-metrics-catalog.json' : metrics ? './postgres-metrics-catalog.json' : lifecycle ? './postgres-lifecycle-catalog.json' : './postgres-telemetry-catalog.json', import.meta.url), 'utf8'));
+  expect(manifest.schema === (incompleteExtension ? 'agoragentic.risk-fork.telemetry-postgres-catalog.v7' : cleanupExtension ? 'agoragentic.risk-fork.telemetry-postgres-catalog.v6' : budgetExtension ? 'agoragentic.risk-fork.telemetry-postgres-catalog.v5' : executionExtension ? 'agoragentic.risk-fork.telemetry-postgres-catalog.v4' : metrics ? 'agoragentic.risk-fork.telemetry-postgres-catalog.v3' : lifecycle ? 'agoragentic.risk-fork.telemetry-postgres-catalog.v2' : MANIFEST_SCHEMA)
     && manifest.postgres_major === 16 && manifest.migration_hash === hash
     && (!extension || manifest.lifecycle_migration_hash === extension.hash)
     && (!metricExtension || manifest.metrics_migration_hash === metricExtension.hash)
     && (!executionExtension || manifest.execution_metrics_migration_hash === executionExtension.hash)
     && (!budgetExtension || manifest.budget_metrics_migration_hash === budgetExtension.hash)
-    && (!cleanupExtension || manifest.cleanup_metrics_migration_hash === cleanupExtension.hash), 'manifest_source');
+    && (!cleanupExtension || manifest.cleanup_metrics_migration_hash === cleanupExtension.hash)
+    && (!incompleteExtension || manifest.cleanup_incomplete_metrics_migration_hash === incompleteExtension.hash), 'manifest_source');
   same(await readManagedTelemetryPostgresCatalog(client, schema), manifest.catalog, 'catalog');
   const ledger = await client.query(`SELECT version,migration_hash FROM "${schema}".telemetry_schema_migrations ORDER BY version`);
   same(ledger.rows, [{ version: 1, migration_hash: hash },...(extension ? [{ version: 2,migration_hash: extension.hash }] : []),
     ...(metricExtension ? [{ version: 3,migration_hash: metricExtension.hash }] : []),
     ...(executionExtension ? [{ version: 4,migration_hash: executionExtension.hash }] : []),
     ...(budgetExtension ? [{ version: 5,migration_hash: budgetExtension.hash }] : []),
-    ...(cleanupExtension ? [{ version: 6,migration_hash: cleanupExtension.hash }] : [])], 'migration_ledger');
+    ...(cleanupExtension ? [{ version: 6,migration_hash: cleanupExtension.hash }] : []),
+    ...(incompleteExtension ? [{ version: 7,migration_hash: incompleteExtension.hash }] : [])], 'migration_ledger');
 }
 
 async function verifyPrivileges(client, schema, owner, lifecycle, metrics) {
@@ -168,7 +171,7 @@ export async function verifyPostgresManagedTelemetryAttestation(client, options 
     const lifecycle = options.lifecycle ?? false, metrics = options.metrics ?? false;
     expect(typeof lifecycle === 'boolean' && typeof metrics === 'boolean' && (!metrics || lifecycle),'version');
     const metricVersion = metrics ? (options.metricVersion ?? 3) : undefined;
-    expect((metrics && [3,4,5,6].includes(metricVersion)) || (!metrics && options.metricVersion === undefined),'version');
+    expect((metrics && [3,4,5,6,7].includes(metricVersion)) || (!metrics && options.metricVersion === undefined),'version');
     expect(client && typeof client.query === 'function', 'client');
     const schema = identifier(options.schemaName ?? 'risk_fork_telemetry');
     const owner = options.expectedOwner === undefined ? undefined : identifier(options.expectedOwner);
