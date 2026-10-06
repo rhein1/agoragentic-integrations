@@ -108,9 +108,9 @@ var require_package = __commonJS({
         url: "https://github.com/rhein1/agoragentic-integrations/issues"
       },
       devDependencies: {
-        "@modelcontextprotocol/client": "2.0.0",
+        "@modelcontextprotocol/client": "2.2.0",
         "@modelcontextprotocol/node": "2.0.0",
-        "@modelcontextprotocol/sdk": "1.30.0",
+        "@modelcontextprotocol/sdk": "1.31.0",
         "@modelcontextprotocol/server": "2.0.0",
         esbuild: "0.28.2"
       },
@@ -77160,7 +77160,7 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
 }
 
 // risk-fork-hosted-mcp/src/index.mjs
-var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:86ae981c1918590ddd835919f3c73cd3c8da6be4c90a81975dfeeba9790e9077" : null;
+var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:ca87e6ca2da7c6886a14a915924f34ed38f369760396ea1ae3fc00fdc973deb6" : null;
 var HOSTED_MCP_BUNDLE_METADATA = Object.freeze({
   package_name: "@agoragentic/risk-fork-hosted-mcp",
   package_version: "0.1.0-alpha.0",
