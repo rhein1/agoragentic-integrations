@@ -615,3 +615,44 @@ Actual disposable producer/observer/restart, replay/capacity/custody and PG16
 pinned-CA/restricted-role tests remain source/local evidence. Real external sink
 custody/delivery and response drill, durable backlog and safe typed dependency
 failure classes, hosted qualification and activation remain separate gates.
+
+### Tenant-authenticated cleanup/recovery snapshot source
+
+`controlPlane.readCleanupRecoveryBacklog(originalAuditPrincipal)` is a trusted,
+checkout-only source read, not a public or worker HTTP route. It requires the
+original branded `audit:read` principal, revalidates current persisted authority
+before the read and again after source/pool waits, and verifies the returned
+closed tenant-bound snapshot. The tenant is derived only from that principal;
+there is no request-supplied tenant, clock, count, provider or formula. Suspended
+tenants and disabled provider bindings do not conceal existing obligations.
+Existing config/default-off behavior and minimal public `/readyz` are unchanged.
+
+Both stores report five **current-state gauges**: `cleanup_pending_count`,
+`recovery_required_count` and expired execution/cleanup/recovery lease counts.
+Cleanup and recovery counts include obligations without an active lease. Lease
+expiry is inclusive (`expires_at <= snapshot_at`); reaping is not performed.
+The memory backend captures one trusted clock after its exclusive wait. PG16
+uses a bounded read-only repeatable-read transaction and one materialized DB
+clock for its tenant-filtered aggregate and persisted credential predicate.
+Every read is its own consistent MVCC/in-process view, not a cross-read frozen
+snapshot or proof of provider resource presence/absence.
+
+The closed response includes canonical `snapshot_at`, tenant identity, the five
+safe-integer counts, a domain-separated content hash,
+`evidence_class:'control_plane_self_attested'` and `production_qualified:false`.
+It exposes no operations, raw invocation/resource refs, provider recovery keys,
+lease tokens, credential hashes or errors. Invalid/missing/unsafe counts, wrong
+tenant/hash, unavailable source, failed DB reads and inactive credentials throw;
+they never manufacture a zero backlog. The content hash is not a signature,
+receipt, execution authority, permanent cursor or hostile-host tamper proof.
+An exact same-time/state read can have the same hash; no historical custody or
+exactly-once observation is implied.
+
+This source reads existing durable invocation state without changing budgets,
+leases, audit anchors or resources. No migration, catalog or grant change is
+needed; the existing control-plane runtime SELECT boundary applies. This is
+the source prerequisite for durable gauge/alert ingestion, **not that ingestion
+itself**: v1–v7 telemetry stores/drainers still reject this snapshot as an event,
+the lifecycle observer does not poll it, and no external alert delivery or
+operator response is established. Durable snapshot custody/gauge thresholds,
+safe typed dependency failure classes and production qualification remain open.

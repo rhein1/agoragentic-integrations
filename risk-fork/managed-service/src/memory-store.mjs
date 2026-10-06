@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { assertCleanupIncompleteLease, cleanupIncompleteAuditBinding,
   normalizeCleanupIncompleteInput, verifyCleanupIncompleteReplay } from './cleanup-incomplete.mjs';
 import { createManagedAuditEvent } from './audit.mjs';
+import { createManagedBacklogSnapshot, normalizeBacklogRead } from './backlog-snapshot.mjs';
 import { normalizeAuditPageRequest, normalizeAuditWindowRequest, verifyAuditInvocationPage } from './audit-read.mjs';
 import { sha256Ref } from '../../src/canonical.mjs';
 import { validateChildOperation } from '../../src/child-operation.mjs';
@@ -693,7 +694,7 @@ export class MemoryManagedServiceStore {
   }
 
   #requireActiveClaimant(tenantIdValue, claimantKeyIdValue, nowValue, requiredScope) {
-    if (requiredScope !== 'invocations:cancel'
+    if (requiredScope !== 'invocations:cancel' && requiredScope !== 'audit:read'
       && !/^worker:(execution|cleanup|recovery):(claim|write)$/.test(requiredScope)) {
       throw new TypeError('claimant scope must be purpose-specific');
     }
@@ -1088,6 +1089,28 @@ export class MemoryManagedServiceStore {
       });
       this.#usage.set(usageKey(record.tenant_id, record.budget_day_utc), nextUsage);
       return this.#commitAuditedRecord(prepared);
+    });
+  }
+
+  async readCleanupRecoveryBacklog(inputValue, { clock = () => new Date() } = {}) {
+    const input = normalizeBacklogRead(inputValue);
+    if (typeof clock !== 'function') throw new TypeError('backlog clock must be a function');
+    return this.#exclusive(() => {
+      // Capture time and authorize only AFTER any pending snapshot/writer wait.
+      const snapshotAt = requireIso(clock(), 'backlog clock result');
+      this.#requireActiveClaimant(input.tenant_id, input.claimant_key_id, snapshotAt, 'audit:read');
+      const counts = { cleanup_pending_count: 0, recovery_required_count: 0,
+        expired_execution_lease_count: 0, expired_cleanup_lease_count: 0, expired_recovery_lease_count: 0 };
+      for (const record of this.#invocations.values()) {
+        if (record.tenant_id !== input.tenant_id) continue;
+        if (record.state === 'cleanup_pending') counts.cleanup_pending_count += 1;
+        if (record.state === 'recovery_required') counts.recovery_required_count += 1;
+        if (record.lease_expires_at === null || Date.parse(record.lease_expires_at) > Date.parse(snapshotAt)) continue;
+        if (record.lease_kind === 'execution') counts.expired_execution_lease_count += 1;
+        if (record.lease_kind === 'cleanup') counts.expired_cleanup_lease_count += 1;
+        if (record.lease_kind === 'recovery') counts.expired_recovery_lease_count += 1;
+      }
+      return createManagedBacklogSnapshot({ tenant_id: input.tenant_id, snapshot_at: snapshotAt, ...counts });
     });
   }
 
