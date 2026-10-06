@@ -54544,6 +54544,7 @@ function networkPolicy(input = {}) {
 import { randomUUID as randomUUID3 } from "node:crypto";
 import { mkdir, open, readFile as readFile2, rename, unlink } from "node:fs/promises";
 import path2 from "node:path";
+import { types as utilTypes2 } from "node:util";
 
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/distributed-authority.mjs
 var DISTRIBUTED_OPERATION_STATES = Object.freeze([
@@ -54571,10 +54572,15 @@ var DistributedAuthorityError = class extends Error {
     this.evidence = cloneJson(evidence);
   }
 };
+var DISTRIBUTED_AMBIGUITY_EVIDENCE = /* @__PURE__ */ new WeakMap();
+function getDistributedAuthorityAmbiguityEvidence(value) {
+  return DISTRIBUTED_AMBIGUITY_EVIDENCE.get(value) ?? null;
+}
 var DistributedAuthorityAmbiguousError = class extends DistributedAuthorityError {
   constructor(message, evidence = {}) {
     super(message, "RISK_FORK_DISTRIBUTED_COMMIT_AMBIGUOUS", evidence);
     this.name = "DistributedAuthorityAmbiguousError";
+    DISTRIBUTED_AMBIGUITY_EVIDENCE.set(this, deepFreeze(cloneJson(this.evidence)));
   }
 };
 function distributedAuthorityError(message, code, evidence = {}) {
@@ -59653,16 +59659,71 @@ function scanTaintedValue(value, policy = {}) {
 }
 
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/clean-commit.mjs
+var COMMIT_AMBIGUOUS_ERRORS = /* @__PURE__ */ new WeakSet();
+var INTERNAL_COMMIT_RECOVERY_EVIDENCE = /* @__PURE__ */ new WeakMap();
+function isCommitAmbiguousError(value) {
+  return COMMIT_AMBIGUOUS_ERRORS.has(value);
+}
 var CommitAmbiguousError = class extends Error {
   constructor(message, evidence) {
     super(message);
     this.name = "CommitAmbiguousError";
     this.code = "RISK_FORK_COMMIT_AMBIGUOUS";
     this.evidence = evidence;
+    COMMIT_AMBIGUOUS_ERRORS.add(this);
   }
 };
+function internalCommitAmbiguity(message, evidence) {
+  const error = new CommitAmbiguousError(message, evidence);
+  const recovery = {};
+  for (const field of ["parent_ref", "transaction_ref", "authorization_id", "operation_ref", "effect_key"]) {
+    if (typeof evidence[field] !== "string") continue;
+    try {
+      recovery[field] = requireOpaqueRef(evidence[field], `internal recovery ${field}`);
+    } catch {
+    }
+  }
+  for (const field of ["binding_hash", "artifact_hash"]) {
+    if (typeof evidence[field] !== "string") continue;
+    try {
+      recovery[field] = requireSha256Ref(evidence[field], `internal recovery ${field}`);
+    } catch {
+    }
+  }
+  for (const [field, allowed] of [
+    ["status", ["active", "consuming", "prepared", "effect_started", "ambiguous"]],
+    ["parent_state_status", ["active", "committing", "ambiguous"]],
+    ["lock_owner_status", ["unknown", "missing", "live", "dead"]],
+    ["cause_code", ["EFFECT_CALLBACK_FAILED", "DURABLE_FINALIZATION_FAILED"]]
+  ]) {
+    if (allowed.includes(evidence[field])) recovery[field] = evidence[field];
+  }
+  if (Number.isSafeInteger(evidence.lock_owner_pid) && evidence.lock_owner_pid > 0) {
+    recovery.lock_owner_pid = evidence.lock_owner_pid;
+  } else if (evidence.lock_owner_pid === null) {
+    recovery.lock_owner_pid = null;
+  }
+  const pending = evidence.pending_transaction;
+  if (pending === null) {
+    recovery.pending_transaction = null;
+  } else if (pending !== void 0 && typeof pending.transaction_ref === "string") {
+    try {
+      recovery.pending_transaction = {
+        transaction_ref: requireOpaqueRef(pending.transaction_ref, "internal recovery pending transaction_ref")
+      };
+    } catch {
+    }
+  }
+  INTERNAL_COMMIT_RECOVERY_EVIDENCE.set(error, deepFreeze(recovery));
+  return error;
+}
 var FILE_PARENT_HEAD_TRANSACTIONS = /* @__PURE__ */ new WeakMap();
 var FILE_EXECUTION_AUTHORIZATION_TRANSACTIONS = /* @__PURE__ */ new WeakMap();
+function systemErrorIs(error, expected) {
+  if (utilTypes2.isProxy(error) || !utilTypes2.isNativeError(error)) return false;
+  const descriptor = Object.getOwnPropertyDescriptor(error, "code");
+  return descriptor !== void 0 && Object.hasOwn(descriptor, "value") && descriptor.value === expected;
+}
 async function atomicWriteJson(file, value) {
   const temporary = `${file}.${randomUUID3()}.tmp`;
   const handle = await open(temporary, "wx", 384);
@@ -59679,7 +59740,7 @@ async function readJsonOrNull(file) {
   try {
     return JSON.parse(await readFile2(file, "utf8"));
   } catch (error) {
-    if (error?.code === "ENOENT") return null;
+    if (systemErrorIs(error, "ENOENT")) return null;
     throw error;
   }
 }
@@ -59698,7 +59759,7 @@ async function tryAcquireFileLock(file) {
       await unlink(file).catch(() => {
       });
     }
-    if (error?.code === "EEXIST") return null;
+    if (systemErrorIs(error, "EEXIST")) return null;
     throw error;
   }
 }
@@ -59707,7 +59768,7 @@ async function inspectFileLock(file) {
   try {
     value = (await readFile2(file, "utf8")).trim();
   } catch (error) {
-    if (error?.code === "ENOENT") {
+    if (systemErrorIs(error, "ENOENT")) {
       return { owner_status: "missing", owner_pid: null };
     }
     return { owner_status: "unknown", owner_pid: null };
@@ -59723,8 +59784,8 @@ async function inspectFileLock(file) {
     process.kill(ownerPid, 0);
     return { owner_status: "live", owner_pid: ownerPid };
   } catch (error) {
-    if (error?.code === "ESRCH") return { owner_status: "dead", owner_pid: ownerPid };
-    if (error?.code === "EPERM") return { owner_status: "live", owner_pid: ownerPid };
+    if (systemErrorIs(error, "ESRCH")) return { owner_status: "dead", owner_pid: ownerPid };
+    if (systemErrorIs(error, "EPERM")) return { owner_status: "live", owner_pid: ownerPid };
     return { owner_status: "unknown", owner_pid: ownerPid };
   }
 }
@@ -59754,7 +59815,7 @@ function fileLockConflict({ kind, stateEvidence, lock }) {
       evidence
     );
   }
-  return new CommitAmbiguousError(
+  return internalCommitAmbiguity(
     `The ${kind} lock exists but its owner cannot be established; automatic retry is forbidden`,
     evidence
   );
@@ -59768,7 +59829,7 @@ async function acquireInterpretedFileLock({ file, kind, inspectPersistedState })
     if (lock.owner_status === "missing" && attempt === 0) continue;
     throw fileLockConflict({ kind, stateEvidence, lock });
   }
-  throw new CommitAmbiguousError(
+  throw internalCommitAmbiguity(
     `The ${kind} lock changed while its durable state was inspected; automatic retry is forbidden`,
     { lock_owner_status: "unknown", lock_owner_pid: null }
   );
@@ -59778,7 +59839,7 @@ async function releaseFileLock(handle, file) {
     await handle.close();
   } finally {
     await unlink(file).catch((error) => {
-      if (error?.code !== "ENOENT") throw error;
+      if (!systemErrorIs(error, "ENOENT")) throw error;
     });
   }
 }
@@ -59791,7 +59852,7 @@ function assertParentHeadAvailable(current, { parentRef, expectedHead }) {
     );
   }
   if (current.status !== "active") {
-    throw new CommitAmbiguousError("Authoritative parent head has an unresolved transaction", {
+    throw internalCommitAmbiguity("Authoritative parent head has an unresolved transaction", {
       parent_ref: parentRef,
       parent_state_status: current.status,
       pending_transaction: current.pending_transaction ?? null
@@ -59835,7 +59896,7 @@ function assertAuthorizationActive(current, authorizationId) {
     );
   }
   if (current.status !== "active") {
-    throw new CommitAmbiguousError("Execution authorization has unresolved consumption state", {
+    throw internalCommitAmbiguity("Execution authorization has unresolved consumption state", {
       authorization_id: authorizationId,
       status: current.status
     });
@@ -59866,7 +59927,7 @@ function assertParentActiveWithoutExpectedHead(current, parentRef) {
     });
   }
   if (current.status !== "active") {
-    throw new CommitAmbiguousError("Authoritative parent head has an unresolved transaction", {
+    throw internalCommitAmbiguity("Authoritative parent head has an unresolved transaction", {
       parent_ref: parentRef,
       parent_state_status: current.status,
       pending_transaction: current.pending_transaction ?? null
@@ -60063,12 +60124,12 @@ async function restoreParentReservation(files, current, authority, evidence) {
   try {
     await atomicWriteJson(files.authority, authority);
     await atomicWriteJson(files.state, current);
-  } catch (restoreError) {
-    throw new CommitAmbiguousError(
+  } catch {
+    throw internalCommitAmbiguity(
       "A pre-effect parent reservation failure could not be durably restored",
       {
         ...evidence,
-        cause: String(restoreError?.message ?? restoreError).slice(0, 1e3)
+        cause: "parent_reservation_restore_unconfirmed"
       }
     );
   }
@@ -60099,7 +60160,7 @@ function createFileParentHeadInternals(directory, clock) {
         await handle.close();
       }
     } catch (error) {
-      if (error?.code !== "EEXIST") throw error;
+      if (!systemErrorIs(error, "EEXIST")) throw error;
       const existing = await readJsonOrNull(files.state);
       if (existing?.status !== "active" || !safeEqual(existing.head_hash, normalizedHead)) {
         throw new Error("Parent head was already initialized with different or ambiguous state");
@@ -60432,24 +60493,28 @@ function createFileParentHeadInternals(directory, clock) {
         result = cloneJson(outcome.result ?? null);
         proof = deepFreeze({ ...cloneJson(proof), observed_at: observedAt });
       } catch (error) {
-        if (!externalEffectStarted && !(error instanceof CommitAmbiguousError)) {
+        if (!externalEffectStarted && !isCommitAmbiguousError(error)) {
           await restoreParentReservation(files, current, authorityBefore, {
             parent_ref: parentRef,
             transaction_ref: intent.transaction_ref
           });
           throw error;
         }
-        const failure = optionalString(error?.message, "mutation error", { maxLength: 1e3 });
+        const failure = "parent_effect_unconfirmed";
         await atomicWriteJson(files.state, {
           ...current,
           status: "ambiguous",
           updated_at: requireIsoDate(clock(), "clock result"),
           pending_transaction: { ...intent, failure }
         });
-        if (error instanceof CommitAmbiguousError) throw error;
-        throw new CommitAmbiguousError(
+        throw internalCommitAmbiguity(
           "Parent commit effect began or nested authority became ambiguous; automatic retry is forbidden",
-          { parent_ref: parentRef, transaction_ref: intent.transaction_ref, cause: failure }
+          {
+            ...INTERNAL_COMMIT_RECOVERY_EVIDENCE.get(error),
+            parent_ref: parentRef,
+            transaction_ref: intent.transaction_ref,
+            cause: failure
+          }
         );
       }
       const completedAt = proof.observed_at;
@@ -60497,13 +60562,13 @@ function createFileParentHeadInternals(directory, clock) {
             transaction_hash: transactionHash
           }
         });
-      } catch (error) {
-        throw new CommitAmbiguousError(
+      } catch {
+        throw internalCommitAmbiguity(
           "Parent commit effect completed but durable authority finalization failed",
           {
             parent_ref: parentRef,
             transaction_ref: intent.transaction_ref,
-            cause: String(error?.message ?? error).slice(0, 1e3)
+            cause: "parent_finalization_unconfirmed"
           }
         );
       }
@@ -60870,32 +60935,36 @@ function createFileExecutionAuthorizationInternals(directory, clock, verifyAutho
           throw new Error("Internal authorization transaction returned without exactly one execution");
         }
       } catch (error) {
-        if (!executionStarted && !(error instanceof CommitAmbiguousError)) {
+        if (!executionStarted && !isCommitAmbiguousError(error)) {
           try {
             await atomicWriteJson(files.state, current);
-          } catch (restoreError) {
-            throw new CommitAmbiguousError(
+          } catch {
+            throw internalCommitAmbiguity(
               "Authorization failed before execution but active state could not be restored",
               {
                 authorization_id: authorizationId,
                 binding_hash: current.binding_hash,
-                cause: String(restoreError?.message ?? restoreError).slice(0, 1e3)
+                cause: "authorization_reservation_restore_unconfirmed"
               }
             );
           }
           throw error;
         }
-        const failure = optionalString(error?.message, "executor error", { maxLength: 1e3 });
+        const failure = "authorized_effect_unconfirmed";
         await atomicWriteJson(files.state, {
           ...current,
           status: "ambiguous",
           updated_at: executionNow ?? initialNow,
           failure
         });
-        if (error instanceof CommitAmbiguousError) throw error;
-        throw new CommitAmbiguousError(
+        throw internalCommitAmbiguity(
           "Authorized execution began; automatic retry is forbidden",
-          { authorization_id: authorizationId, binding_hash: current.binding_hash, cause: failure }
+          {
+            ...INTERNAL_COMMIT_RECOVERY_EVIDENCE.get(error),
+            authorization_id: authorizationId,
+            binding_hash: current.binding_hash,
+            cause: failure
+          }
         );
       }
       const resultHash = sha256Ref(result ?? null);
@@ -61453,13 +61522,13 @@ async function consumeAuthorizationAndExecute(input, context) {
       authorization: normalized,
       observed_at: normalized.observed_at
     };
-  } catch (error) {
-    throw new CommitAmbiguousError(
+  } catch {
+    throw internalCommitAmbiguity(
       "Authorized execution completed but its atomic consumption receipt was invalid; automatic retry is forbidden",
       {
         authorization_id: binding.one_use_authorization_id,
         binding_hash: binding.binding_hash,
-        cause: String(error?.message ?? error).slice(0, 1e3)
+        cause: "authorization_consumption_receipt_invalid"
       }
     );
   }
@@ -61908,10 +61977,11 @@ async function commitPreparedArtifact(input = {}, options = {}) {
         }
       });
     } catch (error) {
-      if (error instanceof DistributedAuthorityAmbiguousError) {
-        throw new CommitAmbiguousError(
+      const ambiguityEvidence = getDistributedAuthorityAmbiguityEvidence(error);
+      if (ambiguityEvidence !== null) {
+        throw internalCommitAmbiguity(
           "Distributed commit effect is unresolved; automatic retry is forbidden",
-          cloneJson(error.evidence ?? {})
+          cloneJson(ambiguityEvidence)
         );
       }
       throw error;
@@ -61930,18 +62000,18 @@ async function commitPreparedArtifact(input = {}, options = {}) {
       });
       finalizeAuthority(proof, parent2.prepared_at, { revalidate: false });
       mutationNow = parent2.completed_at;
-    } catch (error) {
-      throw new CommitAmbiguousError(
+    } catch {
+      throw internalCommitAmbiguity(
         "Distributed mutation committed but its authoritative receipt was invalid; automatic retry is forbidden",
         {
           artifact_hash: artifact.artifact_hash,
-          cause: String(error?.message ?? error).slice(0, 1e3)
+          cause: "distributed_commit_receipt_invalid"
         }
       );
     }
     if (binding) {
       if (parent2.authorization_id !== binding.one_use_authorization_id || !safeEqual(parent2.authorization_binding_hash, binding.binding_hash)) {
-        throw new CommitAmbiguousError(
+        throw internalCommitAmbiguity(
           "Distributed authorization consumption receipt did not bind the exact action",
           { artifact_hash: artifact.artifact_hash }
         );
@@ -62068,10 +62138,10 @@ async function commitPreparedArtifact(input = {}, options = {}) {
   let parent;
   try {
     parent = normalizeParentTransaction(parentResult, expectedParentStateHash, mutationResult);
-  } catch (error) {
-    throw new CommitAmbiguousError(
+  } catch {
+    throw internalCommitAmbiguity(
       "Parent mutation completed but its authoritative transaction receipt was invalid; automatic retry is forbidden",
-      { artifact_hash: artifact.artifact_hash, cause: String(error?.message ?? error).slice(0, 1e3) }
+      { artifact_hash: artifact.artifact_hash, cause: "parent_commit_receipt_invalid" }
     );
   }
   return {
@@ -62451,7 +62521,7 @@ function requireProviderCapability(provider, capability) {
 
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/host-boundary.mjs
 import { randomUUID as randomUUID4 } from "node:crypto";
-import { types as utilTypes2 } from "node:util";
+import { types as utilTypes3 } from "node:util";
 
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/skillspector-admission.mjs
 import { createHash as createHash3 } from "node:crypto";
@@ -64164,7 +64234,7 @@ function keyFingerprints(value) {
 function assertNoCallerRiskLabels(value, field = "operation", { rejectAdmissionEvidence = false } = {}) {
   function walk(current) {
     if (!current || typeof current !== "object") return;
-    if (utilTypes2.isProxy(current)) {
+    if (utilTypes3.isProxy(current)) {
       throw boundaryError(
         RISK_FORK_HOST_DIAGNOSTIC_CODES.INVALID_BOUNDARY_INPUT,
         `${field} must be ordinary JSON`
@@ -64237,7 +64307,7 @@ function assertBoundedCanonicalJson(value, {
       }
       return;
     }
-    if (typeof current !== "object" || utilTypes2.isProxy(current)) {
+    if (typeof current !== "object" || utilTypes3.isProxy(current)) {
       throw boundaryError(
         dlp ? RISK_FORK_HOST_DIAGNOSTIC_CODES.IMPORT_INVALID : RISK_FORK_HOST_DIAGNOSTIC_CODES.INVALID_BOUNDARY_INPUT,
         `${field} must contain only ordinary JSON values`
@@ -65948,6 +66018,26 @@ function markPreparationStageFailed(lifecycle, at) {
   }
   return lifecycle;
 }
+function preparationFailureCode(state) {
+  switch (state) {
+    case "SAVEPOINTING":
+      return "RISK_FORK_SAVEPOINT_STAGE_FAILED";
+    case "SAVEPOINT_READY":
+    case "FORK_STARTING":
+      return "RISK_FORK_FORK_STAGE_FAILED";
+    case "FORK_READY":
+    case "EXECUTING":
+      return "RISK_FORK_EXECUTION_STAGE_FAILED";
+    case "TAINTED":
+    case "VALIDATING":
+      return "RISK_FORK_VALIDATION_STAGE_FAILED";
+    case "COMMIT_READY":
+    case "PRECOMMIT_DESTROYING":
+      return "RISK_FORK_CLEANUP_STAGE_FAILED";
+    default:
+      return "RISK_FORK_PREPARATION_STAGE_FAILED";
+  }
+}
 var RiskForkPreparationError = class extends Error {
   constructor(message, evidence = {}) {
     super(message);
@@ -65960,9 +66050,9 @@ var RiskForkCommitError = class extends Error {
   constructor(message, { lifecycle, cause }) {
     super(message);
     this.name = "RiskForkCommitError";
-    this.code = cause instanceof CommitAmbiguousError ? "RISK_FORK_COMMIT_AMBIGUOUS" : "RISK_FORK_COMMIT_FAILED";
+    this.code = isCommitAmbiguousError(cause) ? "RISK_FORK_COMMIT_AMBIGUOUS" : "RISK_FORK_COMMIT_FAILED";
     this.lifecycle = lifecycle;
-    this.cause_code = String(cause?.code ?? cause?.name ?? "error").slice(0, 200);
+    this.cause_code = isCommitAmbiguousError(cause) ? "RISK_FORK_COMMIT_AMBIGUOUS" : "RISK_FORK_CLEAN_COMMIT_FAILED";
   }
 };
 var RiskForkController = class {
@@ -66075,19 +66165,19 @@ var RiskForkController = class {
           reason: "risk_fork_clean_boundary",
           cleanup_request: result.fork_cleanup_request
         });
-      } catch (error) {
-        result.fork_request = { status: "failed", code: String(error?.code ?? "destroy_failed") };
+      } catch {
+        result.fork_request = { status: "failed", code: "destroy_failed" };
       }
       try {
         result.fork_verification = await this.provider.verifyDestroyed({
           fork_ref: forkRef,
           cleanup_request: result.fork_cleanup_request
         });
-      } catch (error) {
+      } catch {
         result.fork_verification = {
           status: "unknown",
           outcome: "unknown",
-          code: String(error?.code ?? "verify_destroyed_failed")
+          code: "verify_destroyed_failed"
         };
       }
     }
@@ -66104,19 +66194,19 @@ var RiskForkController = class {
           savepoint_ref: savepointRef,
           cleanup_request: result.savepoint_cleanup_request
         });
-      } catch (error) {
-        result.savepoint_request = { status: "failed", code: String(error?.code ?? "delete_failed") };
+      } catch {
+        result.savepoint_request = { status: "failed", code: "delete_failed" };
       }
       try {
         result.savepoint_verification = await this.provider.verifySavepointDestroyed({
           savepoint_ref: savepointRef,
           cleanup_request: result.savepoint_cleanup_request
         });
-      } catch (error) {
+      } catch {
         result.savepoint_verification = {
           status: "unknown",
           outcome: "unknown",
-          code: String(error?.code ?? "verify_delete_failed")
+          code: "verify_delete_failed"
         };
       }
     }
@@ -66240,6 +66330,7 @@ var RiskForkController = class {
     let savepointCreationAttempted = false;
     let forkCreationAttempted = false;
     let cleanupResult = null;
+    let cleanupFailure = null;
     const measurements = {};
     try {
       lifecycle = advance(lifecycle, "SAVEPOINTING", { at: requireIsoDate(this.clock(), "clock result") });
@@ -66395,13 +66486,14 @@ var RiskForkController = class {
             }
           )
         });
-        throw new RiskForkPreparationError("Risk Fork cleanup was not verified; commit is blocked", {
+        cleanupFailure = new RiskForkPreparationError("Risk Fork cleanup was not verified; commit is blocked", {
           lifecycle,
           cleanup: {
             fork: forkClaim,
             savepoint: savepointClaim
           }
         });
+        throw cleanupFailure;
       }
       const combinedCleanupHash = sha256Ref({
         fork_evidence_hash: requireSha256Ref(forkClaim.evidence_hash, "fork destruction evidence_hash"),
@@ -66451,7 +66543,8 @@ var RiskForkController = class {
       });
       return prepared;
     } catch (error) {
-      if (error instanceof RiskForkPreparationError) throw error;
+      if (cleanupFailure !== null && error === cleanupFailure) throw error;
+      const failureCode = preparationFailureCode(lifecycle.state);
       const failedAt = requireIsoDate(this.clock(), "clock result");
       lifecycle = markPreparationStageFailed(lifecycle, failedAt);
       const cleanup = cleanupResult ?? await this.#destroyResources({ forkRef, savepointRef });
@@ -66545,7 +66638,7 @@ var RiskForkController = class {
           fork: forkClaim,
           savepoint: savepointClaim
         },
-        cause_code: String(error?.code ?? error?.name ?? "error").slice(0, 200)
+        cause_code: failureCode
       });
     }
   }
@@ -66603,14 +66696,15 @@ var RiskForkController = class {
       });
       return deepFreeze({ ...result, lifecycle });
     } catch (error) {
+      const ambiguous = isCommitAmbiguousError(error);
       lifecycle = advance(
         lifecycle,
-        error instanceof CommitAmbiguousError ? "COMMIT_AMBIGUOUS" : "COMMIT_FAILED",
+        ambiguous ? "COMMIT_AMBIGUOUS" : "COMMIT_FAILED",
         {
           at: requireIsoDate(this.clock(), "clock result"),
           evidence: lifecycleEvidence(
-            error instanceof CommitAmbiguousError ? "commit_ambiguous" : "commit_failed",
-            error instanceof CommitAmbiguousError ? "unknown" : "failed"
+            ambiguous ? "commit_ambiguous" : "commit_failed",
+            ambiguous ? "unknown" : "failed"
           )
         }
       );
@@ -71470,7 +71564,7 @@ import { readFile as readFile6 } from "node:fs/promises";
 import path6 from "node:path";
 import { performance as performance2 } from "node:perf_hooks";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
-import { types as utilTypes3 } from "node:util";
+import { types as utilTypes4 } from "node:util";
 
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/e2b-template/lib/runtime-contract.mjs
 var BOOT_EVIDENCE_SCHEMA = "agoragentic.risk-fork.e2b-boot-evidence.v1";
@@ -73651,7 +73745,7 @@ function createDetachedArray4(...values) {
   return output;
 }
 function buildE2BCleanSandboxCreateOptions(input = {}) {
-  if (input && typeof input === "object" && utilTypes3.isProxy(input)) {
+  if (input && typeof input === "object" && utilTypes4.isProxy(input)) {
     throw new TypeError("E2B clean sandbox creation input must not be a Proxy");
   }
   assertPlainObject(input, "E2B clean sandbox creation input");
@@ -73683,7 +73777,7 @@ function buildE2BCleanSandboxCreateOptions(input = {}) {
     }
   );
   const rawMetadata = inputDescriptors.metadata.value;
-  if (rawMetadata && typeof rawMetadata === "object" && utilTypes3.isProxy(rawMetadata)) {
+  if (rawMetadata && typeof rawMetadata === "object" && utilTypes4.isProxy(rawMetadata)) {
     throw new TypeError("E2B clean sandbox metadata must not be a Proxy");
   }
   assertPlainObject(rawMetadata, "E2B clean sandbox metadata");
@@ -73709,7 +73803,7 @@ function buildE2BCleanSandboxCreateOptions(input = {}) {
     if (!E2B_CLEAN_METADATA_KEYS.has(normalizedKey)) {
       throw new TypeError("E2B clean sandbox metadata contains an unsupported key");
     }
-    if (value && typeof value === "object" && utilTypes3.isProxy(value)) {
+    if (value && typeof value === "object" && utilTypes4.isProxy(value)) {
       throw new TypeError(`E2B clean sandbox metadata ${normalizedKey} must not be a Proxy`);
     }
     const normalizedValue = requireString(value, `E2B clean sandbox metadata ${normalizedKey}`, {
@@ -77160,7 +77254,7 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
 }
 
 // risk-fork-hosted-mcp/src/index.mjs
-var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:78c1a0777874cae7da766e154c2f3fb0d79170147bdd140d6323b97d2ccec272" : null;
+var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:8aa4826477e7d89c3ff41065ebadeed010cc4c59ba43c8d5319f1a88ec17fb8f" : null;
 var HOSTED_MCP_BUNDLE_METADATA = Object.freeze({
   package_name: "@agoragentic/risk-fork-hosted-mcp",
   package_version: "0.1.0-alpha.0",

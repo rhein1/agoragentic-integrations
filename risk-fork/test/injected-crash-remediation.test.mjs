@@ -11,8 +11,13 @@ import {
   FileParentHeadTransaction,
   commitPreparedArtifact,
   deriveParentAuthorityRef,
+  isCommitAmbiguousError,
 } from '../src/clean-commit.mjs';
-import { RiskForkController } from '../src/controller.mjs';
+import { RiskForkCommitError, RiskForkController, RiskForkPreparationError } from '../src/controller.mjs';
+import {
+  DistributedAuthorityAmbiguousError,
+  getDistributedAuthorityAmbiguityEvidence,
+} from '../src/distributed-authority.mjs';
 import {
   RiskForkProvider,
   createCleanupVerificationEvidence,
@@ -240,7 +245,7 @@ test('injected savepoint-creation crash is terminally blocked with unknown destr
   );
 
   assert.equal(error?.code, 'RISK_FORK_PREPARATION_FAILED');
-  assert.equal(error.evidence.cause_code, 'INJECTED_CREATE_SAVEPOINT_CRASH');
+  assert.equal(error.evidence.cause_code, 'RISK_FORK_SAVEPOINT_STAGE_FAILED');
   assert.equal(error.evidence.lifecycle.state, 'DESTRUCTION_UNKNOWN');
   assert.equal(error.evidence.lifecycle.fork_resource_state, 'DESTROY_UNKNOWN');
   assert.equal(provider.counts.createSavepoint, 1);
@@ -258,7 +263,7 @@ test('injected fork-creation crash blocks with unknown fork absence and cleans t
   );
 
   assert.equal(error?.code, 'RISK_FORK_PREPARATION_FAILED');
-  assert.equal(error.evidence.cause_code, 'INJECTED_CREATE_FORK_CRASH');
+  assert.equal(error.evidence.cause_code, 'RISK_FORK_FORK_STAGE_FAILED');
   assert.equal(error.evidence.lifecycle.state, 'DESTRUCTION_UNKNOWN');
   assert.equal(error.evidence.lifecycle.fork_resource_state, 'DESTROY_UNKNOWN');
   assert.equal(provider.counts.createSavepoint, 1);
@@ -774,6 +779,337 @@ test('injected authorization finalization crash is COMMIT_AMBIGUOUS after one ex
     assert.equal(executionAttempts, 1);
     await expectAmbiguous(prepared, input);
     assert.equal(executionAttempts, 1);
+  } finally {
+    await rm(temporary, { recursive: true, force: true });
+  }
+});
+
+function thrownFixture(kind) {
+  let touches = 0;
+  const touch = () => { touches += 1; throw new Error('fixture trap reached'); };
+  let value;
+  if (kind === 'revoked-proxy') {
+    const revocable = Proxy.revocable({}, {});
+    value = revocable.proxy;
+    revocable.revoke();
+  } else if (kind === 'proxy') {
+    value = new Proxy({}, {
+      get: touch, getPrototypeOf: touch, getOwnPropertyDescriptor: touch, ownKeys: touch,
+    });
+  } else if (kind === 'getters') {
+    value = new Error('fixture-private-error-text');
+    for (const key of ['code', 'name', 'message', 'toString', Symbol.toPrimitive]) {
+      Object.defineProperty(value, key, { get: touch });
+    }
+  } else if (kind === 'coercion') {
+    value = { code: { [Symbol.toPrimitive]: touch }, name: 'fixture-private-error-text' };
+  } else if (kind === 'abort') {
+    value = new DOMException('fixture-private-error-text', 'AbortError');
+  } else if (kind === 'ambiguous-error') {
+    value = new CommitAmbiguousError('fixture-private-error-text', { status: 'consuming' });
+    Object.defineProperty(value, 'evidence', { get: touch });
+  } else if (kind === 'preparation-error') {
+    value = new RiskForkPreparationError('fixture-private-error-text', {});
+  } else if (kind === 'primitive') {
+    value = 'fixture-private-error-text';
+  } else {
+    value = Object.assign(new Error('fixture-private-error-text'), {
+      code: 'fixture-private-error-text',
+    });
+  }
+  return { value, touches: () => touches };
+}
+
+const THROWN_KINDS = ['proxy', 'revoked-proxy', 'getters', 'coercion', 'abort', 'ambiguous-error', 'preparation-error', 'primitive', 'error'];
+
+for (const kind of THROWN_KINDS) {
+  test(`cleanup catches ${kind} without inspecting it, skipping verification, or duplicating destruction`, async () => {
+    for (const failingMethod of ['destroyFork', 'verifyDestroyed', 'destroySavepoint', 'verifySavepointDestroyed']) {
+      const fixture = thrownFixture(kind);
+      const provider = new InjectedCrashProvider();
+      for (const verifyMethod of ['verifyDestroyed', 'verifySavepointDestroyed']) {
+        provider[verifyMethod] = async (input) => {
+          provider.counts[verifyMethod] += 1;
+          return createCleanupVerificationEvidence(input.cleanup_request, {
+            status: 'unknown', observed_at: NOW, observation_hash: hash('unconfirmed-absence'),
+          });
+        };
+      }
+      provider[failingMethod] = async () => {
+        provider.counts[failingMethod] += 1;
+        throw fixture.value;
+      };
+      const capsule = makeCapsule({ allowed_commit_types: ['TYPED_RESULT'] });
+      const error = await capturePreparationError(makeController(provider), prepareInput(capsule));
+      assert.equal(fixture.touches(), 0, failingMethod);
+      assert.equal(error?.code, 'RISK_FORK_PREPARATION_FAILED', failingMethod);
+      assert.equal(error.evidence.lifecycle.state, 'DESTRUCTION_UNKNOWN');
+      for (const method of ['destroyFork', 'verifyDestroyed', 'destroySavepoint', 'verifySavepointDestroyed']) {
+        assert.equal(provider.counts[method], 1, `${failingMethod}: ${method}`);
+      }
+      assert.equal(JSON.stringify(error).includes('fixture-private-error-text'), false);
+    }
+  });
+
+  test(`execution throwing ${kind} cannot bypass resource cleanup or export exception content`, async () => {
+    const fixture = thrownFixture(kind);
+    const provider = new InjectedCrashProvider();
+    provider.executeInFork = async () => {
+      provider.counts.executeInFork += 1;
+      throw fixture.value;
+    };
+    const capsule = makeCapsule({ allowed_commit_types: ['TYPED_RESULT'] });
+    const error = await capturePreparationError(makeController(provider), prepareInput(capsule));
+    assert.equal(fixture.touches(), 0);
+    assert.equal(error?.code, 'RISK_FORK_PREPARATION_FAILED');
+    assert.equal(error.evidence.cause_code, 'RISK_FORK_EXECUTION_STAGE_FAILED');
+    assert.equal(error.evidence.lifecycle.state, 'DESTROYED');
+    for (const method of ['destroyFork', 'verifyDestroyed', 'destroySavepoint', 'verifySavepointDestroyed']) {
+      assert.equal(provider.counts[method], 1, method);
+    }
+    assert.equal(JSON.stringify(error).includes('fixture-private-error-text'), false);
+  });
+
+  for (const action of [false, true]) {
+    test(`${action ? 'action' : 'typed result'} throwing ${kind} persists redacted ambiguity and cannot replay`, async () => {
+      const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-hostile-throw-'));
+      try {
+        const fixture = thrownFixture(kind);
+        const prepared = action ? actionPrepared() : typedPrepared();
+        const governance = currentGovernance(prepared.capsule, action ? {} : {
+          typed_result_schema_hash: prepared.capsule.authorized_result_schema_hash,
+        });
+        const authority = await provisionCommitAuthorities({
+          directory: temporary, prepared, governance, binding: action ? prepared.binding : null,
+        });
+        let effects = 0;
+        const effect = async () => { effects += 1; throw fixture.value; };
+        const input = action
+          ? actionCommitInput(prepared, governance, authority.parentStateTransaction,
+            authority.executionAuthorizationTransaction, effect)
+          : typedCommitInput(prepared, governance, authority.parentStateTransaction, effect);
+        const error = await expectAmbiguous(prepared, input);
+        if (kind === 'ambiguous-error') assert.equal(Object.hasOwn(error.evidence, 'status'), false);
+        assert.equal(fixture.touches(), 0);
+        const parent = await authority.parentStateTransaction.getParentHead(authority.parentRef);
+        assert.equal(parent.status, 'ambiguous');
+        assert.equal(parent.pending_transaction.failure, 'parent_effect_unconfirmed');
+        if (action) {
+          const authorization = await readAuthorizationState(authority.authorizationDirectory, prepared.binding);
+          assert.equal(authorization.status, 'ambiguous');
+          assert.equal(authorization.failure, 'authorized_effect_unconfirmed');
+          assert.equal(JSON.stringify(authorization).includes('fixture-private-error-text'), false);
+        }
+        assert.equal(JSON.stringify(parent).includes('fixture-private-error-text'), false);
+        assert.equal(JSON.stringify(error).includes('fixture-private-error-text'), false);
+        await expectAmbiguous(prepared, input);
+        assert.equal(effects, 1);
+        assert.equal(fixture.touches(), 0);
+      } finally {
+        await rm(temporary, { recursive: true, force: true });
+      }
+    });
+  }
+}
+
+test('pre-effect proxy rejection is wrapped safely without entering a parent effect', async () => {
+  const fixture = thrownFixture('proxy');
+  const provider = new InjectedCrashProvider();
+  const capsule = makeCapsule({ allowed_commit_types: ['TYPED_RESULT'] });
+  const controller = makeController(provider);
+  const prepared = await controller.prepare(prepareInput(capsule));
+  const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-pre-effect-throw-'));
+  try {
+    const governance = currentGovernance(capsule, {
+      typed_result_schema_hash: capsule.authorized_result_schema_hash,
+    });
+    const authority = await provisionCommitAuthorities({ directory: temporary, prepared, governance });
+    let effects = 0;
+    const error = await controller.commit(prepared, {
+      ...typedCommitInput(prepared, governance, authority.parentStateTransaction, async () => {
+        effects += 1; return { accepted: true };
+      }),
+      resolveCurrentGovernance: async () => { throw fixture.value; },
+    }).catch((caught) => caught);
+    assert.equal(fixture.touches(), 0);
+    assert.equal(error.code, 'RISK_FORK_COMMIT_FAILED');
+    assert.equal(error.cause_code, 'RISK_FORK_CLEAN_COMMIT_FAILED');
+    assert.equal(error.lifecycle.state, 'COMMIT_FAILED');
+    assert.equal((await authority.parentStateTransaction.getParentHead(authority.parentRef)).status, 'active');
+    assert.equal(effects, 0);
+  } finally {
+    await rm(temporary, { recursive: true, force: true });
+  }
+});
+
+test('hostile savepoint/fork creation throws preserve ambiguous custody and clean known resources', async () => {
+  for (const method of ['createSavepoint', 'createFork']) {
+    const fixture = thrownFixture('proxy');
+    const provider = new InjectedCrashProvider();
+    provider[method] = async () => { provider.counts[method] += 1; throw fixture.value; };
+    const capsule = makeCapsule({ allowed_commit_types: ['TYPED_RESULT'] });
+    const error = await capturePreparationError(makeController(provider), prepareInput(capsule));
+    assert.equal(fixture.touches(), 0);
+    assert.equal(error.code, 'RISK_FORK_PREPARATION_FAILED');
+    assert.equal(error.evidence.lifecycle.state, 'DESTRUCTION_UNKNOWN');
+    assert.equal(error.evidence.cause_code, method === 'createSavepoint'
+      ? 'RISK_FORK_SAVEPOINT_STAGE_FAILED' : 'RISK_FORK_FORK_STAGE_FAILED');
+    assert.equal(provider.counts.executeInFork, 0);
+    assert.equal(provider.counts.destroyFork, 0);
+    assert.equal(provider.counts.destroySavepoint, method === 'createFork' ? 1 : 0);
+    assert.equal(provider.counts.verifySavepointDestroyed, method === 'createFork' ? 1 : 0);
+  }
+});
+
+test('private ambiguity identities reject prototypes/proxies and do not read mutable error fields', () => {
+  const fixture = thrownFixture('proxy');
+  for (const value of [fixture.value, Object.create(CommitAmbiguousError.prototype), null, 'error']) {
+    assert.equal(isCommitAmbiguousError(value), false);
+    assert.equal(new RiskForkCommitError('closed wrapper', { lifecycle: null, cause: value }).code,
+      'RISK_FORK_COMMIT_FAILED');
+  }
+  const genuine = new CommitAmbiguousError('fixture-private-error-text', {});
+  Object.setPrototypeOf(genuine, fixture.value);
+  assert.equal(isCommitAmbiguousError(genuine), true);
+  const wrapped = new RiskForkCommitError('closed wrapper', { lifecycle: null, cause: genuine });
+  assert.equal(wrapped.code, 'RISK_FORK_COMMIT_AMBIGUOUS');
+  assert.equal(wrapped.cause_code, 'RISK_FORK_COMMIT_AMBIGUOUS');
+  assert.equal(JSON.stringify(wrapped).includes('fixture-private-error-text'), false);
+  const distributed = new DistributedAuthorityAmbiguousError('closed message', {
+    operation_ref: 'operation:fixture',
+  });
+  Object.defineProperty(distributed, 'evidence', { get() { throw fixture.value; } });
+  assert.deepEqual(getDistributedAuthorityAmbiguityEvidence(distributed), {
+    operation_ref: 'operation:fixture',
+  });
+  assert.equal(Object.isFrozen(getDistributedAuthorityAmbiguityEvidence(distributed)), true);
+  assert.equal(getDistributedAuthorityAmbiguityEvidence(fixture.value), null);
+  assert.equal(getDistributedAuthorityAmbiguityEvidence(Object.create(DistributedAuthorityAmbiguousError.prototype)), null);
+  assert.equal(fixture.touches(), 0);
+});
+
+test('hostile serialization after a completed effect remains ambiguous and redacted', async () => {
+  const fixture = thrownFixture('proxy');
+  const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-return-throw-'));
+  try {
+    const prepared = typedPrepared();
+    const governance = currentGovernance(prepared.capsule, {
+      typed_result_schema_hash: prepared.capsule.authorized_result_schema_hash,
+    });
+    const authority = await provisionCommitAuthorities({ directory: temporary, prepared, governance });
+    let effects = 0;
+    const input = typedCommitInput(prepared, governance, authority.parentStateTransaction, async () => {
+      effects += 1;
+      return { get toJSON() { throw fixture.value; } };
+    });
+    await expectAmbiguous(prepared, input);
+    const parent = await authority.parentStateTransaction.getParentHead(authority.parentRef);
+    assert.equal(parent.status, 'ambiguous');
+    assert.equal(parent.pending_transaction.failure, 'parent_effect_unconfirmed');
+    assert.equal(fixture.touches(), 0);
+    await expectAmbiguous(prepared, input);
+    assert.equal(effects, 1);
+    assert.equal(fixture.touches(), 0);
+  } finally {
+    await rm(temporary, { recursive: true, force: true });
+  }
+});
+
+test('execution rejection with unconfirmed cleanup cannot claim absence or clean-commit readiness', async () => {
+  const fixture = thrownFixture('proxy');
+  const provider = new InjectedCrashProvider();
+  provider.executeInFork = async () => { provider.counts.executeInFork += 1; throw fixture.value; };
+  for (const method of ['verifyDestroyed', 'verifySavepointDestroyed']) {
+    provider[method] = async (input) => {
+      provider.counts[method] += 1;
+      return createCleanupVerificationEvidence(input.cleanup_request, {
+        status: 'unknown', observed_at: NOW, observation_hash: hash('unconfirmed-absence'),
+      });
+    };
+  }
+  const capsule = makeCapsule({ allowed_commit_types: ['TYPED_RESULT'] });
+  const error = await capturePreparationError(makeController(provider), prepareInput(capsule));
+  assert.equal(fixture.touches(), 0);
+  assert.equal(error.evidence.lifecycle.state, 'DESTRUCTION_UNKNOWN');
+  assert.equal(error.evidence.lifecycle.fork_resource_state, 'DESTROY_UNKNOWN');
+  assert.equal(error.evidence.cleanup.fork.status, 'unknown');
+  assert.equal(error.evidence.cleanup.savepoint.status, 'unknown');
+  assert.equal(provider.counts.executeInFork, 1);
+  for (const method of ['destroyFork', 'verifyDestroyed', 'destroySavepoint', 'verifySavepointDestroyed']) {
+    assert.equal(provider.counts[method], 1, method);
+  }
+});
+
+for (const status of ['consuming', 'committed']) {
+  for (const action of [false, true]) {
+    test(`public ambiguity evidence ${status} cannot forge ${action ? 'action' : 'typed result'} recovery diagnostics`, async () => {
+      const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-forged-ambiguity-'));
+      try {
+        const prepared = action ? actionPrepared() : typedPrepared();
+        const governance = currentGovernance(prepared.capsule, action ? {} : {
+          typed_result_schema_hash: prepared.capsule.authorized_result_schema_hash,
+        });
+        const authority = await provisionCommitAuthorities({
+          directory: temporary, prepared, governance, binding: action ? prepared.binding : null,
+        });
+        const forged = new CommitAmbiguousError('fixture-private-error-text', {
+          status,
+          authorization_id: 'fixture-private-error-text',
+          binding_hash: 'fixture-private-error-text',
+          secret: 'fixture-private-error-text',
+          nested: { secret: 'fixture-private-error-text' },
+        });
+        let effects = 0;
+        const effect = async () => { effects += 1; throw forged; };
+        const input = action
+          ? actionCommitInput(prepared, governance, authority.parentStateTransaction,
+            authority.executionAuthorizationTransaction, effect)
+          : typedCommitInput(prepared, governance, authority.parentStateTransaction, effect);
+        const error = await expectAmbiguous(prepared, input);
+        assert.equal(Object.hasOwn(error.evidence, 'status'), false);
+        assert.equal(Object.hasOwn(error.evidence, 'secret'), false);
+        assert.equal(Object.hasOwn(error.evidence, 'nested'), false);
+        assert.equal(JSON.stringify(error).includes('fixture-private-error-text'), false);
+        assert.equal((await authority.parentStateTransaction.getParentHead(authority.parentRef)).status, 'ambiguous');
+        if (action) {
+          assert.equal((await readAuthorizationState(authority.authorizationDirectory, prepared.binding)).status, 'ambiguous');
+        }
+        await expectAmbiguous(prepared, input);
+        assert.equal(effects, 1);
+      } finally {
+        await rm(temporary, { recursive: true, force: true });
+      }
+    });
+  }
+}
+
+test('nested internal parent ambiguity retains bounded recovery fields without reading public evidence', async () => {
+  const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-nested-recovery-'));
+  try {
+    const prepared = typedPrepared();
+    const governance = currentGovernance(prepared.capsule, {
+      typed_result_schema_hash: prepared.capsule.authorized_result_schema_hash,
+    });
+    const authority = await provisionCommitAuthorities({ directory: temporary, prepared, governance });
+    const hostile = thrownFixture('proxy');
+    let effects = 0;
+    let nestedTransaction;
+    let input;
+    input = typedCommitInput(prepared, governance, authority.parentStateTransaction, async () => {
+      effects += 1;
+      const nested = await expectAmbiguous(prepared, input);
+      assert.equal(isCommitAmbiguousError(nested), true);
+      assert.equal(nested.evidence.parent_state_status, 'committing');
+      nestedTransaction = nested.evidence.pending_transaction.transaction_ref;
+      Object.defineProperty(nested, 'evidence', { get() { throw hostile.value; } });
+      throw nested;
+    });
+    const error = await expectAmbiguous(prepared, input);
+    assert.equal(error.evidence.parent_state_status, 'committing');
+    assert.equal(error.evidence.pending_transaction.transaction_ref, nestedTransaction);
+    assert.equal(hostile.touches(), 0);
+    await expectAmbiguous(prepared, input);
+    assert.equal(effects, 1);
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }
