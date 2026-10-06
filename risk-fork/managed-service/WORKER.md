@@ -185,9 +185,16 @@ may already have committed, in which case the store rejects an incomplete event
 on the terminal invocation. A failed/unknown observation append is not claimed
 durable. This is self-attested incompletion, not provider failure, verified
 destruction, absence, termination or finalized cost. The redacted lifecycle
-observer recognizes the exact label, but current v3–v6 metric settings do not
-count it. Opt-in incomplete-attempt thresholds/catalog and real alert delivery
-remain separate work; audit retention alone does not complete Gate 5.
+observer recognizes the exact label. V3–v6 metric settings do not count it;
+opt-in v7 or later can count `cleanup_incomplete_observed` with an explicitly
+configured rule and the attested catalog/settings boundary described in
+[TELEMETRY.md](./TELEMETRY.md#opt-in-v7-incomplete-cleanup-attempts). Catalog-only
+upgrades preserve existing settings and never silently enable the rule or
+backfill old observations. These are per-generation incomplete-attempt counts,
+not current backlog. Opt-in v8 latest gauges and v9 backlog threshold alerts
+have separate sampled meanings. Real external alert delivery and an observed
+operator-response drill remain unfinished; source/audit custody alone does not
+complete Gate 5.
 
 ## Ambiguity, restart, and shutdown
 

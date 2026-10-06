@@ -11,7 +11,7 @@ import { migratePostgresManagedTelemetry } from '../src/postgres-telemetry-migra
 import { createPostgresManagedTelemetryStore } from '../src/postgres-telemetry-store.mjs';
 import { prunePostgresManagedTelemetry } from '../src/postgres-telemetry-maintenance.mjs';
 import { createManagedTelemetryDrainer } from '../src/telemetry-drainer.mjs';
-import { backlogAlertStateHash, backlogAlertTotalsHash, createManagedBacklogAlert } from '../src/backlog-alert.mjs';
+import { backlogAlertStateHash, createManagedBacklogAlert } from '../src/backlog-alert.mjs';
 import { createFixture } from './helpers.mjs';
 
 const connectionString = process.env.RISK_FORK_MANAGED_TEST_POSTGRES_URL;
