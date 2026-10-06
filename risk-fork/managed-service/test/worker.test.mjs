@@ -1102,3 +1102,39 @@ test('a fabricated broker result after valid provider settlement cannot be journ
     assert.equal(worker.status().termination_proven, false);
   } finally { worker.close(); current.worker.close(); }
 });
+
+test('broker retirement during bound-method preflight prevents late raw-provider dispatch', { timeout: 5000 }, async (t) => {
+  retainTestHost(t);
+  const current = await fixture(); let heldRenewals = 0; let holdNextRenewal = false;
+  let preflightEntered; let releasePreflight; let boundCall;
+  const ready = new Promise((resolve) => { preflightEntered = resolve; });
+  const wait = new Promise((resolve) => { releasePreflight = resolve; });
+  const controlPlane = { ...current.controlPlane, async renewLease(...args) {
+    const renewed = await current.controlPlane.renewLease(...args);
+    // Select the bound method's fresh preflight, not a controller/fence renewal.
+    if (holdNextRenewal) { holdNextRenewal = false; heldRenewals += 1; preflightEntered(); await wait; }
+    return renewed;
+  } };
+  const worker = createManagedRiskForkWorker({ ...current.options, controlPlane,
+    invokeProvider: async (packet) => {
+      await packet.effectFence();
+      holdNextRenewal = true;
+      boundCall = packet.provider[packet.method](packet.input);
+      await ready;
+      return { fabricated: true };
+    },
+  });
+  try {
+    await assert.rejects(worker.execute(current.admitted.invocation_ref), { code: 'WORKER_PREPARATION_FAILED' });
+    assert.equal(heldRenewals, 1);
+    assert.equal(worker.status().pending_attempts, 0);
+    assert.equal(worker.status().pending_provider_callbacks, 1);
+    assert.deepEqual(current.provider.created, []);
+    const before = await current.controlPlane.getInvocation(current.principal, current.admitted.invocation_ref);
+    releasePreflight();
+    await assert.rejects(boundCall, { code: 'WORKER_BROKER_FENCE_INVALID' });
+    assert.equal(worker.status().pending_provider_callbacks, 0);
+    assert.deepEqual(current.provider.created, [], 'the post-await finished guard must deny a retired callback');
+    assert.deepEqual(await current.controlPlane.getInvocation(current.principal, current.admitted.invocation_ref), before);
+  } finally { releasePreflight(); if (boundCall) await boundCall.catch(() => {}); worker.close(); current.worker.close(); }
+});
