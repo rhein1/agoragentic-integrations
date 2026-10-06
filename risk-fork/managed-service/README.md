@@ -447,6 +447,32 @@ capabilities, never HTTP routes. No public demo or hosted protection is activate
 
 ## Evidence truth
 
+### Current cleanup/recovery backlog health
+
+Trusted in-process host/operator callers can inspect `controlPlane.health().storage`.
+It includes `snapshot_at`, `cleanup_pending_count`, `recovery_required_count`, and
+`expired_execution_lease_count`, `expired_cleanup_lease_count`,
+`expired_recovery_lease_count`. These are current recorded obligations, not counts
+of terminal audit labels or telemetry-window totals. Pending cleanup includes jobs
+with no cleanup lease. Expired counts use the recorded lease kind and non-null
+expiry `<= snapshot_at`, without hiding a lease whose state/kind pairing is unusual.
+Existing readiness still blocks on recovery-required work and expired execution
+leases only; the new cleanup/recovery fields grant no admission or provider authority.
+
+Memory computes all counters without an intervening await using its supplied clock.
+PostgreSQL reads catalog, migrations and counts in one read-only repeatable-read
+snapshot, with a transaction-local five-second statement timeout. One materialized
+database clock, truncated to the returned ISO millisecond precision, evaluates every
+lease expiry. `snapshot_at` is the assessment clock for that MVCC view, not a promise
+that concurrent commits are reflected at response time. Failed reads remain typed
+non-ready errors, never fabricated zero counts; unavailable catalog leaves timestamp
+and counts null. Results are bounded scalars, but scan cost and pool acquisition still
+need operational capacity/deadline qualification. Health writes no lifecycle, audit,
+budget, lease or telemetry state. The cross-tenant counts are not exposed by public
+`/readyz`, which retains its minimal response. No durable backlog delivery/alert,
+provider absence/destruction, managed database, deployment or live qualification is
+established by this source snapshot.
+
 ### Bounded observer audit reads
 
 Trusted checkout-only callers with a current `audit:read` principal can use

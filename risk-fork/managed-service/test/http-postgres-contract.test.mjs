@@ -490,6 +490,10 @@ test('PostgreSQL source schema binds tenant state, hashes credentials, and makes
 test('PostgreSQL health probe is local-pool injectable and reports durability truth', async () => {
   let released = false;
   let migrationCount = 4;
+  const queries = [];
+  const snapshotAt = '2026-09-05T12:00:00.000Z';
+  let stateOverrides = {};
+  let tableCount = 8;
   const migrationHash = sha256Ref((await readFile(
     new URL('../migrations/001_managed_control_plane.pg.sql', import.meta.url),
     'utf8',
@@ -507,11 +511,15 @@ test('PostgreSQL health probe is local-pool injectable and reports durability tr
     async connect() {
       return {
         async query(sql) {
+          queries.push(sql);
+          if (sql.startsWith('BEGIN') || sql.startsWith('SET LOCAL') || sql === 'COMMIT' || sql === 'ROLLBACK') {
+            return { rowCount: 0, rows: [] };
+          }
           if (sql.includes('information_schema.tables')) {
             return {
               rowCount: 1,
               rows: [{
-                table_count: 8,
+                table_count: tableCount,
                 trigger_count: 2,
                 fsync: 'on',
                 synchronous_commit: 'on',
@@ -528,8 +536,13 @@ test('PostgreSQL health probe is local-pool injectable and reports durability tr
               lock_migration_hash: lockMigrationHash,
               cancellation_migration_hash: cancellationMigrationHash,
               migration_count: migrationCount,
+              snapshot_at: snapshotAt,
+              cleanup_pending_count: '0',
               recovery_required_count: 0,
               expired_execution_lease_count: 0,
+              expired_cleanup_lease_count: '0',
+              expired_recovery_lease_count: '0',
+              ...stateOverrides,
             }],
           };
         },
@@ -554,10 +567,21 @@ test('PostgreSQL health probe is local-pool injectable and reports durability tr
     runtime_privileges_verified: false,
     migration_verified: true,
     migration_count: 4,
+    snapshot_at: snapshotAt,
+    cleanup_pending_count: 0,
     recovery_required_count: 0,
     expired_execution_lease_count: 0,
+    expired_cleanup_lease_count: 0,
+    expired_recovery_lease_count: 0,
   });
   assert.equal(released, true);
+  assert.equal(queries[0], 'BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+  assert.equal(queries[1], "SET LOCAL statement_timeout = '5000ms'");
+  assert.equal(queries.at(-1), 'COMMIT');
+  const snapshotQuery = queries.find((sql) => sql.includes('managed_schema_migrations'));
+  assert.equal((snapshotQuery.match(/clock_timestamp\(\)/g) ?? []).length, 1);
+  assert.match(snapshotQuery, /health_clock AS MATERIALIZED/);
+  assert.equal(queries.some((sql) => /\b(?:INSERT|UPDATE|DELETE|ALTER)\b/.test(sql)), false);
   migrationCount = 5;
   const unreviewedMigration = await store.health();
   assert.equal(unreviewedMigration.ready, false);
@@ -569,6 +593,24 @@ test('PostgreSQL health probe is local-pool injectable and reports durability tr
   assert.equal(tamperedCancellationMigration.ready, false);
   assert.equal(tamperedCancellationMigration.migration_verified, false);
   assert.equal(tamperedCancellationMigration.migration_count, 4);
+  for (const field of ['cleanup_pending_count', 'recovery_required_count', 'expired_execution_lease_count',
+    'expired_cleanup_lease_count', 'expired_recovery_lease_count']) {
+    for (const value of [null, '-1', '01', '9007199254740992', 0.5]) {
+      stateOverrides = { [field]: value };
+      await assert.rejects(store.health(), TypeError);
+      assert.equal(queries.at(-1), 'ROLLBACK');
+    }
+  }
+  stateOverrides = { snapshot_at: 'invalid' };
+  await assert.rejects(store.health(), TypeError);
+  stateOverrides = {};
+  tableCount = 7;
+  const unavailable = await store.health();
+  assert.equal(unavailable.ready, false);
+  for (const field of ['snapshot_at', 'cleanup_pending_count', 'recovery_required_count',
+    'expired_execution_lease_count', 'expired_cleanup_lease_count', 'expired_recovery_lease_count']) {
+    assert.equal(unavailable[field], null);
+  }
   assert.throws(
     () => new PostgresManagedServiceStore({ pool, requireTls: true }),
     (error) => error.code === 'MANAGED_POSTGRES_TLS_POOL_UNTRUSTED',

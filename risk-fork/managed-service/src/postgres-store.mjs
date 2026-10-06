@@ -1890,7 +1890,8 @@ export class PostgresManagedServiceStore {
   }
 
   async health() {
-    return this.#withClient(async (client) => {
+    return this.#withReadSnapshot(async (client) => {
+      await client.query("SET LOCAL statement_timeout = '5000ms'");
       const catalog = await client.query(
         `SELECT
            (SELECT count(*)::integer
@@ -1915,11 +1916,27 @@ export class PostgresManagedServiceStore {
         && Number(row.trigger_count) === REQUIRED_AUDIT_TRIGGERS.length;
       let migrationVerified = false;
       let migrationCount = null;
+      let snapshotAt = null;
+      let cleanupPendingCount = null;
       let recoveryRequiredCount = null;
       let expiredExecutionLeaseCount = null;
+      let expiredCleanupLeaseCount = null;
+      let expiredRecoveryLeaseCount = null;
       if (catalogVerified) {
         const state = await client.query(
-          `SELECT
+          `WITH health_clock AS MATERIALIZED (
+             SELECT date_trunc('milliseconds', clock_timestamp()) AS snapshot_at
+           ), backlog AS (
+             SELECT count(*) FILTER (WHERE state = 'cleanup_pending') AS cleanup_pending_count,
+                    count(*) FILTER (WHERE state = 'recovery_required') AS recovery_required_count,
+                    count(*) FILTER (WHERE lease_kind = 'execution'
+                      AND lease_expires_at <= health_clock.snapshot_at) AS expired_execution_lease_count,
+                    count(*) FILTER (WHERE lease_kind = 'cleanup'
+                      AND lease_expires_at <= health_clock.snapshot_at) AS expired_cleanup_lease_count,
+                    count(*) FILTER (WHERE lease_kind = 'recovery'
+                      AND lease_expires_at <= health_clock.snapshot_at) AS expired_recovery_lease_count
+               FROM ${this.#schema}.managed_invocations CROSS JOIN health_clock
+           ) SELECT
              (SELECT migration_hash
                 FROM ${this.#schema}.managed_schema_migrations
                WHERE version = 1) AS migration_hash,
@@ -1934,23 +1951,23 @@ export class PostgresManagedServiceStore {
                WHERE version = 4) AS cancellation_migration_hash,
              (SELECT count(*)::integer
                 FROM ${this.#schema}.managed_schema_migrations) AS migration_count,
-             (SELECT count(*)::integer
-                FROM ${this.#schema}.managed_invocations
-               WHERE state = 'recovery_required') AS recovery_required_count,
-             (SELECT count(*)::integer
-                FROM ${this.#schema}.managed_invocations
-               WHERE lease_kind = 'execution'
-                 AND lease_expires_at <= clock_timestamp()) AS expired_execution_lease_count`,
+             (SELECT snapshot_at FROM health_clock) AS snapshot_at,
+             backlog.* FROM backlog`,
         );
-        const stateRow = state.rows[0] ?? {};
-        migrationCount = Number(stateRow.migration_count);
+        if (state.rowCount !== 1) throw managedError('Health snapshot unavailable', 'STORE_HEALTH_FAILED', 503);
+        const stateRow = state.rows[0];
+        migrationCount = pgInteger(stateRow.migration_count, 'health migration_count');
         migrationVerified = migrationCount === 4
           && stateRow.migration_hash === await expectedMigrationHash(1)
           && stateRow.purpose_migration_hash === await expectedMigrationHash(2)
           && stateRow.lock_migration_hash === await expectedMigrationHash(3)
           && stateRow.cancellation_migration_hash === await expectedMigrationHash(4);
-        recoveryRequiredCount = Number(stateRow.recovery_required_count);
-        expiredExecutionLeaseCount = Number(stateRow.expired_execution_lease_count);
+        snapshotAt = pgIso(stateRow.snapshot_at, 'health snapshot_at');
+        cleanupPendingCount = pgInteger(stateRow.cleanup_pending_count, 'health cleanup_pending_count');
+        recoveryRequiredCount = pgInteger(stateRow.recovery_required_count, 'health recovery_required_count');
+        expiredExecutionLeaseCount = pgInteger(stateRow.expired_execution_lease_count, 'health expired_execution_lease_count');
+        expiredCleanupLeaseCount = pgInteger(stateRow.expired_cleanup_lease_count, 'health expired_cleanup_lease_count');
+        expiredRecoveryLeaseCount = pgInteger(stateRow.expired_recovery_lease_count, 'health expired_recovery_lease_count');
       }
       const durabilityVerified = row.fsync === 'on'
         && row.synchronous_commit === 'on'
@@ -1973,8 +1990,12 @@ export class PostgresManagedServiceStore {
         runtime_privileges_verified: this.#expectedOwner !== undefined,
         migration_verified: migrationVerified,
         migration_count: migrationCount,
+        snapshot_at: snapshotAt,
+        cleanup_pending_count: cleanupPendingCount,
         recovery_required_count: recoveryRequiredCount,
         expired_execution_lease_count: expiredExecutionLeaseCount,
+        expired_cleanup_lease_count: expiredCleanupLeaseCount,
+        expired_recovery_lease_count: expiredRecoveryLeaseCount,
       });
     });
   }
