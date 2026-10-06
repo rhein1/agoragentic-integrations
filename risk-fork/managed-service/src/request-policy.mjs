@@ -8,8 +8,9 @@ import { assertManagedTelemetryAppend, createManagedTelemetryEvent } from './tel
 import { createManagedDeadline } from './deadline.mjs';
 
 const ROUTES = Object.freeze(['admission', 'execution', 'cleanup', 'recovery', 'read']);
-const EVENTS = Object.freeze(['control_denied', 'rate_denied', 'policy_error', 'policy_allowed', 'policy_candidate']);
-const OUTCOMES = Object.freeze(['allowed', 'disabled', 'rate_limited', 'failed_closed', 'timeout', 'candidate']);
+const EVENTS = Object.freeze(['control_denied', 'rate_denied', 'policy_error', 'policy_allowed', 'policy_candidate',
+  'invocation_budget_denied', 'daily_budget_denied']);
+const OUTCOMES = Object.freeze(['allowed', 'disabled', 'rate_limited', 'failed_closed', 'timeout', 'candidate', 'budget_limited']);
 const POLICIES = new WeakSet();
 
 // Clean-host capability identity only. Serialized decisions and lookalike
@@ -76,13 +77,15 @@ function closedRate(value) {
 
 export function createManagedRequestPolicy(options = {}) {
   assertPlainRecord(options, 'request policy options');
-  assertAllowedKeys(options, ['readControl', 'consumeRateLimit', 'emitTelemetry', 'recordTelemetry', 'telemetryTimeoutMs', 'clock'], 'request policy options');
+  assertAllowedKeys(options, ['readControl', 'consumeRateLimit', 'emitTelemetry', 'recordTelemetry', 'telemetryTimeoutMs', 'clock', 'observeBudgetDenials'], 'request policy options');
   const { readControl, consumeRateLimit, emitTelemetry, recordTelemetry, clock = () => Date.now() } = options;
   if (typeof readControl !== 'function' || typeof consumeRateLimit !== 'function'
     || (typeof emitTelemetry !== 'function' && typeof recordTelemetry !== 'function')) {
     throw new TypeError('host-owned policy callbacks are required');
   }
   if (emitTelemetry !== undefined && recordTelemetry !== undefined) throw new TypeError('Choose best-effort emission or durable recording, not both');
+  const observeBudgetDenials = options.observeBudgetDenials ?? false;
+  if (typeof observeBudgetDenials !== 'boolean') throw new TypeError('observeBudgetDenials must be boolean');
   const telemetryTimeoutMs = requireInteger(options.telemetryTimeoutMs ?? 1000, 'telemetryTimeoutMs', { min: 100, max: 5000 });
   if (typeof clock !== 'function') throw new TypeError('clock must be a function');
   const pending = new Set();
@@ -201,8 +204,24 @@ export function createManagedRequestPolicy(options = {}) {
         current = final;
       }
       const decision = Object.freeze({ tenant_id: p.tenant_id, key_id: p.key_id, epoch: current.epoch, route_class: routeClass });
-      decisions.set(decision, p);
+      decisions.set(decision, Object.freeze({ ...p, started }));
       return decision;
+    },
+    // Host-only observation after the admission promise rejects. No await,
+    // response replacement, budget change or execution authority is supplied.
+    observeAdmissionDenial(decision, error) {
+      const admitted = decisions.get(decision);
+      if (!admitted || decision.route_class !== 'admission') return false;
+      decisions.delete(decision);
+      if (!observeBudgetDenials || !(error instanceof Error)) return false;
+      const code = Object.getOwnPropertyDescriptor(error, 'code')?.value;
+      const status = Object.getOwnPropertyDescriptor(error, 'status')?.value;
+      if (status !== 429) return false;
+      const event = code === 'INVOCATION_BUDGET_EXCEEDED' ? 'invocation_budget_denied'
+        : code === 'DAILY_BUDGET_EXCEEDED' ? 'daily_budget_denied' : null;
+      if (event === null) return false;
+      telemetry(event, admitted, 'admission', 429, 'budget_limited', admitted.started);
+      return true; // Attempted observation, not a durable append acknowledgement.
     },
     telemetryHealth() {
       return Object.freeze({ mode: recordTelemetry ? 'durable_append' : 'best_effort', recorded, failed, dropped,

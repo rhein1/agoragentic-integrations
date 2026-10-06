@@ -6,6 +6,7 @@ import {
   requireString,
 } from './validation.mjs';
 import { MANAGED_SERVICE_PROTOCOL_LIMITS } from './constants.mjs';
+import { assertManagedRequestPolicy } from './request-policy.mjs';
 
 function response(status, body, headers = {}) {
   return Object.freeze({
@@ -73,6 +74,9 @@ function createHandler(controlPlane, authenticator, allowPublicRoutes, allowWork
   if (requestPolicy !== undefined && (!requestPolicy || typeof requestPolicy.beforeMutation !== 'function')) {
     throw new TypeError('requestPolicy must be a host-owned managed request policy');
   }
+  const beforeMutation = requestPolicy?.beforeMutation?.bind(requestPolicy);
+  const observeAdmissionDenial = requestPolicy?.observeAdmissionDenial === undefined ? null
+    : assertManagedRequestPolicy(requestPolicy).observeAdmissionDenial.bind(requestPolicy);
 
   return async function handleManagedServiceRequest(request = {}) {
     try {
@@ -80,6 +84,7 @@ function createHandler(controlPlane, authenticator, allowPublicRoutes, allowWork
       const method = requireString(request.method, 'HTTP request.method', { maxBytes: 16 }).toUpperCase();
       const path = requireString(request.path, 'HTTP request.path', { maxBytes: 512 });
       const headers = request.headers ?? {};
+      let policyDecision;
       function checkDeadline() {
         if (request.signal?.aborted) {
           throw managedError('Request deadline expired', 'REQUEST_TIMEOUT', 408);
@@ -92,7 +97,7 @@ function createHandler(controlPlane, authenticator, allowPublicRoutes, allowWork
         );
         checkDeadline();
         if (requestPolicy !== undefined) {
-          await requestPolicy.beforeMutation({ principal, routeClass, signal: request.signal });
+          policyDecision = await beforeMutation({ principal, routeClass, signal: request.signal });
           checkDeadline();
         }
         return principal;
@@ -133,8 +138,14 @@ function createHandler(controlPlane, authenticator, allowPublicRoutes, allowWork
 
       if (allowPublicRoutes && method === 'POST' && path === '/v1/invocations') {
         const principal = await authenticate('invocations:write', 'admission');
-        const result = await controlPlane.admitInvocation(principal, body);
-        return response(result.created ? 201 : 200, result);
+        try {
+          const result = await controlPlane.admitInvocation(principal, body);
+          return response(result.created ? 201 : 200, result);
+        } catch (error) {
+          try { observeAdmissionDenial?.(policyDecision, error); }
+          catch { /* Observer failure cannot change the original admission denial. */ }
+          throw error;
+        }
       }
 
       const invocationMatch = /^\/v1\/invocations\/([A-Za-z0-9][A-Za-z0-9._:@-]{0,199})$/.exec(path);

@@ -39,10 +39,13 @@ export function normalizeTelemetryOptions(options, extraKeys = []) {
   if (!metrics && options.metricSettings !== undefined) throw new TypeError('Metric settings require explicit metrics=true');
   if (!metrics && options.metricVersion !== undefined) throw new TypeError('Metric version requires explicit metrics=true');
   const metricVersion = metrics ? (options.metricVersion ?? 3) : undefined;
-  if (metrics && ![3,4].includes(metricVersion)) throw new TypeError('Invalid metric version');
+  if (metrics && ![3,4,5].includes(metricVersion)) throw new TypeError('Invalid metric version');
   const metricSettings = metrics ? normalizeMetricSettings(options.metricSettings) : undefined;
   if (metricVersion === 3 && metricSettings.rules.some((rule) => rule.rule_id === 'execution_failure_observed')) {
     throw new TypeError('Execution failure metrics require explicit metricVersion=4');
+  }
+  if (metrics && metricVersion < 5 && metricSettings.rules.some((rule) => rule.rule_id === 'budget_denied')) {
+    throw new TypeError('Budget denial metrics require explicit metricVersion=5');
   }
   if ((options.deploymentMode ?? 'local_test') !== 'local_test') {
     throw managedError('Telemetry is source-only local_test', 'TELEMETRY_NOT_QUALIFIED', 503);
@@ -77,16 +80,22 @@ export async function executionMetricsMigration(schemaName) {
   const source = (await readFile(new URL('../migrations/009_managed_execution_metrics.pg.sql',import.meta.url),'utf8')).replace(/\r\n?/g,'\n');
   return Object.freeze({ hash: sha256Ref(source),sql: source.replaceAll('__RISK_FORK_TELEMETRY_SCHEMA__',quotePostgresAuthorityIdentifier(schemaName)) });
 }
+export async function budgetMetricsMigration(schemaName) {
+  const source = (await readFile(new URL('../migrations/010_managed_budget_metrics.pg.sql',import.meta.url),'utf8')).replace(/\r\n?/g,'\n');
+  return Object.freeze({ hash: sha256Ref(source),sql: source.replaceAll('__RISK_FORK_TELEMETRY_SCHEMA__',quotePostgresAuthorityIdentifier(schemaName)) });
+}
 
 export async function verifyTelemetrySettings(client, config, hash) {
   const settings = await client.query(`SELECT version,migration_hash FROM ${config.quotedSchema}.telemetry_schema_migrations ORDER BY version`);
   const extension = config.lifecycle ? await lifecycleMigration(config.schemaName) : null;
   const metrics = config.metrics ? await metricsMigration(config.schemaName) : null;
-  const execution = config.metricVersion === 4 ? await executionMetricsMigration(config.schemaName) : null;
-  if (settings.rowCount !== (execution ? 4 : metrics ? 3 : extension ? 2 : 1) || settings.rows[0].version !== 1 || settings.rows[0].migration_hash !== hash
+  const execution = config.metricVersion >= 4 ? await executionMetricsMigration(config.schemaName) : null;
+  const budget = config.metricVersion === 5 ? await budgetMetricsMigration(config.schemaName) : null;
+  if (settings.rowCount !== (budget ? 5 : execution ? 4 : metrics ? 3 : extension ? 2 : 1) || settings.rows[0].version !== 1 || settings.rows[0].migration_hash !== hash
     || (extension && (settings.rows[1].version !== 2 || settings.rows[1].migration_hash !== extension.hash))
     || (metrics && (settings.rows[2].version !== 3 || settings.rows[2].migration_hash !== metrics.hash))
-    || (execution && (settings.rows[3].version !== 4 || settings.rows[3].migration_hash !== execution.hash))) throw new TypeError('Telemetry migration drift');
+    || (execution && (settings.rows[3].version !== 4 || settings.rows[3].migration_hash !== execution.hash))
+    || (budget && (settings.rows[4].version !== 5 || settings.rows[4].migration_hash !== budget.hash))) throw new TypeError('Telemetry migration drift');
   const result = await client.query(`SELECT settings_hash,max_events,max_events_per_tenant,lease_ms,retry_ms,retention_ms
     FROM ${config.quotedSchema}.telemetry_settings WHERE singleton=true`);
   const row = result.rows[0], l = config.limits;

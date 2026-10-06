@@ -258,9 +258,9 @@ time, not the source event's occurrence time or all real traffic:
 | `lease_expiry_observed` | execution/cleanup/recovery `*_lease_expired` audit label | actual lease age, backlog size, provider destruction |
 
 Unknown rules, request-supplied formulas, duplicate rule IDs and accessor fields
-are rejected. Configure 1–6 rules in v3 (up to 7 in opt-in v4), each with threshold 1–1,000,000 and fixed
+are rejected. Configure 1–6 rules in v3 (up to 7 in opt-in v4 or 8 in opt-in v5), each with threshold 1–1,000,000 and fixed
 window 1,000–86,400,000 ms. Rules are canonically sorted and immutable settings
-and all three migration/catalog hashes must match. Changing thresholds or
+and every migration/catalog hash for the selected version must match. Changing thresholds or
 capacities is a separately reviewed migration, not a hot reload.
 
 ```js
@@ -431,3 +431,74 @@ actual failed/successful PostgreSQL producers, multi-instance exact replay,
 lost COMMIT/ACK, pruning, rollback/caps, migration compatibility, least-privilege
 roles and catalog drift. These are source/local-test evidence, not hosted alert
 delivery, provider qualification or production activation.
+
+### Opt-in v5 HTTP budget-denial observations
+
+Set trusted `observeBudgetDenials:true` on `createManagedRequestPolicy` to
+observe authenticated **public HTTP** admission failures after the actual
+control-plane/store promise rejects. The local host uses the same public
+handler. Direct `controlPlane.admitInvocation()` and direct store calls remain
+unobserved. Omitting the option preserves the previous producer behavior.
+
+Only exact typed `INVOCATION_BUDGET_EXCEEDED` or `DAILY_BUDGET_EXCEEDED` errors
+with status 429 produce `invocation_budget_denied` or `daily_budget_denied`,
+respectively, with fixed `budget_limited` outcome and `admission` route. Rate
+limits, concurrency quota, validation/authentication, policy disablement,
+recovery fences and idempotency errors do not match. Global protocol/config
+input ceilings still reject invalid inputs as before; they are not reclassified
+as typed tenant budget denials. Accepted/replayed admissions and cost settlement
+do not emit this event. No budget/reservation/authority behavior is changed.
+
+The handler retains its original policy decision and calls the original branded
+policy's `observeAdmissionDenial(decision,error)` method only after admission
+rejects. The decision is instance-bound and one-use for observation. `true`
+means an observation was attempted, **not** durable persistence or authority.
+The existing bounded recorder constructs one packet and keeps its reference
+through append/delivery. It is nonblocking: queue overflow, sink rejection,
+timeout, unknown commit or a callback ignoring abort cannot replace or delay
+the original error response. Health/flush preserve actual callback settlement;
+this remains lossy under outage/process loss and is not a complete rejection
+ledger. Nothing raw from the error/body, including amounts or budget balances,
+is recorded. Hashes and fixed labels are `host_policy_self_attested` observer
+evidence, not actual spend or independent provider evidence.
+
+For durable recording/counts select `metricVersion:5`, `lifecycle:true`,
+`metrics:true` and explicit immutable `metricSettings` on migration and **every**
+store sharing the schema. Configure `{rule_id:'budget_denied',threshold:1,
+window_ms:60000}` as a trusted example, not qualified production sizing. The
+rule counts both exact budget-denial labels by DB ingestion time. Other rules
+keep their prior semantics. V1–v4 stores reject these packets/catalogs; upgrade
+the recorder, drainer and store before opting the HTTP producer in.
+
+The callback-based policy cannot inspect a recorder's schema version at
+composition time. An opt-in policy paired with a v3/v4 durable recorder can
+still admit its supported policy candidate, but the later budget append is
+rejected: `telemetryHealth().failed` increases, no budget packet/count persists,
+and the original 429 response is unchanged. `observeAdmissionDenial() === true`
+does not establish compatible or durable storage. Test the v5 recorder setup
+before enabling the observer; do not interpret callback acceptance as coverage.
+
+Additive `010_managed_budget_metrics.pg.sql` is version **5 of the independent
+telemetry ledger**, after frozen `005`/`006`/`007`/`009`. It widens only the
+ledger-version, metric-rule, policy-event and exact policy-label CHECKs. No
+tables, columns or grants are added; the existing dedicated telemetry,
+lifecycle and metric role templates apply. Capture the independent PG16 v5
+catalog with `node managed-service/scripts/capture-metrics-catalog.mjs --v5`
+only in the explicitly disposable loopback lab.
+
+Fresh schemas and v1/v2 upgrades can bind the new rule; surviving old packets
+remain `legacy_uncounted`, never retroactively counted. Existing v3/v4 schemas
+can upgrade catalog-only **with identical persisted metric settings**. Adding
+the new rule to those settings fails before DDL/custody changes even if empty.
+Do not erase custody, reset history or rewrite hashes. Enabling a new rule needs
+a separately reviewed fresh observer schema/coverage boundary or a separate
+versioned rule-set custody migration, not a hot reload. Drain old runtimes
+before upgrading; rollback means disabling the new observer while preserving
+custody, not a down migration or destructive reset.
+
+Threshold alerts retain deterministic IDs, exact-source replay, atomic ACK
+custody, at-least-once delivery, permanent capacity limits,
+`ingested_observations_only` coverage and `production_qualified:false`.
+Disposable PostgreSQL/TLS/role tests are local evidence only; hosted sinks,
+operator alert drills, accurate balances/expenditure, managed operations and
+activation remain open.
