@@ -9,7 +9,7 @@
     "schema": "agoragentic.risk-fork-hosted-mcp.reviewed-sources.v2",
     "normalization": "utf8_crlf_to_lf_lone_cr_preserved",
     "files": 70,
-    "sha256": "sha256:343e0e664846123bafbae76f90c611cc26a22c5a62368e885bd6c735862026f0"
+    "sha256": "sha256:161c88b78ddbcb162fa10615d43f3893d0f574fff72f59ee8aba37b50ea7fa56"
   },
   "reviewed_sources": [
     {
@@ -89,8 +89,8 @@
     },
     {
       "path": "risk-fork/package.json",
-      "bytes": 5917,
-      "sha256": "sha256:76b7938edff14f0d8c156d48c713156cb11fddaef43d0572b995550e885172d5"
+      "bytes": 5987,
+      "sha256": "sha256:29ed93f71e9fc0926c1e599a82a137d7cfec0d24e8c7bc9d214a8e225e0b0ce8"
     },
     {
       "path": "risk-fork/schema/e2b-qualification-evidence.v1.json",
@@ -2681,7 +2681,7 @@
   "artifact": {
     "path": "dist/runtime/index.mjs",
     "bytes": 3223942,
-    "sha256": "sha256:1193d5ee1556697a06dec2b8062a7b2f431eb1558631cca11c480764425bab9d"
+    "sha256": "sha256:bcc9706598ea30cad202306a1882407b82b198194aff2d87162c45d098f485b9"
   },
   "packaged_assets": [
     {

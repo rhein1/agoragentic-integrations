@@ -1,0 +1,15 @@
+-- Explicit v9 additions AFTER the unchanged telemetry/lifecycle/metrics/v8 grants.
+BEGIN;
+GRANT SELECT ON __TELEMETRY_SCHEMA__.telemetry_backlog_alert_settings,
+  __TELEMETRY_SCHEMA__.telemetry_backlog_alert_state,__TELEMETRY_SCHEMA__.telemetry_backlog_alert_totals,
+  __TELEMETRY_SCHEMA__.telemetry_backlog_alerts TO __TELEMETRY_RUNTIME__;
+GRANT INSERT (tenant_hash,payload,state_hash) ON __TELEMETRY_SCHEMA__.telemetry_backlog_alert_state TO __TELEMETRY_RUNTIME__;
+GRANT UPDATE (payload,state_hash) ON __TELEMETRY_SCHEMA__.telemetry_backlog_alert_state TO __TELEMETRY_RUNTIME__;
+GRANT UPDATE (alert_count,state_hash) ON __TELEMETRY_SCHEMA__.telemetry_backlog_alert_totals TO __TELEMETRY_RUNTIME__;
+GRANT INSERT (event_ref,event_hash,tenant_hash,rule_id,episode,transition,payload,created_ms) ON __TELEMETRY_SCHEMA__.telemetry_backlog_alerts TO __TELEMETRY_RUNTIME__;
+GRANT UPDATE (state,generation,attempts,claim_hash,lease_expires_ms,next_attempt_ms,acknowledged_ms,acknowledgement_hash,last_error_code)
+  ON __TELEMETRY_SCHEMA__.telemetry_backlog_alerts TO __TELEMETRY_RUNTIME__;
+COMMIT;
+-- No immutable outbox-payload/key UPDATE, DELETE/TRUNCATE, DDL, grant,
+-- settings/ledger write or execution/cleanup/recovery authority. Only the
+-- exact separate owner may compact acknowledged contiguous transition prefixes.

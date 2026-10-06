@@ -365,7 +365,7 @@ process exit and listener disposal. Local tests cannot establish hosted sink cus
 monitoring SLOs, HA/restore/rotation, WAF, real alert delivery or an observed
 operator response drill. Opt-in v3 adds source-count thresholds and an alert
 outbox, not a hosted alert service. Accurate historical budget/cost/lease
-measurements, durable backlog alerting, safe typed dependency/provider/audit/DB-failure
+measurements, safe typed dependency/provider/audit/DB-failure
 root-cause events, broader cooldown policy, hosted sink custody and an observed
 alert/response drill remain separate work. No provider or live agent traffic is
 protected by this tranche. See [OPERATIONAL_QUALIFICATION.md](./OPERATIONAL_QUALIFICATION.md).
@@ -655,7 +655,7 @@ the source prerequisite for durable gauge/alert ingestion, **not that ingestion
 itself**: v1–v7 telemetry stores/drainers still reject this snapshot as an event,
 and the lifecycle observer does not poll it. The explicit v8 collector below
 adds latest-snapshot custody without changing those event contracts. Gauge
-thresholds, external alert delivery/operator response, safe typed dependency
+thresholds require opt-in v9 below; external alert delivery/operator response, safe typed dependency
 failure classes and production qualification remain open.
 
 ### Opt-in v8 durable latest backlog gauges
@@ -736,10 +736,147 @@ validate their closed payload/hash. Same-count replacement or an owner/runtime
 consistently rewriting observer state is not defeated: this is trusted-host
 custody, not independent signed or hostile-host assurance.
 
-**Gauge threshold episodes, gauge alert generation/delivery and a hosted
-alert/response drill remain unfinished.** V8 never inserts backlog snapshots
+V9 below adds sampled threshold episodes and source alert delivery. A hosted
+alert/response drill remains unfinished. V8 never inserts backlog snapshots
 into the policy/lifecycle/alert outboxes; their closed contracts remain unchanged.
 Event-count verification and incomplete-attempt alerts are still available with
 their earlier meanings. No provider call, money movement, provisioning, deployed
 monitoring, resource-absence proof, production qualification or activation is
 established by this source-only collector.
+
+### Opt-in v9 sampled backlog threshold alerts
+
+V9 extends the existing telemetry ledger/store/drainer, not execution authority,
+an evidence receipt or a new monitoring runtime. Select `metricVersion:9` with
+the **unchanged** `metricSettings` and `backlogSettings`, plus separate immutable
+`backlogAlertSettings` on migration and every store sharing this schema. It adds
+`014_managed_backlog_threshold_alerts.pg.sql` and a genuine disposable PG16
+catalog captured with `capture-metrics-catalog.mjs --v9`. Frozen v1–v8 sources,
+catalogs, gauge/batch hashes and event-counter meanings remain unchanged. Drain
+old runtimes before upgrade; they reject the new catalog. Apply the existing
+telemetry/lifecycle/metric/backlog grants plus
+[v9 column grants](./ops/postgres/backlog-alert-grants.sql.template). Require
+`expectedOwner` for exact separate-runtime privilege assurance.
+
+```js
+// Explicit trusted checkout-only composition; never model/request settings.
+const options = {
+  ...hostTelemetryOptions, lifecycle: true, metrics: true, metricVersion: 9,
+  metricSettings: hostUnchangedMetricSettings,
+  backlogSettings: hostUnchangedBacklogSettings,
+  backlogAlertSettings: {
+    maxAlerts: 1000, maxAlertsPerTenant: 100,
+    rules: [
+      { rule_id: 'cleanup_pending_count', threshold: 10 },
+      { rule_id: 'recovery_required_count', threshold: 1 },
+    ],
+  },
+};
+const backlogStore = await createPostgresManagedTelemetryStore(options);
+const backlogObserver = createManagedBacklogObserver({
+  controlPlane, store: backlogStore, auditPrincipals: hostAuditPrincipals,
+  observerId: 'host-backlog-v1', timeoutMs: 2000,
+});
+const backlogAlertStore = await createPostgresManagedTelemetryStore({
+  ...options, eventKind: 'backlog_alert',
+});
+const backlogAlertDrainer = createManagedTelemetryDrainer({
+  store: backlogAlertStore, eventKind: 'backlog_alert',
+  deliver: hostReviewedRedactedAlertSink,
+  deliveryTimeoutMs: 1000, storeTimeoutMs: 2000,
+});
+// Host owns start/stop explicitly; no local-host auto-wiring or HTTP route.
+await backlogObserver.runOnce();
+await backlogAlertDrainer.runOnce();
+const state = await backlogStore.readBacklogAlertState({tenant_hash: hostTenantHash});
+await backlogObserver.close();
+await backlogAlertDrainer.close();
+await backlogAlertStore.close();
+await backlogStore.close();
+```
+
+Rules select 1–5 unique fixed gauge names: `cleanup_pending_count`,
+`recovery_required_count`, `expired_execution_lease_count`,
+`expired_cleanup_lease_count` and `expired_recovery_lease_count`. Thresholds are
+positive safe integers, inclusive (`value >= threshold`), canonically sorted
+and hash-bound. Unknown names, duplicate rules, formulas, sparse arrays,
+accessors and authority additions reject. This is sampled condition monitoring,
+not actual event time, complete transitions between polls, hysteresis, severity
+or a global cooldown. Existing low samples becoming high emit
+`threshold_crossed`; a first high sample emits only `condition_observed`, not
+an invented crossing. Further high samples emit nothing. A successful new
+below-threshold sample emits `threshold_cleared`; a later high sample opens
+the next episode. Missing/failed/stale/revoked/timed-out/late/CAS-rejected samples
+never fabricate zero, clear a condition, or refresh an identical gauge.
+
+Upgrades validate every existing gauge and baseline its rules as unknown,
+without altering gauges or generating historical alerts. At most 10,000 old
+tenants are read once and inserted in batches of 64 in the same transaction.
+The first new nonidentical successful view establishes each baseline condition;
+an identical source hash leaves it unknown. Each rule retains a safe bounded
+episode and transition counter: odd transitions open, even transitions clear
+the same episode; only openings increment the episode. Sequence exhaustion
+fails closed. Fixed-size per-tenant state binds the current gauge hash/generation,
+settings hash, emitted chain tail and pruned transition/generation/hash/ACK
+checkpoint. It retains one state row per latest gauge tenant, not one permanent
+row per episode.
+
+The shared clock transaction validates the selected tenant's state and retained
+chain **before** even an exact-latest replay can succeed, then atomically writes
+the gauge, any opening/clearing notifications, state and aggregate totals. A
+capacity, integrity, abort or write failure rolls back all parts: it cannot
+advance a gauge while dropping its required notification. An unknown COMMIT is
+not success; exact latest packet replay may confirm it, including after valid
+ACK-prefix pruning. Superseded packets still conflict; no automatic source or
+original-operation replay occurs. Counter windows/sources do not grow per poll.
+
+Closed alerts carry only hash-only tenant/source/settings identity, a fixed rule,
+threshold/value, episode/transition, source timestamp, gauge generation, separate
+recorded time and prior alert hash. Deterministic `event_ref` binds all fields;
+coverage is `sampled_threshold_conditions_only`, evidence is
+`control_plane_self_attested` and `production_qualified:false`. No credentials,
+raw invocation/resource/provider errors, model approvals or executable commands
+are stored. They are not proof of independent destruction or provider absence.
+
+Delivery uses the existing claim token, lease, generation, attempts, closed ACK,
+retry/deadline and restart behavior. The earliest **unacknowledged** transition
+per tenant/rule must settle before a later transition can claim. Exhaustion
+blocks that rule until owner intervention, never silently drops it; other rules
+and tenants remain eligible. This is at-least-once delivery, not strict network
+ordering or exactly-once sink effects. Sinks must deduplicate `event_ref` and
+handle monotone tenant/rule transition identity so a late duplicate cannot
+overwrite a newer condition. Claim/replay, ACK and retry validate the selected
+tenant's complete retained chain and gauge binding before use.
+
+Global capacity counts both opens and clears, including ACKed rows, and is
+1–1,000,000 alerts. Per-tenant capacity is 1–10,000 and no greater than global.
+All five rules share these bounds. Owner-only
+`prunePostgresManagedTelemetry({...options,eventKind:'backlog_alert',expectedOwner,maxDelete})`
+compacts at most 1,000 oldest contiguous ACK-expired transitions. It cannot skip
+pending, claimed or unexpired ACK prefixes. Each deletion atomically folds the
+exact event hash/ref, transition, gauge generation and ACK hash/time into a
+fixed checkpoint and updates count/hash totals. The first retained generation
+must exceed the pruned generation and the retained chain must end at the emitted
+tail. Missing/disconnected custody fails without self-repair. Runtime grants
+allow state/hash updates and delivery metadata, but not outbox payload/key
+UPDATE, DELETE/TRUNCATE, settings/ledger mutation, DDL or other-ledger authority.
+
+Initialization and aggregate `stats()` attest catalog/settings, tenant/state
+membership, row counts and capacity; they do **not** authenticate every tenant's
+chain. Gauge/state reads, append/replay and selected delivery/pruning paths
+validate the touched tenant. Coherently forged trusted-host/owner state is not
+defeated by unsigned hashes. Per-operation retained-state scans can reach 10,000
+tenant rows, with global count scans up to the configured cap and SQL deadlines;
+maximum-capacity throughput/SLOs, byte/storage cost, safe operational retention
+and migration duration are **not measured or qualified** by these bounds.
+
+Focused actual PG16 tests cover transitions/order, source expiry, competing
+CAS, rollback at every persistence edge, unknown COMMIT, tenant/global capacity,
+retry/exhaustion isolation, exact post-prune replay, generation rollback,
+disconnected custody, 65-tenant batched upgrade, shared sink retry and positive
+CA/wrong-CA separate-role grants. Generic observer/drainer deadline tests remain
+applicable. This establishes local source behavior only: safe typed dependency/
+provider/audit/DB failure classes, real sink custody, durable monitoring and an
+observed alert/response drill remain open. Provider qualification, managed DB
+HA/PITR/rotation, edge/WAF operations, publication, deployment, staging/canary
+and explicit activation remain separate gates. No live agent is protected.

@@ -3,7 +3,7 @@ import { canonicalize, sha256Ref } from '../../src/canonical.mjs';
 import { quotePostgresAuthorityIdentifier } from '../../src/adapters/postgres-authority-migrator.mjs';
 import { readRequestPolicyPostgresCatalog } from './postgres-request-policy-attestation.mjs';
 import { TELEMETRY_TABLES, TELEMETRY_INSERT_COLUMNS, TELEMETRY_UPDATE_COLUMNS, LIFECYCLE_TABLES, LIFECYCLE_INSERT_COLUMNS, lifecycleMigration,
-  METRIC_TABLES, METRIC_ALERT_INSERT_COLUMNS, METRIC_SOURCE_INSERT_COLUMNS, METRIC_WINDOW_INSERT_COLUMNS, metricsMigration, executionMetricsMigration, budgetMetricsMigration, cleanupMetricsMigration, cleanupIncompleteMetricsMigration, BACKLOG_TABLES, backlogGaugesMigration } from './postgres-telemetry-config.mjs';
+  METRIC_TABLES, METRIC_ALERT_INSERT_COLUMNS, METRIC_SOURCE_INSERT_COLUMNS, METRIC_WINDOW_INSERT_COLUMNS, metricsMigration, executionMetricsMigration, budgetMetricsMigration, cleanupMetricsMigration, cleanupIncompleteMetricsMigration, BACKLOG_TABLES, backlogGaugesMigration, BACKLOG_ALERT_TABLES, BACKLOG_ALERT_INSERT_COLUMNS, backlogAlertsMigration } from './postgres-telemetry-config.mjs';
 import { assertAllowedKeys, assertPlainRecord } from './validation.mjs';
 
 const TABLES = TELEMETRY_TABLES;
@@ -39,9 +39,10 @@ async function verifyCatalog(client, schema, lifecycle, metrics, metricVersion) 
   const budgetExtension = metricVersion >= 5 ? await budgetMetricsMigration(schema) : null;
   const cleanupExtension = metricVersion >= 6 ? await cleanupMetricsMigration(schema) : null;
   const incompleteExtension = metricVersion >= 7 ? await cleanupIncompleteMetricsMigration(schema) : null;
-  const backlogExtension = metricVersion === 8 ? await backlogGaugesMigration(schema) : null;
-  const manifest = JSON.parse(await readFile(new URL(backlogExtension ? './postgres-backlog-gauges-catalog.json' : incompleteExtension ? './postgres-cleanup-incomplete-metrics-catalog.json' : cleanupExtension ? './postgres-cleanup-metrics-catalog.json' : budgetExtension ? './postgres-budget-metrics-catalog.json' : executionExtension ? './postgres-execution-metrics-catalog.json' : metrics ? './postgres-metrics-catalog.json' : lifecycle ? './postgres-lifecycle-catalog.json' : './postgres-telemetry-catalog.json', import.meta.url), 'utf8'));
-  expect(manifest.schema === (backlogExtension ? 'agoragentic.risk-fork.telemetry-postgres-catalog.v8' : incompleteExtension ? 'agoragentic.risk-fork.telemetry-postgres-catalog.v7' : cleanupExtension ? 'agoragentic.risk-fork.telemetry-postgres-catalog.v6' : budgetExtension ? 'agoragentic.risk-fork.telemetry-postgres-catalog.v5' : executionExtension ? 'agoragentic.risk-fork.telemetry-postgres-catalog.v4' : metrics ? 'agoragentic.risk-fork.telemetry-postgres-catalog.v3' : lifecycle ? 'agoragentic.risk-fork.telemetry-postgres-catalog.v2' : MANIFEST_SCHEMA)
+  const backlogExtension = metricVersion >= 8 ? await backlogGaugesMigration(schema) : null;
+  const backlogAlertsExtension = metricVersion === 9 ? await backlogAlertsMigration(schema) : null;
+  const manifest = JSON.parse(await readFile(new URL(backlogAlertsExtension ? './postgres-backlog-alerts-catalog.json' : backlogExtension ? './postgres-backlog-gauges-catalog.json' : incompleteExtension ? './postgres-cleanup-incomplete-metrics-catalog.json' : cleanupExtension ? './postgres-cleanup-metrics-catalog.json' : budgetExtension ? './postgres-budget-metrics-catalog.json' : executionExtension ? './postgres-execution-metrics-catalog.json' : metrics ? './postgres-metrics-catalog.json' : lifecycle ? './postgres-lifecycle-catalog.json' : './postgres-telemetry-catalog.json', import.meta.url), 'utf8'));
+  expect(manifest.schema === (backlogAlertsExtension ? 'agoragentic.risk-fork.telemetry-postgres-catalog.v9' : backlogExtension ? 'agoragentic.risk-fork.telemetry-postgres-catalog.v8' : incompleteExtension ? 'agoragentic.risk-fork.telemetry-postgres-catalog.v7' : cleanupExtension ? 'agoragentic.risk-fork.telemetry-postgres-catalog.v6' : budgetExtension ? 'agoragentic.risk-fork.telemetry-postgres-catalog.v5' : executionExtension ? 'agoragentic.risk-fork.telemetry-postgres-catalog.v4' : metrics ? 'agoragentic.risk-fork.telemetry-postgres-catalog.v3' : lifecycle ? 'agoragentic.risk-fork.telemetry-postgres-catalog.v2' : MANIFEST_SCHEMA)
     && manifest.postgres_major === 16 && manifest.migration_hash === hash
     && (!extension || manifest.lifecycle_migration_hash === extension.hash)
     && (!metricExtension || manifest.metrics_migration_hash === metricExtension.hash)
@@ -49,7 +50,8 @@ async function verifyCatalog(client, schema, lifecycle, metrics, metricVersion) 
     && (!budgetExtension || manifest.budget_metrics_migration_hash === budgetExtension.hash)
     && (!cleanupExtension || manifest.cleanup_metrics_migration_hash === cleanupExtension.hash)
     && (!incompleteExtension || manifest.cleanup_incomplete_metrics_migration_hash === incompleteExtension.hash)
-    && (!backlogExtension || manifest.backlog_gauges_migration_hash === backlogExtension.hash), 'manifest_source');
+    && (!backlogExtension || manifest.backlog_gauges_migration_hash === backlogExtension.hash)
+    && (!backlogAlertsExtension || manifest.backlog_alerts_migration_hash === backlogAlertsExtension.hash), 'manifest_source');
   same(await readManagedTelemetryPostgresCatalog(client, schema), manifest.catalog, 'catalog');
   const ledger = await client.query(`SELECT version,migration_hash FROM "${schema}".telemetry_schema_migrations ORDER BY version`);
   same(ledger.rows, [{ version: 1, migration_hash: hash },...(extension ? [{ version: 2,migration_hash: extension.hash }] : []),
@@ -58,11 +60,12 @@ async function verifyCatalog(client, schema, lifecycle, metrics, metricVersion) 
     ...(budgetExtension ? [{ version: 5,migration_hash: budgetExtension.hash }] : []),
     ...(cleanupExtension ? [{ version: 6,migration_hash: cleanupExtension.hash }] : []),
     ...(incompleteExtension ? [{ version: 7,migration_hash: incompleteExtension.hash }] : []),
-    ...(backlogExtension ? [{ version: 8,migration_hash: backlogExtension.hash }] : [])], 'migration_ledger');
+    ...(backlogExtension ? [{ version: 8,migration_hash: backlogExtension.hash }] : []),
+    ...(backlogAlertsExtension ? [{ version: 9,migration_hash: backlogAlertsExtension.hash }] : [])], 'migration_ledger');
 }
 
 async function verifyPrivileges(client, schema, owner, lifecycle, metrics, metricVersion) {
-  const tablesExpected = [...TABLES,...(lifecycle ? LIFECYCLE_TABLES : []),...(metrics ? METRIC_TABLES : []),...(metricVersion === 8 ? BACKLOG_TABLES : [])].sort();
+  const tablesExpected = [...TABLES,...(lifecycle ? LIFECYCLE_TABLES : []),...(metrics ? METRIC_TABLES : []),...(metricVersion >= 8 ? BACKLOG_TABLES : []),...(metricVersion === 9 ? BACKLOG_ALERT_TABLES : [])].sort();
   const grants = { ...GRANTS,...(lifecycle ? {
     telemetry_lifecycle_events: { INSERT: LIFECYCLE_INSERT_COLUMNS,UPDATE: TELEMETRY_UPDATE_COLUMNS },
     telemetry_lifecycle_checkpoints: { INSERT: ['observer_hash','tenant_hash','invocation_hash','sequence','event_hash','checkpoint_hash'],UPDATE: ['sequence','event_hash','checkpoint_hash'] },
@@ -72,9 +75,13 @@ async function verifyPrivileges(client, schema, owner, lifecycle, metrics, metri
     telemetry_metric_sources: { INSERT: METRIC_SOURCE_INSERT_COLUMNS },
     telemetry_metric_totals: { UPDATE: ['source_count','window_count','state_hash'] },
     telemetry_metric_windows: { INSERT: METRIC_WINDOW_INSERT_COLUMNS,UPDATE: ['payload','state_hash'] },
-  } : {}),...(metricVersion === 8 ? {
+  } : {}),...(metricVersion >= 8 ? {
     telemetry_backlog_state: { INSERT: ['tenant_hash','payload','state_hash'],UPDATE: ['payload','state_hash'] },
     telemetry_backlog_totals: { UPDATE: ['tenant_count','state_hash'] },
+  } : {}),...(metricVersion === 9 ? {
+    telemetry_backlog_alert_state: { INSERT: ['tenant_hash','payload','state_hash'],UPDATE: ['payload','state_hash'] },
+    telemetry_backlog_alert_totals: { UPDATE: ['alert_count','state_hash'] },
+    telemetry_backlog_alerts: { INSERT: BACKLOG_ALERT_INSERT_COLUMNS,UPDATE: TELEMETRY_UPDATE_COLUMNS },
   } : {}) };
   const roles = await client.query(`SELECT current_user AS runtime,session_user AS session,
     r.rolcanlogin,r.rolinherit,r.rolsuper,r.rolcreatedb,r.rolcreaterole,r.rolreplication,r.rolbypassrls
@@ -177,7 +184,7 @@ export async function verifyPostgresManagedTelemetryAttestation(client, options 
     const lifecycle = options.lifecycle ?? false, metrics = options.metrics ?? false;
     expect(typeof lifecycle === 'boolean' && typeof metrics === 'boolean' && (!metrics || lifecycle),'version');
     const metricVersion = metrics ? (options.metricVersion ?? 3) : undefined;
-    expect((metrics && [3,4,5,6,7,8].includes(metricVersion)) || (!metrics && options.metricVersion === undefined),'version');
+    expect((metrics && [3,4,5,6,7,8,9].includes(metricVersion)) || (!metrics && options.metricVersion === undefined),'version');
     expect(client && typeof client.query === 'function', 'client');
     const schema = identifier(options.schemaName ?? 'risk_fork_telemetry');
     const owner = options.expectedOwner === undefined ? undefined : identifier(options.expectedOwner);
