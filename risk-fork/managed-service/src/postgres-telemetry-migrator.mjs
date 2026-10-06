@@ -1,5 +1,5 @@
 import { acquirePostgresAuthorityClient, createPostgresAuthorityPool } from '../../src/adapters/postgres-authority-migrator.mjs';
-import { executionMetricsMigration, lifecycleMigration, metricsMigration, normalizeTelemetryOptions, telemetryDbInteger, telemetryMigration, verifyTelemetrySettings } from './postgres-telemetry-config.mjs';
+import { budgetMetricsMigration, executionMetricsMigration, lifecycleMigration, metricsMigration, normalizeTelemetryOptions, telemetryDbInteger, telemetryMigration, verifyTelemetrySettings } from './postgres-telemetry-config.mjs';
 import { verifyPostgresManagedTelemetryAttestation } from './postgres-telemetry-attestation.mjs';
 import { managedError } from './validation.mjs';
 import { metricSettingsHash } from './metric-event.mjs';
@@ -63,7 +63,7 @@ export async function migratePostgresManagedTelemetry(options = {}) {
             await client.query(`UPDATE ${s}.telemetry_clock SET last_seen_ms=$1 WHERE singleton=true`,[now]);
           }
         }
-        if (config.metricVersion === 4) {
+        if (config.metricVersion >= 4) {
           const ledger = await client.query(`SELECT version FROM ${s}.telemetry_schema_migrations ORDER BY version`);
           if (ledger.rowCount === 3) {
             // The settings hash also binds every retained contribution/window.
@@ -74,6 +74,19 @@ export async function migratePostgresManagedTelemetry(options = {}) {
             const extension = await executionMetricsMigration(config.schemaName);
             await client.query(extension.sql);
             await client.query(`INSERT INTO ${s}.telemetry_schema_migrations VALUES (4,$1)`,[extension.hash]);
+          }
+        }
+        if (config.metricVersion === 5) {
+          const ledger = await client.query(`SELECT version FROM ${s}.telemetry_schema_migrations ORDER BY version`);
+          if (ledger.rowCount === 4) {
+            // Existing settings remain byte-equivalent in meaning. Adding the
+            // new rule to existing v3/v4 custody fails before this DDL.
+            await verifyPostgresManagedTelemetryAttestation(client,{ schemaName: config.schemaName,lifecycle: true,metrics: true,metricVersion: 4 });
+            await verifyTelemetrySettings(client,{ ...config,metricVersion: 4 },migration.hash);
+            await verifyMetricTotals(client,config);
+            const extension = await budgetMetricsMigration(config.schemaName);
+            await client.query(extension.sql);
+            await client.query(`INSERT INTO ${s}.telemetry_schema_migrations VALUES (5,$1)`,[extension.hash]);
           }
         }
         await verifyPostgresManagedTelemetryAttestation(client, { schemaName: config.schemaName,lifecycle: config.lifecycle,metrics: config.metrics,metricVersion: config.metricVersion });

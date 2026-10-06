@@ -3,8 +3,9 @@ import { sha256Ref } from '../../src/canonical.mjs';
 import { assertAllowedKeys, assertPlainRecord, requireEnum, requireInteger, requireSha256 } from './validation.mjs';
 
 export const TELEMETRY_ROUTES = Object.freeze(['admission', 'execution', 'cleanup', 'recovery', 'read']);
-const EVENTS = Object.freeze(['control_denied', 'rate_denied', 'policy_error', 'policy_allowed', 'policy_candidate']);
-const OUTCOMES = Object.freeze(['allowed', 'disabled', 'rate_limited', 'failed_closed', 'timeout', 'candidate']);
+const EVENTS = Object.freeze(['control_denied', 'rate_denied', 'policy_error', 'policy_allowed', 'policy_candidate',
+  'invocation_budget_denied', 'daily_budget_denied']);
+const OUTCOMES = Object.freeze(['allowed', 'disabled', 'rate_limited', 'failed_closed', 'timeout', 'candidate', 'budget_limited']);
 const FIELDS = Object.freeze(['event_ref', 'event', 'route_class', 'status', 'outcome', 'duration_ms', 'tenant_hash', 'key_hash']);
 
 export function requireTelemetryRef(value) {
@@ -22,6 +23,8 @@ export function normalizeManagedTelemetryEvent(value) {
   if (!((event === 'policy_allowed' && outcome === 'allowed' && status === 200)
     || (event === 'policy_candidate' && outcome === 'candidate' && status === 200)
     || (event === 'rate_denied' && outcome === 'rate_limited' && status === 429)
+    || (['invocation_budget_denied', 'daily_budget_denied'].includes(event) && outcome === 'budget_limited'
+      && status === 429 && value.route_class === 'admission')
     || (event === 'control_denied' && ['disabled', 'failed_closed'].includes(outcome) && status === 503)
     || (event === 'policy_error' && ['failed_closed', 'timeout'].includes(outcome) && status === 503))) {
     throw new TypeError('Telemetry labels disagree');
