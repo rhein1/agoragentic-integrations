@@ -4,13 +4,14 @@ import { lifecycleTenantHash } from './lifecycle-event.mjs';
 import { MANAGED_BACKLOG_COUNT_FIELDS, normalizeManagedBacklogSnapshot } from './backlog-snapshot.mjs';
 import { normalizeBacklogGauge } from './backlog-gauge.mjs';
 import { createManagedDeadline } from './deadline.mjs';
+import { createObserverDiagnostic } from './observer-diagnostic.mjs';
 
 const bump = (n) => Math.min(2_147_483_647,n+1);
 // Checkout-only trusted host composition over the existing authorized read and
 // telemetry store. No provider callback, public route or automatic startup.
 export function createManagedBacklogObserver(options) {
   assertPlainRecord(options,'backlog observer options');
-  assertAllowedKeys(options,['controlPlane','store','auditPrincipals','observerId','timeoutMs','intervalMs','maxTenantsPerTick'],'backlog observer options');
+  assertAllowedKeys(options,['controlPlane','store','auditPrincipals','observerId','timeoutMs','intervalMs','maxTenantsPerTick','diagnosticSettings','diagnosticTimeoutMs','diagnosticClock'],'backlog observer options');
   const observerHash = sha256Ref({ domain: 'risk-fork-backlog-observer-v1',observer_id: requireOpaqueRef(options.observerId,'observerId') });
   const principals = assertDataArray(options.auditPrincipals,'auditPrincipals',{ maxLength: 64 }).slice(), tenants = new Set();
   if (principals.length === 0) throw new TypeError('At least one audit principal is required');
@@ -28,10 +29,11 @@ export function createManagedBacklogObserver(options) {
   const interval = requireInteger(options.intervalMs ?? 1000,'intervalMs',{ min: 100,max: 30_000 });
   const batch = requireInteger(options.maxTenantsPerTick ?? 4,'maxTenantsPerTick',{ min: 1,max: 64 });
   const stop = new AbortController(), pending = new Map();
+  const diagnostics = createObserverDiagnostic(options,observerHash,stop.signal);
   let timer, current, closed = false, cursor = 0, sampled = 0, failed = 0, timedOut = 0;
   const failureCounts = { backlog_gauge_read: 0,backlog_source_read: 0,backlog_snapshot_append: 0 };
   const health = () => Object.freeze({ sampled,failed,timed_out: timedOut,failure_counts: Object.freeze({ ...failureCounts }),
-    in_flight: pending.size,running: timer !== undefined,closed,production_qualified: false });
+    in_flight: pending.size,diagnostics: diagnostics.health(),running: timer !== undefined,closed,production_qualified: false });
   const active = (signal) => { if (closed || signal.aborted) throw new DOMException('Backlog observer stopped','AbortError'); };
   async function step(principal) {
     const deadline = createManagedDeadline(timeout,{ signal: stop.signal }), signal = deadline.signal;
@@ -39,7 +41,10 @@ export function createManagedBacklogObserver(options) {
     // Private host phase only: rejection, invalid reply and timeout all mean
     // unconfirmed at this boundary, never a diagnosed dependency/root cause.
     let boundary = 'backlog_gauge_read';
-    const observeFailure = () => { failed = bump(failed); failureCounts[boundary] = bump(failureCounts[boundary]); };
+    const observeFailure = async () => {
+      failed = bump(failed); failureCounts[boundary] = bump(failureCounts[boundary]);
+      await diagnostics.record(tenantHash,boundary);
+    };
     const work = Promise.resolve().then(async () => {
       active(signal);
       const expected = normalizeBacklogGauge(await read({ tenant_hash: tenantHash,signal })); active(signal);
@@ -67,8 +72,8 @@ export function createManagedBacklogObserver(options) {
       const result = await Promise.race([work,deadline.aborted]);
       // Count only the bounded wait's outcome. Late rejection/settlement and
       // intentional shutdown never add another failure or manufacture success.
-      if (signal.aborted) { if (!closed) { timedOut = bump(timedOut); observeFailure(); } }
-      else if (result.failed) observeFailure();
+      if (signal.aborted) { if (!closed) { timedOut = bump(timedOut); await observeFailure(); } }
+      else if (result.failed) await observeFailure();
       else sampled = bump(sampled);
     } finally { deadline.dispose(); }
   }
@@ -79,7 +84,7 @@ export function createManagedBacklogObserver(options) {
       const selected = [];
       for (let inspected = 0; inspected < principals.length && selected.length < batch; inspected += 1) {
         const principal = principals[cursor]; cursor = (cursor+1)%principals.length;
-        if (!pending.has(principal.tenant_id)) selected.push(step(principal));
+        if (!pending.has(principal.tenant_id) && !diagnostics.has(lifecycleTenantHash(principal.tenant_id))) selected.push(step(principal));
       }
       const work = Promise.all(selected).then(health); current = work;
       void work.finally(() => { if (current === work) current = undefined; }).catch(() => {});
@@ -96,9 +101,9 @@ export function createManagedBacklogObserver(options) {
       const timeoutMs = requireInteger(options.timeoutMs ?? timeout,'timeoutMs',{ min: 50,max: 30_000 });
       closed = true; stop.abort(); if (timer !== undefined) clearInterval(timer); timer = undefined;
       const deadline = createManagedDeadline(timeoutMs);
-      try { if (pending.size) await Promise.race([Promise.allSettled([...pending.values()]),deadline.aborted]); }
+      try { await Promise.race([Promise.allSettled([...pending.values(),...diagnostics.pending()]),deadline.aborted]); }
       finally { deadline.dispose(); }
-      return Object.freeze({ settled: pending.size === 0,...health() });
+      return Object.freeze({ settled: pending.size === 0 && diagnostics.health().in_flight === 0,...health() });
     },
   });
   return api;

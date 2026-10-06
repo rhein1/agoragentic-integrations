@@ -2,11 +2,13 @@ import { sha256Ref } from '../../src/canonical.mjs';
 import { assertAllowedKeys, assertDataArray, assertPlainRecord, deepFreeze, requireEnum, requireInteger, requireSha256 } from './validation.mjs';
 import { normalizeManagedTelemetryEvent, requireTelemetryRef } from './telemetry-event.mjs';
 import { normalizeManagedLifecycleEvent } from './lifecycle-event.mjs';
+import { DIAGNOSTIC_RULE_IDS } from './diagnostic-event.mjs';
 
 // These count accepted observer packets, not all traffic, actual budget, current
 // cleanup backlog or independent provider outcomes. No request-supplied formula.
 export const METRIC_RULE_IDS = Object.freeze(['budget_denied','cleanup_incomplete_observed','cleanup_verified','control_disabled','control_failed','execution_failure_observed','lease_expiry_observed','policy_failure','policy_timeout','rate_denied','recovery_absence_verified']);
-export const metricRuleKind = (id) => ['cleanup_incomplete_observed','cleanup_verified','execution_failure_observed','lease_expiry_observed','recovery_absence_verified'].includes(requireEnum(id,METRIC_RULE_IDS,'rule_id')) ? 'lifecycle' : 'policy';
+export const metricRuleKind = (id) => DIAGNOSTIC_RULE_IDS.includes(requireEnum(id,[...METRIC_RULE_IDS,...DIAGNOSTIC_RULE_IDS],'rule_id')) ? 'diagnostic'
+  : ['cleanup_incomplete_observed','cleanup_verified','execution_failure_observed','lease_expiry_observed','recovery_absence_verified'].includes(id) ? 'lifecycle' : 'policy';
 const CAP_FIELDS = ['maxSources','maxSourcesPerTenant','maxWindows','maxWindowsPerTenant','maxAlerts','maxAlertsPerTenant'];
 export function normalizeMetricSettings(value) {
   assertPlainRecord(value,'metric settings'); assertAllowedKeys(value,[...CAP_FIELDS,'rules'],'metric settings');
@@ -51,7 +53,7 @@ function alertRef(fields) {
     window_start_ms: fields.window_start_ms,rules_hash: fields.rules_hash }).slice(7,55);
 }
 function alertFields(value) {
-  const rule_id = requireEnum(value.rule_id,METRIC_RULE_IDS,'rule_id'), source_kind = metricRuleKind(rule_id);
+  const rule_id = requireEnum(value.rule_id,[...METRIC_RULE_IDS,...DIAGNOSTIC_RULE_IDS],'rule_id'), source_kind = metricRuleKind(rule_id);
   const window_ms = requireInteger(value.window_ms,'window_ms',{ min: 1000,max: 86_400_000 });
   const window_start_ms = requireInteger(value.window_start_ms,'window_start_ms');
   requireInteger(window_start_ms+window_ms,'window end');
@@ -59,8 +61,8 @@ function alertFields(value) {
   const threshold = requireInteger(value.threshold,'threshold',{ min: 1,max: 1_000_000 });
   return { event: 'metric_threshold_observed',tenant_hash: requireSha256(value.tenant_hash,'tenant_hash'),rule_id,source_kind,
     window_start_ms,window_ms,count: threshold,threshold,rules_hash: requireSha256(value.rules_hash,'rules_hash'),
-    evidence_class: source_kind === 'lifecycle' ? 'control_plane_self_attested' : 'host_policy_self_attested',
-    coverage: 'ingested_observations_only',production_qualified: false };
+    evidence_class: source_kind === 'diagnostic' ? 'host_observer_self_attested' : source_kind === 'lifecycle' ? 'control_plane_self_attested' : 'host_policy_self_attested',
+    coverage: source_kind === 'diagnostic' ? 'ingested_unconfirmed_buckets_only' : 'ingested_observations_only',production_qualified: false };
 }
 export function createManagedMetricAlert(value) {
   assertPlainRecord(value,'metric alert fields');

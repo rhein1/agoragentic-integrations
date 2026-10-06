@@ -12,6 +12,7 @@ import { acknowledgeMetricAlert, readMetricAlert, readMetricWindow, recordMetric
 import { backlogGaugeInput } from './backlog-gauge.mjs';
 import { appendBacklogGauge, readBacklogGauge, verifyBacklogCustody } from './postgres-backlog-gauge-state.mjs';
 import { readBacklogAlert, readBacklogAlertState, recordBacklogAlerts, verifyBacklogAlertCustody } from './postgres-backlog-alert-state.mjs';
+import { normalizeManagedDiagnosticObservation } from './diagnostic-event.mjs';
 
 const FIELDS = 'event_ref,event_hash,event,route_class,status,outcome,duration_ms,tenant_hash,key_hash,created_ms';
 const DELIVERY_FIELDS = `${FIELDS},state,generation,attempts,claim_hash,lease_expires_ms,next_attempt_ms,acknowledged_ms,acknowledgement_hash,last_error_code`;
@@ -23,16 +24,16 @@ const BACKLOG_ALERT_DELIVERY_FIELDS = `${ALERT_DELIVERY_FIELDS},rule_id,episode,
 const KNOWN_ERRORS = new Set(['TELEMETRY_CAPACITY','TELEMETRY_EVENT_CONFLICT','TELEMETRY_STALE_CLAIM','TELEMETRY_CLAIM_EXPIRED','TELEMETRY_CHECKPOINT_CONFLICT','TELEMETRY_CHECKPOINT_DRIFT','TELEMETRY_METRIC_DRIFT','TELEMETRY_BACKLOG_DRIFT','TELEMETRY_BACKLOG_ALERT_DRIFT','TELEMETRY_BACKLOG_CONFLICT','TELEMETRY_BACKLOG_STALE']);
 const fail = (code) => managedError('Telemetry operation unavailable', code, 503);
 function input(value, fields) { assertPlainRecord(value, 'telemetry request'); assertAllowedKeys(value, fields, 'telemetry request'); return value; }
-function readEvent(row, kind = 'policy', settings) {
-  const event = kind === 'backlog_alert' ? readBacklogAlert(row,settings) : kind === 'alert' ? readMetricAlert(row,settings) : kind === 'lifecycle' ? normalizeManagedLifecycleEvent(row.payload)
+function readEvent(row, kind = 'policy', settings, diagnosticSettings) {
+  const event = kind === 'backlog_alert' ? readBacklogAlert(row,settings) : kind === 'alert' ? readMetricAlert(row,settings,diagnosticSettings) : kind === 'lifecycle' ? normalizeManagedLifecycleEvent(row.payload)
     : normalizeManagedTelemetryEvent(Object.fromEntries(['event_ref','event','route_class','status','outcome','duration_ms','tenant_hash','key_hash'].map((name) => [name,row[name]])));
   if (sha256Ref(event) !== row.event_hash || telemetryDbInteger(row.created_ms) < 0
     || (kind === 'lifecycle' && (row.event_ref !== event.event_ref || row.tenant_hash !== event.tenant_hash
       || row.invocation_hash !== event.invocation_hash || row.source_sequence !== event.source_sequence))) throw new TypeError('Telemetry payload drift');
   return event;
 }
-function claimResult(row, kind, settings) {
-  return Object.freeze({ event: readEvent(row,kind,settings), generation: requireInteger(telemetryDbInteger(row.generation), 'generation', { min: 1 }),
+function claimResult(row, kind, settings, diagnosticSettings) {
+  return Object.freeze({ event: readEvent(row,kind,settings,diagnosticSettings), generation: requireInteger(telemetryDbInteger(row.generation), 'generation', { min: 1 }),
     attempts: requireInteger(row.attempts, 'attempts', { min: 1, max: 1_000_000 }),
     lease_expires_ms: requireInteger(telemetryDbInteger(row.lease_expires_ms), 'lease_expires_ms') });
 }
@@ -62,7 +63,7 @@ export class PostgresManagedTelemetryStore {
       applicationName: 'risk-fork-managed-telemetry' });
     const store = new PostgresManagedTelemetryStore({ pool, limits: config.limits, schemaName: config.schemaName,
       requireTls: false, disposableDb: true, statementTimeoutMs: config.statementTimeoutMs,lifecycle: config.lifecycle,eventKind: config.eventKind,
-      metrics: config.metrics,metricSettings: config.metricSettings,metricVersion: config.metricVersion,backlogSettings: config.backlogSettings,backlogAlertSettings: config.backlogAlertSettings });
+      metrics: config.metrics,metricSettings: config.metricSettings,metricVersion: config.metricVersion,backlogSettings: config.backlogSettings,backlogAlertSettings: config.backlogAlertSettings,diagnosticSettings: config.diagnosticSettings });
     store.#config = config; store.#ownsPool = owned;
     try { await store.initialize(); return store; } catch (error) { if (owned) await pool.end().catch(() => {}); throw error; }
   }
@@ -113,7 +114,7 @@ export class PostgresManagedTelemetryStore {
   async append(value, options = {}) {
     if (this.#config.eventKind !== 'policy') throw new TypeError('Only policy packets use append; lifecycle/alerts require atomic source projection');
     const event = normalizeManagedTelemetryEvent(value), hash = managedTelemetryEventHash(event);
-    if (event.outcome === 'budget_limited' && ![5,6,7,8,9].includes(this.#config.metricVersion)) {
+    if (event.outcome === 'budget_limited' && ![5,6,7,8,9,10].includes(this.#config.metricVersion)) {
       throw new TypeError('Budget observations require explicit metricVersion=5 or later');
     }
     input(options, ['signal']);
@@ -146,10 +147,10 @@ export class PostgresManagedTelemetryStore {
       if (same.rowCount) {
         if (same.rowCount !== 1) throw new TypeError('Ambiguous telemetry claim');
         const row = same.rows[0];
-        await this.#verifyDeliveryCustody(client,row); readEvent(row,this.#config.eventKind,this.#eventSettings);
+        await this.#verifyDeliveryCustody(client,row); readEvent(row,this.#config.eventKind,this.#eventSettings,this.#config.diagnosticSettings);
         if (row.state === 'acked') return null;
         if (row.state !== 'claimed' || telemetryDbInteger(row.lease_expires_ms) <= now) throw fail('TELEMETRY_CLAIM_EXPIRED');
-        return claimResult(row,this.#config.eventKind,this.#eventSettings);
+        return claimResult(row,this.#config.eventKind,this.#eventSettings,this.#config.diagnosticSettings);
       }
       // Later recovery/reopen transitions cannot overtake an unresolved earlier
       // transition for this rule, including retry-exhausted obligations. Other
@@ -164,7 +165,7 @@ export class PostgresManagedTelemetryStore {
           ${fence}
         ORDER BY ${ordered ? 'created_ms,tenant_hash,rule_id,transition' : 'created_ms,event_ref'} LIMIT 1 FOR UPDATE SKIP LOCKED`, [now]);
       if (due.rowCount === 0) return null;
-      const row = due.rows[0]; await this.#verifyDeliveryCustody(client,row); readEvent(row,this.#config.eventKind,this.#eventSettings);
+      const row = due.rows[0]; await this.#verifyDeliveryCustody(client,row); readEvent(row,this.#config.eventKind,this.#eventSettings,this.#config.diagnosticSettings);
       const generation = requireInteger(telemetryDbInteger(row.generation), 'generation', { max: Number.MAX_SAFE_INTEGER - 1 }) + 1;
       const attempts = requireInteger(row.attempts, 'attempts', { max: 999_999 }) + 1;
       const expiry = requireInteger(now + this.#config.limits.leaseMs, 'lease_expires_ms');
@@ -172,7 +173,7 @@ export class PostgresManagedTelemetryStore {
         claim_hash=$4,lease_expires_ms=$5,last_error_code=NULL WHERE event_ref=$1 RETURNING ${this.#fields}`,
         [row.event_ref,generation,attempts,hash,expiry]);
       if (updated.rowCount !== 1) throw new TypeError('Claim lost');
-      return claimResult(updated.rows[0],this.#config.eventKind,this.#eventSettings);
+      return claimResult(updated.rows[0],this.#config.eventKind,this.#eventSettings,this.#config.diagnosticSettings);
     });
   }
   async acknowledge(options) {
@@ -188,7 +189,7 @@ export class PostgresManagedTelemetryStore {
       const result = await client.query(`SELECT ${this.#fields} FROM ${s}.${this.#table} WHERE event_ref=$1 FOR UPDATE`, [ref]);
       const row = result.rows[0];
       if (result.rowCount !== 1 || telemetryDbInteger(row.generation) !== generation || row.claim_hash !== hash) throw fail('TELEMETRY_STALE_CLAIM');
-      await this.#verifyDeliveryCustody(client,row); readEvent(row,this.#config.eventKind,this.#eventSettings);
+      await this.#verifyDeliveryCustody(client,row); readEvent(row,this.#config.eventKind,this.#eventSettings,this.#config.diagnosticSettings);
       if (row.state === 'acked' && row.acknowledgement_hash === ackHash) return Object.freeze({ event_ref: ref, acknowledged: true });
       if (row.state !== 'claimed' || telemetryDbInteger(row.lease_expires_ms) <= now) throw fail('TELEMETRY_STALE_CLAIM');
       await client.query(`UPDATE ${s}.${this.#table} SET state='acked',acknowledged_ms=$2,acknowledgement_hash=$3,
@@ -208,7 +209,7 @@ export class PostgresManagedTelemetryStore {
       const row = result.rows[0];
       if (result.rowCount !== 1 || row.state !== 'claimed' || row.claim_hash !== hash
         || telemetryDbInteger(row.generation) !== generation || telemetryDbInteger(row.lease_expires_ms) <= now) throw fail('TELEMETRY_STALE_CLAIM');
-      await this.#verifyDeliveryCustody(client,row); readEvent(row,this.#config.eventKind,this.#eventSettings);
+      await this.#verifyDeliveryCustody(client,row); readEvent(row,this.#config.eventKind,this.#eventSettings,this.#config.diagnosticSettings);
       const next = requireInteger(now + this.#config.limits.retryMs, 'next_attempt_ms');
       await client.query(`UPDATE ${s}.${this.#table} SET state='pending',claim_hash=NULL,lease_expires_ms=NULL,
         next_attempt_ms=$2,last_error_code=$3 WHERE event_ref=$1`, [ref,next,options.errorCode]);
@@ -366,32 +367,48 @@ export class PostgresManagedTelemetryStore {
       const counts = await client.query(`SELECT count(*)::integer AS retained_sources,count(*) FILTER (WHERE (payload->>'legacy_uncounted')::boolean)::integer AS legacy_uncounted
         FROM ${s}.telemetry_metric_sources WHERE tenant_hash=$1`,[tenant]);
       if (counts.rowCount !== 1 || !Number.isInteger(counts.rows[0].retained_sources) || !Number.isInteger(counts.rows[0].legacy_uncounted)) throw fail('TELEMETRY_METRIC_DRIFT');
-      return Object.freeze({ windows: Object.freeze(rows.rows.slice(0,64).map((row) => readMetricWindow(row,this.#config.metricSettings))),
+      return Object.freeze({ windows: Object.freeze(rows.rows.slice(0,64).map((row) => readMetricWindow(row,this.#config.metricSettings,this.#config.diagnosticSettings))),
         truncated: rows.rows.length > 64,...counts.rows[0],coverage: 'ingested_observations_only',production_qualified: false });
     });
   }
   async readBacklogGauge(options) {
-    if (![8,9].includes(this.#config.metricVersion)) throw new TypeError('Backlog custody requires explicit metricVersion=8 or later');
+    if (![8,9,10].includes(this.#config.metricVersion)) throw new TypeError('Backlog custody requires explicit metricVersion=8 or later');
     input(options,['tenant_hash','signal']); const tenant = requireSha256(options.tenant_hash,'tenant_hash');
     return this.#transaction(options.signal,async (client) => {
-      if (this.#config.metricVersion === 9) await readBacklogAlertState(client,this.#config,tenant);
+      if (this.#config.metricVersion >= 9) await readBacklogAlertState(client,this.#config,tenant);
       return readBacklogGauge(client,this.#config,tenant);
     });
   }
   async readBacklogAlertState(options) {
-    if (this.#config.metricVersion !== 9) throw new TypeError('Backlog alerts require explicit metricVersion=9');
+    if (![9,10].includes(this.#config.metricVersion)) throw new TypeError('Backlog alerts require explicit metricVersion=9 or later');
     input(options,['tenant_hash','signal']); const tenant = requireSha256(options.tenant_hash,'tenant_hash');
     return this.#transaction(options.signal,(client) => readBacklogAlertState(client,this.#config,tenant));
   }
   async appendBacklogSnapshot(value, options = {}) {
-    if (![8,9].includes(this.#config.metricVersion)) throw new TypeError('Backlog custody requires explicit metricVersion=8 or later');
+    if (![8,9,10].includes(this.#config.metricVersion)) throw new TypeError('Backlog custody requires explicit metricVersion=8 or later');
     input(options,['signal']); const packet = backlogGaugeInput(value,this.#config.backlogSettings);
     return this.#transaction(options.signal,async (client,now) => {
       // Validate retained state BEFORE even an exact-latest replay can return.
-      const previous = this.#config.metricVersion === 9 ? await readBacklogAlertState(client,this.#config,packet.tenantHash) : null;
+      const previous = this.#config.metricVersion >= 9 ? await readBacklogAlertState(client,this.#config,packet.tenantHash) : null;
       const result = await appendBacklogGauge(client,this.#config,packet,now);
-      if (this.#config.metricVersion === 9) await recordBacklogAlerts(client,this.#config,previous,result.state);
+      if (this.#config.metricVersion >= 9) await recordBacklogAlerts(client,this.#config,previous,result.state);
       return result;
+    });
+  }
+  async appendDiagnosticObservation(value, options = {}) {
+    if (this.#config.metricVersion !== 10) throw new TypeError('Diagnostics require explicit metricVersion=10');
+    input(options,['signal']); const event = normalizeManagedDiagnosticObservation(value,this.#config.diagnosticSettings);
+    return this.#transaction(options.signal,async (client,now) => {
+      // Exact retained custody confirms a lost COMMIT even after admission age
+      // expired. Never re-count or move that source to the retry's time window.
+      if (!await replayMetricSource(client,this.#config,event,'diagnostic')) {
+        const settings = this.#config.diagnosticSettings;
+        if (event.bucket_start_ms > now+settings.max_future_ms || now-(event.bucket_start_ms+event.bucket_ms) > settings.max_age_ms) {
+          throw new TypeError('Diagnostic bucket outside admitted clock bounds');
+        }
+        await recordMetricSource(client,this.#config,event,'diagnostic',now);
+      }
+      return Object.freeze({ event_ref: event.event_ref,persisted: true });
     });
   }
   async close() { if (this.#closed) return; this.#closed = true; if (this.#ownsPool) await this.#pool.end(); }
