@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { assertCleanupIncompleteLease, cleanupIncompleteAuditBinding,
+  normalizeCleanupIncompleteInput, verifyCleanupIncompleteReplay } from './cleanup-incomplete.mjs';
 import { createManagedAuditEvent } from './audit.mjs';
 import { normalizeAuditPageRequest, normalizeAuditWindowRequest, verifyAuditInvocationPage } from './audit-read.mjs';
 import { sha256Ref } from '../../src/canonical.mjs';
@@ -185,7 +187,7 @@ export class MemoryManagedServiceStore {
     }
   }
 
-  #draftAudit(record, eventType, occurredAt, details = {}) {
+  #draftAudit(record, eventType, occurredAt, details = {}, eventRef = undefined) {
     const key = invocationKey(record.tenant_id, record.invocation_ref);
     const events = this.#audit.get(key) ?? [];
     const normalizedOccurredAt = requireIso(occurredAt, 'audit event occurred_at');
@@ -198,7 +200,7 @@ export class MemoryManagedServiceStore {
       );
     }
     const event = createManagedAuditEvent({
-      event_ref: requireOpaqueRef(this.#eventRef(), 'event reference'),
+      event_ref: requireOpaqueRef(eventRef ?? this.#eventRef(), 'event reference'),
       tenant_id: record.tenant_id,
       invocation_ref: record.invocation_ref,
       sequence: events.length + 1,
@@ -210,8 +212,8 @@ export class MemoryManagedServiceStore {
     return { key, events: [...events, event], event };
   }
 
-  #prepareAuditedRecord(record, eventType, occurredAt, details = {}) {
-    const draft = this.#draftAudit(record, eventType, occurredAt, details);
+  #prepareAuditedRecord(record, eventType, occurredAt, details = {}, eventRef = undefined) {
+    const draft = this.#draftAudit(record, eventType, occurredAt, details, eventRef);
     const { event } = draft;
     record.audit_head_hash = event.event_hash;
     record.audit_event_count = draft.events.length;
@@ -757,6 +759,24 @@ export class MemoryManagedServiceStore {
     if (!tenant || tenant.status !== 'active') {
       throw managedError('Tenant suspended execution authority', 'TENANT_NOT_ACTIVE', 403);
     }
+  }
+
+  async recordCleanupIncomplete(inputValue) {
+    const input = normalizeCleanupIncompleteInput(inputValue);
+    return this.#exclusive(() => {
+      const key = invocationKey(input.tenant_id, input.invocation_ref);
+      const record = this.#invocations.get(key);
+      if (!record) throw managedError('Invocation was not found', 'INVOCATION_NOT_FOUND', 404);
+      this.#requireActiveClaimant(input.tenant_id, input.claimant_key_id, input.now, workerWriteScope('cleanup'));
+      assertCleanupIncompleteLease(record, input, input.now);
+      const binding = cleanupIncompleteAuditBinding(input);
+      const prior = (this.#audit.get(key) ?? []).find((event) => event.event_ref === binding.event_ref);
+      if (prior) return verifyCleanupIncompleteReplay(prior, input, record);
+      const next = cloneJson(record, 'cleanup incomplete invocation');
+      const prepared = this.#prepareAuditedRecord(next, 'cleanup_incomplete', input.now, binding.details, binding.event_ref);
+      this.#commitAuditedRecord(prepared);
+      return prepared.event;
+    });
   }
 
   async transitionInvocation(input) {
