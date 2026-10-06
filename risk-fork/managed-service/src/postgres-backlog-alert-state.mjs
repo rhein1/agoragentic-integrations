@@ -19,7 +19,7 @@ export function readBacklogAlert(row, settings) {
   return event;
 }
 export async function verifyBacklogAlertCustody(client, config) {
-  if (config.metricVersion !== 9) return;
+  if (config.metricVersion < 9 || config.metricVersion === undefined) return;
   const s = config.quotedSchema, settings = config.backlogAlertSettings;
   const bound = await client.query(`SELECT settings_hash,payload FROM ${s}.telemetry_backlog_alert_settings WHERE singleton=true`);
   if (bound.rowCount !== 1 || bound.rows[0].settings_hash !== backlogAlertSettingsHash(settings)

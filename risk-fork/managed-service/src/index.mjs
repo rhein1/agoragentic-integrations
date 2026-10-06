@@ -51,6 +51,7 @@ export { normalizeManagedLifecycleEvent } from './lifecycle-event.mjs';
 export { normalizeManagedBacklogSnapshot } from './backlog-snapshot.mjs';
 export { createManagedTelemetryEvent, normalizeManagedTelemetryEvent } from './telemetry-event.mjs';
 export { createManagedMetricAlert, normalizeManagedMetricAlert } from './metric-event.mjs';
+export { createManagedDiagnosticObservation, normalizeManagedDiagnosticObservation } from './diagnostic-event.mjs';
 export { createManagedBacklogAlert, normalizeManagedBacklogAlert } from './backlog-alert.mjs';
 export { createManagedProviderRegistry } from './provider-registry.mjs';
 export { MemoryManagedServiceStore } from './memory-store.mjs';

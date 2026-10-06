@@ -5,7 +5,7 @@ import { backlogGaugeHash, backlogSettingsHash, backlogTotalsHash, normalizeBack
 const fail = (code = 'TELEMETRY_BACKLOG_DRIFT') => managedError('Backlog telemetry unavailable',code,503);
 
 export async function verifyBacklogCustody(client, config) {
-  if (![8,9].includes(config.metricVersion)) return;
+  if (![8,9,10].includes(config.metricVersion)) return;
   const s = config.quotedSchema;
   const settings = await client.query(`SELECT settings_hash,payload FROM ${s}.telemetry_backlog_settings WHERE singleton=true`);
   const bound = settings.rows[0];

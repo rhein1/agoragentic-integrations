@@ -4,6 +4,7 @@ import { createManagedMetricAlert, matchingMetricRules, metricRulesHash, normali
 import { requireTelemetryRef } from './telemetry-event.mjs';
 import { normalizeManagedTelemetryEvent } from './telemetry-event.mjs';
 import { normalizeManagedLifecycleEvent } from './lifecycle-event.mjs';
+import { DIAGNOSTIC_RULE_IDS, diagnosticRulesHash, normalizeDiagnosticSettings, normalizeManagedDiagnosticObservation } from './diagnostic-event.mjs';
 
 const WINDOW_FIELDS = ['tenant_hash','rule_id','window_start_ms','window_ms','count','last_alert_ref','last_alert_hash',
   'alert_acknowledged_ms','alert_acknowledgement_hash','rules_hash'];
@@ -30,12 +31,13 @@ export async function verifyMetricTotals(client,config) {
   // Existing permanent windows retain delivery obligations. Missing rows are
   // legitimate only after an exact ACK was committed atomically into the window.
   // Derive templates from the closed JS contract, not another SQL vocabulary.
-  const rules_hash = metricRulesHash(config.metricSettings);
-  const templates = config.metricSettings.rules.map((rule) => {
+  const configured = [{ rules: config.metricSettings.rules,hash: metricRulesHash(config.metricSettings) },
+    ...(config.metricVersion === 10 ? [{ rules: config.diagnosticSettings.rules,hash: diagnosticRulesHash(config.diagnosticSettings) }] : [])];
+  const templates = configured.flatMap(({ rules,hash: rules_hash }) => rules.map((rule) => {
     const { event_ref,tenant_hash,window_start_ms,...template } = createManagedMetricAlert({ ...rule,
       tenant_hash: sha256Ref('metric template only'),window_start_ms: 0,rules_hash });
     return { rule_id: rule.rule_id,template };
-  });
+  }));
   const drift = await client.query(`SELECT 1 FROM ${s}.telemetry_metric_windows w
     LEFT JOIN LATERAL (SELECT rule->'template' AS template FROM jsonb_array_elements($1::jsonb) rule
       WHERE rule->>'rule_id'=w.rule_id) r ON true
@@ -63,23 +65,27 @@ function closed(value,fields,label) {
   assertPlainRecord(value,label); assertAllowedKeys(value,fields,label);
   if (fields.some((key) => !Object.hasOwn(value,key))) throw new TypeError(label+' requires own fields');
 }
-function ruleFor(settings,id) {
-  const rule = settings.rules.find((value) => value.rule_id === id);
-  if (!rule) throw fail(); return rule;
+function ruleFor(settings,id,diagnosticSettings) {
+  const diagnostic = DIAGNOSTIC_RULE_IDS.includes(id);
+  if (diagnostic && diagnosticSettings === undefined) throw fail();
+  const configured = diagnostic ? normalizeDiagnosticSettings(diagnosticSettings) : settings;
+  const rule = configured.rules.find((value) => value.rule_id === id);
+  if (!rule) throw fail();
+  return { rule,rulesHash: diagnostic ? diagnosticRulesHash(configured) : metricRulesHash(settings) };
 }
-function expectedAlert(value,settings) {
-  const rule = ruleFor(settings,value.rule_id);
+function expectedAlert(value,settings,diagnosticSettings) {
+  const { rule,rulesHash } = ruleFor(settings,value.rule_id,diagnosticSettings);
   return createManagedMetricAlert({ tenant_hash: value.tenant_hash,rule_id: rule.rule_id,window_start_ms: value.window_start_ms,
-    window_ms: rule.window_ms,threshold: rule.threshold,rules_hash: metricRulesHash(settings) });
+    window_ms: rule.window_ms,threshold: rule.threshold,rules_hash: rulesHash });
 }
-export function readMetricWindow(row,settings) {
+export function readMetricWindow(row,settings,diagnosticSettings) {
   const value = row.payload; closed(value,WINDOW_FIELDS,'metric window');
-  const rule = ruleFor(settings,value.rule_id);
+  const { rule,rulesHash } = ruleFor(settings,value.rule_id,diagnosticSettings);
   requireSha256(value.tenant_hash,'tenant_hash'); requireInteger(value.window_start_ms,'window_start_ms');
   const count = requireInteger(value.count,'metric count',{ min: 1,max: 1_000_000 });
-  const alert = expectedAlert(value,settings);
+  const alert = expectedAlert(value,settings,diagnosticSettings);
   if (row.tenant_hash !== value.tenant_hash || row.rule_id !== value.rule_id || Number(row.window_start_ms) !== value.window_start_ms
-    || value.window_ms !== rule.window_ms || value.rules_hash !== metricRulesHash(settings)
+    || value.window_ms !== rule.window_ms || value.rules_hash !== rulesHash
     || value.window_start_ms % value.window_ms !== 0 || windowHash(value) !== row.state_hash) throw fail();
   const ref = count >= rule.threshold ? alert.event_ref : null, hash = count >= rule.threshold ? sha256Ref(alert) : null;
   if (value.last_alert_ref !== ref || value.last_alert_hash !== hash) throw fail();
@@ -112,14 +118,16 @@ export async function replayMetricSource(client,config,event,kind) {
     WHERE source_kind=$1 AND event_ref=$2`,[kind,event.event_ref]);
   if (result.rowCount === 0) return false; if (result.rowCount !== 1) throw fail();
   const row = result.rows[0], value = row.payload;
-  closed(value,SOURCE_FIELDS,'metric custody');
+  closed(value,kind === 'diagnostic' ? [...SOURCE_FIELDS,'diagnostic_event'] : SOURCE_FIELDS,'metric custody');
+  if (kind === 'diagnostic' && (config.metricVersion !== 10 || value.legacy_uncounted !== false
+    || canonicalize(normalizeManagedDiagnosticObservation(value.diagnostic_event,config.diagnosticSettings)) !== canonicalize(event))) throw fail();
   requireInteger(value.recorded_ms,'metric recorded_ms');
   if (value.source_kind !== kind || value.event_ref !== event.event_ref || value.event_hash !== sha256Ref(event)
     || value.tenant_hash !== event.tenant_hash || row.source_kind !== kind || row.event_ref !== value.event_ref
     || row.event_hash !== value.event_hash || row.tenant_hash !== value.tenant_hash || custodyHash(value) !== row.state_hash) throw fail('TELEMETRY_EVENT_CONFLICT');
   if (typeof value.legacy_uncounted !== 'boolean') throw fail();
-  const parts = assertDataArray(value.contributions,'metric contributions',{ maxLength: settings.rules.length });
-  const rules = value.legacy_uncounted ? [] : matchingMetricRules(event,kind,settings);
+  const rules = value.legacy_uncounted ? [] : sourceRules(event,kind,config);
+  const parts = assertDataArray(value.contributions,'metric contributions',{ maxLength: kind === 'diagnostic' ? config.diagnosticSettings.rules.length : settings.rules.length });
   if (parts.length !== rules.length) throw fail();
   for (let index = 0; index < parts.length; index += 1) {
     const part = parts[index], rule = rules[index]; closed(part,['rule_id','window_start_ms','count_after'],'metric contribution');
@@ -127,26 +135,33 @@ export async function replayMetricSource(client,config,event,kind) {
     if (part.rule_id !== rule.rule_id || part.window_start_ms !== start) throw fail();
     requireInteger(part.count_after,'count_after',{ min: 1,max: 1_000_000 });
     const kept = await windowRow(client,s,event.tenant_hash,rule.rule_id,start);
-    if (!kept || readMetricWindow(kept,settings).count < part.count_after) throw fail();
+    if (!kept || readMetricWindow(kept,settings,config.diagnosticSettings).count < part.count_after) throw fail();
   }
   return true;
+}
+function sourceRules(event,kind,config) {
+  if (kind !== 'diagnostic') return matchingMetricRules(event,kind,config.metricSettings);
+  if (config.metricVersion !== 10) throw fail();
+  const normalized = normalizeManagedDiagnosticObservation(event,config.diagnosticSettings);
+  return config.diagnosticSettings.rules.filter((rule) => rule.rule_id === 'observer_'+normalized.boundary+'_unconfirmed');
 }
 export async function recordMetricSource(client,config,event,kind,now,{ legacy = false } = {}) {
   if (!config.metrics) return;
   if (await replayMetricSource(client,config,event,kind)) return;
   const s = config.quotedSchema, settings = config.metricSettings, contributions = [];
   await assertMetricCapacity(client,s,'telemetry_metric_sources',event.tenant_hash,settings.maxSources,settings.maxSourcesPerTenant);
-  for (const rule of legacy ? [] : matchingMetricRules(event,kind,settings)) {
+  if (kind === 'diagnostic' && legacy) throw fail();
+  for (const rule of legacy ? [] : sourceRules(event,kind,config)) {
     const start = Math.floor(now/rule.window_ms)*rule.window_ms;
-    const row = await windowRow(client,s,event.tenant_hash,rule.rule_id,start), old = row ? readMetricWindow(row,settings) : null;
+    const row = await windowRow(client,s,event.tenant_hash,rule.rule_id,start), old = row ? readMetricWindow(row,settings,config.diagnosticSettings) : null;
     if (!old) await assertMetricCapacity(client,s,'telemetry_metric_windows',event.tenant_hash,settings.maxWindows,settings.maxWindowsPerTenant);
     const count = requireInteger((old?.count ?? 0)+1,'metric count',{ min: 1,max: 1_000_000 });
     const next = { tenant_hash: event.tenant_hash,rule_id: rule.rule_id,window_start_ms: start,window_ms: rule.window_ms,count,
       last_alert_ref: old?.last_alert_ref ?? null,last_alert_hash: old?.last_alert_hash ?? null,
       alert_acknowledged_ms: old?.alert_acknowledged_ms ?? null,alert_acknowledgement_hash: old?.alert_acknowledgement_hash ?? null,
-      rules_hash: metricRulesHash(settings) };
+      rules_hash: ruleFor(settings,rule.rule_id,config.diagnosticSettings).rulesHash };
     if (count === rule.threshold) {
-      const alert = expectedAlert(next,settings);
+      const alert = expectedAlert(next,settings,config.diagnosticSettings);
       await assertMetricCapacity(client,s,'telemetry_metric_alerts',event.tenant_hash,settings.maxAlerts,settings.maxAlertsPerTenant);
       await client.query(`INSERT INTO ${s}.telemetry_metric_alerts (event_ref,event_hash,tenant_hash,payload,created_ms) VALUES ($1,$2,$3,$4,$5)`,
         [alert.event_ref,sha256Ref(alert),alert.tenant_hash,alert,now]);
@@ -159,7 +174,8 @@ export async function recordMetricSource(client,config,event,kind,now,{ legacy =
     contributions.push({ rule_id: rule.rule_id,window_start_ms: start,count_after: count });
   }
   const payload = { source_kind: kind,event_ref: requireTelemetryRef(event.event_ref),event_hash: sha256Ref(event),tenant_hash: event.tenant_hash,
-    recorded_ms: requireInteger(now,'recorded_ms'),legacy_uncounted: legacy,contributions };
+    recorded_ms: requireInteger(now,'recorded_ms'),legacy_uncounted: legacy,contributions,
+    ...(kind === 'diagnostic' ? { diagnostic_event: normalizeManagedDiagnosticObservation(event,config.diagnosticSettings) } : {}) };
   await client.query(`INSERT INTO ${s}.telemetry_metric_sources (source_kind,event_ref,event_hash,tenant_hash,payload,state_hash) VALUES ($1,$2,$3,$4,$5,$6)`,
     [kind,event.event_ref,payload.event_hash,event.tenant_hash,payload,custodyHash(payload)]);
   const totals = await actualTotals(client,s);
@@ -188,17 +204,17 @@ export async function baselineMetricSources(client,config,now) {
     }
   }
 }
-export function readMetricAlert(row,settings) {
+export function readMetricAlert(row,settings,diagnosticSettings) {
   const event = normalizeManagedMetricAlert(row.payload);
   if (event.event_ref !== row.event_ref || event.tenant_hash !== row.tenant_hash || sha256Ref(event) !== row.event_hash
-    || canonicalize(expectedAlert(event,settings)) !== canonicalize(event)) throw fail();
+    || canonicalize(expectedAlert(event,settings,diagnosticSettings)) !== canonicalize(event)) throw fail();
   return event;
 }
 export async function acknowledgeMetricAlert(client,config,row,now) {
-  const event = readMetricAlert(row,config.metricSettings), s = config.quotedSchema;
+  const event = readMetricAlert(row,config.metricSettings,config.diagnosticSettings), s = config.quotedSchema;
   const kept = await windowRow(client,s,event.tenant_hash,event.rule_id,event.window_start_ms);
   if (!kept) throw fail();
-  const previous = readMetricWindow(kept,config.metricSettings);
+  const previous = readMetricWindow(kept,config.metricSettings,config.diagnosticSettings);
   if (previous.last_alert_ref !== event.event_ref || previous.last_alert_hash !== row.event_hash
     || previous.alert_acknowledgement_hash !== null) throw fail();
   const value = { ...previous,alert_acknowledged_ms: requireInteger(now,'alert_acknowledged_ms'),

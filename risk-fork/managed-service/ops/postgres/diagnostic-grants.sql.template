@@ -1,0 +1,6 @@
+-- Explicit v10 addition AFTER existing telemetry/lifecycle/metric/backlog grants.
+-- Dedicated owner only; runtime can read but never rewrite diagnostic meaning.
+BEGIN;
+GRANT SELECT ON __TELEMETRY_SCHEMA__.telemetry_diagnostic_settings TO __TELEMETRY_RUNTIME__;
+COMMIT;
+-- Existing metric column grants suffice. No new mutation or delivery authority.

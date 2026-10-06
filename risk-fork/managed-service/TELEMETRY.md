@@ -383,13 +383,15 @@ add nothing; later successful passes do not reset historical failures. Pending
 tenant slots, fair scheduling and append/checkpoint custody are unchanged. No
 failed read becomes a zero backlog, a cleared alert or a verification success.
 
-These counters are **not durable observations, deduplicated incidents or new
-threshold rules**. There is no database migration, new event family, provider
-callback, public endpoint or automatic startup. Independent host monitoring must
+These counters themselves are **not durable observations, deduplicated incidents
+or new threshold rules**. They need no database migration, provider callback,
+public endpoint or automatic startup. The separately opt-in v10 recorder below
+adds durable unconfirmed-boundary buckets without changing their local meaning.
+Independent host monitoring must
 observe recorder failure/overflow: a failing telemetry database cannot reliably
-record its own outage through that same database. Safe typed durable boundary
-observations and thresholds, independent outage monitoring, hosted sink custody
-and an observed alert/response drill remain open Gate 5 work.
+record its own outage through that same database. Independent outage monitoring,
+provider/root-cause classes, hosted sink custody and an observed alert/response
+drill remain open Gate 5 work.
 
 Focused deterministic tests and guarded real PostgreSQL tests cover capacity,
 replay/restart, unknown/late commits, stale claims, roles, retention, drift, abort,
@@ -915,3 +917,92 @@ provider/audit/DB failure classes, real sink custody, durable monitoring and an
 observed alert/response drill remain open. Provider qualification, managed DB
 HA/PITR/rotation, edge/WAF operations, publication, deployment, staging/canary
 and explicit activation remain separate gates. No live agent is protected.
+
+### Opt-in v10 durable host-boundary unconfirmed observations
+
+Both existing lifecycle/backlog observers can now **optionally** record their
+closed private failure phases durably. This is diagnostic observer evidence,
+not provider/DB root cause, independent absence, health or recovery proof.
+Use `metricVersion:10` and explicit immutable `diagnosticSettings`:
+
+```js
+const diagnosticSettings = {
+  bucket_ms: 1000, max_age_ms: 60000, max_future_ms: 1000,
+  rules: [
+    {rule_id: 'observer_backlog_source_read_unconfirmed', threshold: 2, window_ms: 60000},
+    {rule_id: 'observer_audit_window_read_unconfirmed', threshold: 1, window_ms: 60000},
+  ],
+};
+const options = {...unchangedV9TelemetryOptions, metricVersion: 10, diagnosticSettings};
+// Explicit owner migration, then all prior grants plus diagnostic-grants.sql.template.
+const store = await createPostgresManagedTelemetryStore(options);
+const observer = createManagedBacklogObserver({
+  controlPlane, store, auditPrincipals: hostAuditPrincipals,
+  observerId: 'stable-host-backlog-v1', diagnosticSettings, diagnosticTimeoutMs: 1000,
+});
+const alerts = await createPostgresManagedTelemetryStore({...options, eventKind: 'alert'});
+const drainer = createManagedTelemetryDrainer({
+  store: alerts, eventKind: 'alert', deliver: hostReviewedRedactedAlertSink,
+});
+await observer.runOnce(); await drainer.runOnce();
+await observer.close(); await drainer.close(); await alerts.close(); await store.close();
+```
+
+The eight phase names are `backlog_gauge_read`, `backlog_source_read`,
+`backlog_snapshot_append`, `lifecycle_sweep_read`, `audit_invocations_read`,
+`lifecycle_checkpoint_read`, `audit_window_read` and `lifecycle_window_append`.
+Rule names are exactly `observer_<phase>_unconfirmed`. Configuration allows
+1–8 unique closed rules; each has a positive threshold up to 1,000,000 and a
+fixed ingestion window containing whole buckets, at most one day. Buckets are
+1–60 seconds. Maximum new-packet age is explicit (up to one day), and maximum
+accepted future skew is explicit (0–30 seconds). An unvisited conditional phase
+is unknown, not healthy or zero. No error object properties or raw messages,
+codes, keys, provider/resource references or executable instructions are read
+or retained. Exceptions, malformed replies and deadlines mean only unconfirmed.
+
+One deterministic packet/ref binds tenant hash, stable observer hash, exact
+phase, host-clock bucket and diagnostic settings hash. Repeated polling/restart
+within that bucket counts **once**, not once per failed attempt. Different
+observer IDs intentionally count separate observations; owners must keep IDs
+stable across replicas. Thresholds count ingested tenant/observer/phase buckets,
+not incidents, complete traffic, outage duration or independent diagnoses.
+Metric windows use the existing serialized DB **ingestion** clock; late packets
+are not reassigned to historical host-time windows. New stale/future packets
+reject. Exact already-retained replay may confirm an unknown COMMIT even after
+the admission age expires; it never increments or moves the original window.
+
+The additive checkout-only `015_managed_diagnostic_metrics.pg.sql` migration
+attests v9 catalog/settings/custody first, then adds a separate SELECT-only
+settings singleton and closed diagnostic vocabulary. Apply the dedicated
+[diagnostic settings grant](./ops/postgres/diagnostic-grants.sql.template)
+after all existing grants. Its PG16 catalog is
+captured from actual DDL with `capture-metrics-catalog.mjs --v10`, not adapted
+from old fixtures. Frozen v1–v9 migration bytes, settings/rules hashes, packet
+meanings and retained windows remain unchanged. Old runtimes reject the new
+catalog. Upgrade creates no invented historical observations or alerts.
+Diagnostic source custody retains the entire closed packet plus exact hash,
+ingestion time and contributions. Source/window/alert persistence and totals are
+one transaction sharing **all existing** global/per-tenant metric capacity caps.
+No second runtime, queue, outbox, receipt or execution authority is introduced.
+Delivery/ACK/retry/pruning use the existing `eventKind:'alert'` drainer; ACKed
+delivery can be pruned but permanent source/window custody remains for replay.
+
+These are immutable fixed-window threshold facts. They **never** emit a clear,
+resolved or recovery event because failures stopped arriving or aged out.
+Keep v9 sampled backlog conditions/clears separate: those require a successful
+new source sample. The observer recorder has its own bounded wait and preserves
+one actual hung call per configured tenant until settlement; other tenants can
+progress. Shutdown/late ACK cannot manufacture confirmation. The process-local
+`diagnostics.recorded` counts timely exact persistence ACKs (including replays),
+not unique durable sources; `failed`, `timed_out` and `in_flight` retain local
+recorder health. The original phase counters stay available with recording off.
+There is no lossless spool or blind source/provider re-execution; recording
+failure, process loss or a later bucket may leave an observation unrecorded.
+
+**Same-store outage cannot reliably record itself in that store.** Independent
+host monitoring and an observed sink/operator-response drill remain required.
+Worker/provider callback failure classes, independently observed DB health,
+full traffic coverage, hostile-host resistance, maximum-capacity SLOs and real
+operational sink custody are not established here. This remains checkout-only,
+default-off and `local_test`; no provider call, billing observation, managed
+deployment or production activation is authorized or qualified by these tests.

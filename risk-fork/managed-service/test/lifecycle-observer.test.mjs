@@ -171,9 +171,9 @@ test('lifecycle failure health names only the unconfirmed boundary without inspe
 });
 
 test('malformed lifecycle replies stay at the unconfirmed boundary and never record success', async () => {
-  // Window content is validated by the trusted append store, not by the
-  // scheduler. Do not attribute store validation to the earlier source read.
-  for (const boundary of boundaries.filter((key) => key !== 'audit_window_read')) {
+  // Validate resolved source replies at their read boundary before append;
+  // the trusted store still independently validates its final input.
+  for (const boundary of boundaries) {
     const f = await admitted(), store = recordingStore(), source = { ...f.controlPlane };
     const owner = isSourceBoundary(boundary) ? source : store;
     owner[methods[boundary]] = () => ({ invalid: true });

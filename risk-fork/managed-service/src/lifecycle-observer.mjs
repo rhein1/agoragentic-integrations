@@ -1,8 +1,11 @@
-import { sha256Ref } from '../../src/canonical.mjs';
+import { canonicalize, sha256Ref } from '../../src/canonical.mjs';
 import { assertAllowedKeys, assertDataArray, assertPlainRecord, requireInteger, requireOpaqueRef, requireTenantId } from './validation.mjs';
 import { lifecycleTenantHash } from './lifecycle-event.mjs';
 import { lifecycleCheckpoint, lifecycleSweep } from './lifecycle-state.mjs';
 import { createManagedDeadline } from './deadline.mjs';
+import { createObserverDiagnostic } from './observer-diagnostic.mjs';
+import { verifyAuditInvocationPage } from './audit-read.mjs';
+import { verifyManagedAuditWindow } from './audit.mjs';
 
 const branded = new WeakSet();
 const bump = (n) => Math.min(2_147_483_647,n+1);
@@ -10,7 +13,7 @@ const bump = (n) => Math.min(2_147_483_647,n+1);
 // through the control plane. No worker/provider callbacks or public routes.
 export function createManagedLifecycleObserver(options) {
   assertPlainRecord(options,'lifecycle observer options');
-  assertAllowedKeys(options,['controlPlane','store','auditPrincipals','observerId','timeoutMs','intervalMs','maxTenantsPerTick'],'lifecycle observer options');
+  assertAllowedKeys(options,['controlPlane','store','auditPrincipals','observerId','timeoutMs','intervalMs','maxTenantsPerTick','diagnosticSettings','diagnosticTimeoutMs','diagnosticClock'],'lifecycle observer options');
   const observerHash = sha256Ref({ domain: 'risk-fork-lifecycle-observer-v1',observer_id: requireOpaqueRef(options.observerId,'observerId') });
   const principals = assertDataArray(options.auditPrincipals,'auditPrincipals',{ maxLength: 64 }).slice();
   if (principals.length === 0) throw new TypeError('At least one audit principal is required');
@@ -30,10 +33,11 @@ export function createManagedLifecycleObserver(options) {
   const interval = requireInteger(options.intervalMs ?? 1000,'intervalMs',{ min: 100,max: 30_000 });
   const batch = requireInteger(options.maxTenantsPerTick ?? 4,'maxTenantsPerTick',{ min: 1,max: 64 });
   const stop = new AbortController(), pending = new Map();
+  const diagnostics = createObserverDiagnostic(options,observerHash,stop.signal);
   let timer, current, closed = false, cursor = 0, recorded = 0, failed = 0, timedOut = 0;
   const failureCounts = { lifecycle_sweep_read: 0,audit_invocations_read: 0,lifecycle_checkpoint_read: 0,audit_window_read: 0,lifecycle_window_append: 0 };
   const health = () => Object.freeze({ recorded,failed,timed_out: timedOut,failure_counts: Object.freeze({ ...failureCounts }),
-    in_flight: pending.size,running: timer !== undefined,closed,production_qualified: false });
+    in_flight: pending.size,diagnostics: diagnostics.health(),running: timer !== undefined,closed,production_qualified: false });
   const active = (signal) => { if (closed || signal.aborted) throw new DOMException('Lifecycle observer stopped','AbortError'); };
   async function step(principal) {
     const deadline = createManagedDeadline(timeout,{ signal: stop.signal }), signal = deadline.signal;
@@ -41,12 +45,16 @@ export function createManagedLifecycleObserver(options) {
     // Classify from our own dispatch phase, never from thrown properties.
     // The result is unconfirmed here; it says nothing about the root cause.
     let boundary = 'lifecycle_sweep_read';
-    const observeFailure = () => { failed = bump(failed); failureCounts[boundary] = bump(failureCounts[boundary]); };
+    const observeFailure = async () => {
+      failed = bump(failed); failureCounts[boundary] = bump(failureCounts[boundary]);
+      await diagnostics.record(scope.tenant_hash,boundary);
+    };
     const work = Promise.resolve().then(async () => {
       active(signal);
       const sweep = lifecycleSweep(await readSweep(scope,{ signal })); active(signal);
       boundary = 'audit_invocations_read';
-      const page = await list(principal,{ after_ref: sweep?.after_ref ?? null,upper_ref: sweep?.upper_ref ?? null,limit: 1 }); active(signal);
+      const pageRequest = { after_ref: sweep?.after_ref ?? null,upper_ref: sweep?.upper_ref ?? null,limit: 1 };
+      const page = verifyAuditInvocationPage(await list(principal,pageRequest),principal.tenant_id,pageRequest); active(signal);
       const ref = page.invocations[0]?.invocation_ref;
       let checkpoint = null, window = null;
       if (ref !== undefined) {
@@ -54,6 +62,14 @@ export function createManagedLifecycleObserver(options) {
         checkpoint = lifecycleCheckpoint(await readPrefix(scope,ref,{ signal })); active(signal);
         boundary = 'audit_window_read';
         window = await read(principal,ref,{ after_sequence: checkpoint?.sequence ?? 0,prior_event_hash: checkpoint?.event_hash ?? null,limit: 64 }); active(signal);
+        assertPlainRecord(window,'lifecycle source window');
+        assertAllowedKeys(window,['tenant_id','invocation_ref','audit_event_count','audit_head_hash','prior_event','events',
+          'complete','next_after_sequence','next_prior_event_hash'],'lifecycle source window');
+        const verified = verifyManagedAuditWindow(Object.fromEntries(['tenant_id','invocation_ref','audit_event_count','audit_head_hash','prior_event','events']
+          .map((key) => [key,window[key]])),{ tenant_id: principal.tenant_id,invocation_ref: ref,
+          after_sequence: checkpoint?.sequence ?? 0,prior_event_hash: checkpoint?.event_hash ?? null,limit: 64 });
+        if (canonicalize(verified) !== canonicalize(window)) throw new TypeError('Lifecycle source window disagrees');
+        window = verified; active(signal);
       }
       boundary = 'lifecycle_window_append';
       const result = await append({ scope,tenant_id: principal.tenant_id,expected_sweep: sweep,expected_checkpoint: checkpoint,page,window },{ signal }); active(signal);
@@ -67,8 +83,8 @@ export function createManagedLifecycleObserver(options) {
     try {
       const result = await Promise.race([work,deadline.aborted]);
       // Only this bounded outcome counts; late settlement and shutdown do not.
-      if (signal.aborted) { if (!closed) { timedOut = bump(timedOut); observeFailure(); } }
-      else if (result.failed) observeFailure();
+      if (signal.aborted) { if (!closed) { timedOut = bump(timedOut); await observeFailure(); } }
+      else if (result.failed) await observeFailure();
       else recorded = Math.min(2_147_483_647,recorded+result.projected);
     } finally { deadline.dispose(); }
     // The underlying slot remains occupied until actual settlement. A source
@@ -81,7 +97,7 @@ export function createManagedLifecycleObserver(options) {
       const selected = [];
       for (let inspected = 0; inspected < principals.length && selected.length < batch; inspected += 1) {
         const principal = principals[cursor]; cursor = (cursor+1)%principals.length;
-        if (!pending.has(principal.tenant_id)) selected.push(step(principal));
+        if (!pending.has(principal.tenant_id) && !diagnostics.has(lifecycleTenantHash(principal.tenant_id))) selected.push(step(principal));
       }
       const work = Promise.all(selected).then(health); current = work;
       void work.finally(() => { if (current === work) current = undefined; }).catch(() => {});
@@ -98,9 +114,9 @@ export function createManagedLifecycleObserver(options) {
       const timeoutMs = requireInteger(options.timeoutMs ?? timeout,'timeoutMs',{ min: 50,max: 30_000 });
       closed = true; stop.abort(); if (timer !== undefined) clearInterval(timer); timer = undefined;
       const deadline = createManagedDeadline(timeoutMs);
-      try { if (pending.size) await Promise.race([Promise.allSettled([...pending.values()]),deadline.aborted]); }
+      try { await Promise.race([Promise.allSettled([...pending.values(),...diagnostics.pending()]),deadline.aborted]); }
       finally { deadline.dispose(); }
-      return Object.freeze({ settled: pending.size === 0,...health() });
+      return Object.freeze({ settled: pending.size === 0 && diagnostics.health().in_flight === 0,...health() });
     },
   });
   branded.add(api); return api;
