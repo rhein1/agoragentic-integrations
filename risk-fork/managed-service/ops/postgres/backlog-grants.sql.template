@@ -1,0 +1,10 @@
+-- Explicit v8 additions AFTER telemetry/lifecycle/metrics grants, exact owner.
+BEGIN;
+GRANT SELECT ON __TELEMETRY_SCHEMA__.telemetry_backlog_settings,
+  __TELEMETRY_SCHEMA__.telemetry_backlog_state,__TELEMETRY_SCHEMA__.telemetry_backlog_totals TO __TELEMETRY_RUNTIME__;
+GRANT INSERT (tenant_hash,payload,state_hash) ON __TELEMETRY_SCHEMA__.telemetry_backlog_state TO __TELEMETRY_RUNTIME__;
+GRANT UPDATE (payload,state_hash) ON __TELEMETRY_SCHEMA__.telemetry_backlog_state TO __TELEMETRY_RUNTIME__;
+GRANT UPDATE (tenant_count,state_hash) ON __TELEMETRY_SCHEMA__.telemetry_backlog_totals TO __TELEMETRY_RUNTIME__;
+COMMIT;
+-- No immutable tenant-key update, settings/ledger write, DELETE/TRUNCATE,
+-- execution/cleanup/recovery authority, DDL or grant authority.

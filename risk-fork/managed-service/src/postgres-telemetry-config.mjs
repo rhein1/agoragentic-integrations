@@ -4,6 +4,7 @@ import { quotePostgresAuthorityIdentifier } from '../../src/adapters/postgres-au
 import { assertAllowedKeys, assertPlainRecord, deepFreeze, managedError, requireInteger } from './validation.mjs';
 import { policyDbInteger, checkPolicySignal } from './postgres-request-policy-config.mjs';
 import { metricSettingsHash, normalizeMetricSettings } from './metric-event.mjs';
+import { normalizeBacklogSettings } from './backlog-gauge.mjs';
 
 export { policyDbInteger as telemetryDbInteger, checkPolicySignal as checkTelemetrySignal };
 export const TELEMETRY_TABLES = Object.freeze(['telemetry_clock','telemetry_events','telemetry_schema_migrations','telemetry_settings']);
@@ -17,6 +18,7 @@ export const METRIC_TABLES = Object.freeze(['telemetry_metric_alerts','telemetry
 export const METRIC_ALERT_INSERT_COLUMNS = Object.freeze(['event_ref','event_hash','tenant_hash','payload','created_ms']);
 export const METRIC_SOURCE_INSERT_COLUMNS = Object.freeze(['source_kind','event_ref','event_hash','tenant_hash','payload','state_hash']);
 export const METRIC_WINDOW_INSERT_COLUMNS = Object.freeze(['tenant_hash','rule_id','window_start_ms','payload','state_hash']);
+export const BACKLOG_TABLES = Object.freeze(['telemetry_backlog_settings','telemetry_backlog_state','telemetry_backlog_totals']);
 
 export function normalizeTelemetryLimits(value) {
   assertPlainRecord(value, 'telemetry limits');
@@ -32,14 +34,16 @@ export function normalizeTelemetryLimits(value) {
 export function normalizeTelemetryOptions(options, extraKeys = []) {
   assertPlainRecord(options, 'PostgreSQL telemetry options');
   assertAllowedKeys(options, ['pool','connectionString','schemaName','requireTls','tls','maxConnections',
-    'connectionTimeoutMs','statementTimeoutMs','deploymentMode','disposableDb','limits','expectedOwner','lifecycle','eventKind','metrics','metricSettings','metricVersion', ...extraKeys], 'PostgreSQL telemetry options');
+    'connectionTimeoutMs','statementTimeoutMs','deploymentMode','disposableDb','limits','expectedOwner','lifecycle','eventKind','metrics','metricSettings','metricVersion','backlogSettings', ...extraKeys], 'PostgreSQL telemetry options');
   const lifecycle = options.lifecycle ?? false, metrics = options.metrics ?? false, eventKind = options.eventKind ?? 'policy';
   if (typeof lifecycle !== 'boolean' || typeof metrics !== 'boolean' || !['policy','lifecycle','alert'].includes(eventKind)
     || (eventKind === 'lifecycle' && !lifecycle) || (metrics && !lifecycle) || (eventKind === 'alert' && !metrics)) throw new TypeError('Invalid telemetry version selection');
   if (!metrics && options.metricSettings !== undefined) throw new TypeError('Metric settings require explicit metrics=true');
   if (!metrics && options.metricVersion !== undefined) throw new TypeError('Metric version requires explicit metrics=true');
   const metricVersion = metrics ? (options.metricVersion ?? 3) : undefined;
-  if (metrics && ![3,4,5,6,7].includes(metricVersion)) throw new TypeError('Invalid metric version');
+  if (metrics && ![3,4,5,6,7,8].includes(metricVersion)) throw new TypeError('Invalid metric version');
+  if (metricVersion !== 8 && options.backlogSettings !== undefined) throw new TypeError('Backlog settings require explicit metricVersion=8');
+  const backlogSettings = metricVersion === 8 ? normalizeBacklogSettings(options.backlogSettings) : undefined;
   const metricSettings = metrics ? normalizeMetricSettings(options.metricSettings) : undefined;
   if (metricVersion === 3 && metricSettings.rules.some((rule) => rule.rule_id === 'execution_failure_observed')) {
     throw new TypeError('Execution failure metrics require explicit metricVersion=4');
@@ -65,7 +69,7 @@ export function normalizeTelemetryOptions(options, extraKeys = []) {
   const quotedSchema = quotePostgresAuthorityIdentifier(schemaName);
   if (options.expectedOwner !== undefined) quotePostgresAuthorityIdentifier(options.expectedOwner);
   const limits = normalizeTelemetryLimits(options.limits);
-  return Object.freeze({ schemaName, quotedSchema, limits, settingsHash: sha256Ref(limits), requireTls,lifecycle,eventKind,metrics,metricSettings,metricVersion,
+  return Object.freeze({ schemaName, quotedSchema, limits, settingsHash: sha256Ref(limits), requireTls,lifecycle,eventKind,metrics,metricSettings,metricVersion,backlogSettings,
     expectedOwner: options.expectedOwner,
     statementTimeoutMs: requireInteger(options.statementTimeoutMs ?? 2000, 'statementTimeoutMs', { min: 100, max: 30_000 }) });
 }
@@ -98,6 +102,10 @@ export async function cleanupIncompleteMetricsMigration(schemaName) {
   const source = (await readFile(new URL('../migrations/012_managed_cleanup_incomplete_metrics.pg.sql',import.meta.url),'utf8')).replace(/\r\n?/g,'\n');
   return Object.freeze({ hash: sha256Ref(source),sql: source.replaceAll('__RISK_FORK_TELEMETRY_SCHEMA__',quotePostgresAuthorityIdentifier(schemaName)) });
 }
+export async function backlogGaugesMigration(schemaName) {
+  const source = (await readFile(new URL('../migrations/013_managed_backlog_gauges.pg.sql',import.meta.url),'utf8')).replace(/\r\n?/g,'\n');
+  return Object.freeze({ hash: sha256Ref(source),sql: source.replaceAll('__RISK_FORK_TELEMETRY_SCHEMA__',quotePostgresAuthorityIdentifier(schemaName)) });
+}
 
 export async function verifyTelemetrySettings(client, config, hash) {
   const settings = await client.query(`SELECT version,migration_hash FROM ${config.quotedSchema}.telemetry_schema_migrations ORDER BY version`);
@@ -106,14 +114,16 @@ export async function verifyTelemetrySettings(client, config, hash) {
   const execution = config.metricVersion >= 4 ? await executionMetricsMigration(config.schemaName) : null;
   const budget = config.metricVersion >= 5 ? await budgetMetricsMigration(config.schemaName) : null;
   const cleanup = config.metricVersion >= 6 ? await cleanupMetricsMigration(config.schemaName) : null;
-  const incomplete = config.metricVersion === 7 ? await cleanupIncompleteMetricsMigration(config.schemaName) : null;
-  if (settings.rowCount !== (incomplete ? 7 : cleanup ? 6 : budget ? 5 : execution ? 4 : metrics ? 3 : extension ? 2 : 1) || settings.rows[0].version !== 1 || settings.rows[0].migration_hash !== hash
+  const incomplete = config.metricVersion >= 7 ? await cleanupIncompleteMetricsMigration(config.schemaName) : null;
+  const backlog = config.metricVersion === 8 ? await backlogGaugesMigration(config.schemaName) : null;
+  if (settings.rowCount !== (backlog ? 8 : incomplete ? 7 : cleanup ? 6 : budget ? 5 : execution ? 4 : metrics ? 3 : extension ? 2 : 1) || settings.rows[0].version !== 1 || settings.rows[0].migration_hash !== hash
     || (extension && (settings.rows[1].version !== 2 || settings.rows[1].migration_hash !== extension.hash))
     || (metrics && (settings.rows[2].version !== 3 || settings.rows[2].migration_hash !== metrics.hash))
     || (execution && (settings.rows[3].version !== 4 || settings.rows[3].migration_hash !== execution.hash))
     || (budget && (settings.rows[4].version !== 5 || settings.rows[4].migration_hash !== budget.hash))
     || (cleanup && (settings.rows[5].version !== 6 || settings.rows[5].migration_hash !== cleanup.hash))
-    || (incomplete && (settings.rows[6].version !== 7 || settings.rows[6].migration_hash !== incomplete.hash))) throw new TypeError('Telemetry migration drift');
+    || (incomplete && (settings.rows[6].version !== 7 || settings.rows[6].migration_hash !== incomplete.hash))
+    || (backlog && (settings.rows[7].version !== 8 || settings.rows[7].migration_hash !== backlog.hash))) throw new TypeError('Telemetry migration drift');
   const result = await client.query(`SELECT settings_hash,max_events,max_events_per_tenant,lease_ms,retry_ms,retention_ms
     FROM ${config.quotedSchema}.telemetry_settings WHERE singleton=true`);
   const row = result.rows[0], l = config.limits;

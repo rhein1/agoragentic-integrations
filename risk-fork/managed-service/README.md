@@ -29,6 +29,8 @@ The package is deliberately marked `private: true`. An explicit, default-off loc
 - explicit opt-in v4 `execution_failure_observed` counts for control-plane-accepted failed outcomes, not provider root-cause, cleanup or cost proof. Fresh/v1-v2 schemas may enable it; existing v3 settings cannot be rewritten to add the rule. See [v4 compatibility and rollout](./TELEMETRY.md#opt-in-v4-failed-execution-observations).
 - explicit opt-in v5 `budget_denied` counts for authenticated public HTTP admission budget rejections, with separate invocation/daily-cap source labels. Direct programmatic/store admissions remain unobserved; no actual spend, complete rejection ledger or provider qualification is implied. Existing v3/v4 settings remain immutable. See [v5 compatibility and rollout](./TELEMETRY.md#opt-in-v5-http-budget-denial-observations).
 - explicit opt-in v6 `cleanup_verified` and `recovery_absence_verified` counts for exact committed control-plane verification labels. They are self-attested terminal observations, not independent provider destruction/absence proof or backlog/failure metrics. Existing v3/v4/v5 settings remain immutable. See [v6 compatibility and rollout](./TELEMETRY.md#opt-in-v6-terminal-cleanup-and-recovery-verification-observations).
+- explicit opt-in v7 `cleanup_incomplete_observed` counts for exact recorded incomplete attempts, once per cleanup lease generation rather than once per poll or unresolved invocation. See [v7 compatibility and rollout](./TELEMETRY.md#opt-in-v7-incomplete-cleanup-attempts).
+- explicit opt-in v8 durable latest cleanup/recovery/expired-lease gauges, collected with original authenticated audit principals into bounded per-tenant telemetry custody. Failed/late reads never become zero samples, polls never sum counts, and gauge thresholds/hosted alert delivery remain unfinished. See [v8 compatibility and rollout](./TELEMETRY.md#opt-in-v8-durable-latest-backlog-gauges).
 
 ## Architecture
 
@@ -461,7 +463,9 @@ obligation, budget, outcome and lease remain intact. Worker production and the
 redacted lifecycle label are described in [WORKER.md](./WORKER.md#incomplete-cleanup-observations-sourcelocal-test-only).
 Current v3–v6 metric rules do not count this label. It is not provider root-cause,
 destruction/absence/termination evidence, a delivered alert or operational
-qualification. The opt-in incomplete-attempt metric/catalog extension remains open.
+qualification. The explicit v7 metric/catalog extension counts these recorded
+attempts; it does not count current unresolved invocations or prove provider
+failure. See [TELEMETRY.md](./TELEMETRY.md#opt-in-v7-incomplete-cleanup-attempts).
 
 ### Current cleanup/recovery backlog health
 

@@ -9,6 +9,8 @@ import { lifecycleCheckpoint, lifecycleScope, lifecycleStateHash, lifecycleSweep
 import { verifyAuditInvocationPage } from './audit-read.mjs';
 import { verifyManagedAuditWindow } from './audit.mjs';
 import { acknowledgeMetricAlert, readMetricAlert, readMetricWindow, recordMetricSource, replayMetricSource, verifyMetricTotals } from './postgres-metric-state.mjs';
+import { backlogGaugeInput } from './backlog-gauge.mjs';
+import { appendBacklogGauge, readBacklogGauge, verifyBacklogCustody } from './postgres-backlog-gauge-state.mjs';
 
 const FIELDS = 'event_ref,event_hash,event,route_class,status,outcome,duration_ms,tenant_hash,key_hash,created_ms';
 const DELIVERY_FIELDS = `${FIELDS},state,generation,attempts,claim_hash,lease_expires_ms,next_attempt_ms,acknowledged_ms,acknowledgement_hash,last_error_code`;
@@ -16,7 +18,7 @@ const LIFECYCLE_FIELDS = 'event_ref,event_hash,tenant_hash,invocation_hash,sourc
 const LIFECYCLE_DELIVERY_FIELDS = `${LIFECYCLE_FIELDS},state,generation,attempts,claim_hash,lease_expires_ms,next_attempt_ms,acknowledged_ms,acknowledgement_hash,last_error_code`;
 const ALERT_FIELDS = 'event_ref,event_hash,tenant_hash,payload,created_ms';
 const ALERT_DELIVERY_FIELDS = `${ALERT_FIELDS},state,generation,attempts,claim_hash,lease_expires_ms,next_attempt_ms,acknowledged_ms,acknowledgement_hash,last_error_code`;
-const KNOWN_ERRORS = new Set(['TELEMETRY_CAPACITY','TELEMETRY_EVENT_CONFLICT','TELEMETRY_STALE_CLAIM','TELEMETRY_CLAIM_EXPIRED','TELEMETRY_CHECKPOINT_CONFLICT','TELEMETRY_CHECKPOINT_DRIFT','TELEMETRY_METRIC_DRIFT']);
+const KNOWN_ERRORS = new Set(['TELEMETRY_CAPACITY','TELEMETRY_EVENT_CONFLICT','TELEMETRY_STALE_CLAIM','TELEMETRY_CLAIM_EXPIRED','TELEMETRY_CHECKPOINT_CONFLICT','TELEMETRY_CHECKPOINT_DRIFT','TELEMETRY_METRIC_DRIFT','TELEMETRY_BACKLOG_DRIFT','TELEMETRY_BACKLOG_CONFLICT','TELEMETRY_BACKLOG_STALE']);
 const fail = (code) => managedError('Telemetry operation unavailable', code, 503);
 function input(value, fields) { assertPlainRecord(value, 'telemetry request'); assertAllowedKeys(value, fields, 'telemetry request'); return value; }
 function readEvent(row, kind = 'policy', settings) {
@@ -54,7 +56,7 @@ export class PostgresManagedTelemetryStore {
       applicationName: 'risk-fork-managed-telemetry' });
     const store = new PostgresManagedTelemetryStore({ pool, limits: config.limits, schemaName: config.schemaName,
       requireTls: false, disposableDb: true, statementTimeoutMs: config.statementTimeoutMs,lifecycle: config.lifecycle,eventKind: config.eventKind,
-      metrics: config.metrics,metricSettings: config.metricSettings,metricVersion: config.metricVersion });
+      metrics: config.metrics,metricSettings: config.metricSettings,metricVersion: config.metricVersion,backlogSettings: config.backlogSettings });
     store.#config = config; store.#ownsPool = owned;
     try { await store.initialize(); return store; } catch (error) { if (owned) await pool.end().catch(() => {}); throw error; }
   }
@@ -80,6 +82,7 @@ export class PostgresManagedTelemetryStore {
         await verifyPostgresManagedTelemetryAttestation(client, { schemaName: this.#config.schemaName, expectedOwner: this.#config.expectedOwner,lifecycle: this.#config.lifecycle,metrics: this.#config.metrics,metricVersion: this.#config.metricVersion });
         await verifyTelemetrySettings(client, this.#config, migration.hash);
         await verifyMetricTotals(client,this.#config);
+        await verifyBacklogCustody(client,this.#config);
         const sample = await client.query('SELECT floor(extract(epoch FROM clock_timestamp()) * 1000)::bigint AS now_ms');
         const now = telemetryDbInteger(sample.rows[0]?.now_ms), prior = telemetryDbInteger(clock.rows[0].last_seen_ms);
         if (sample.rowCount !== 1 || now < prior) throw new TypeError('Telemetry clock regressed');
@@ -103,7 +106,7 @@ export class PostgresManagedTelemetryStore {
   async append(value, options = {}) {
     if (this.#config.eventKind !== 'policy') throw new TypeError('Only policy packets use append; lifecycle/alerts require atomic source projection');
     const event = normalizeManagedTelemetryEvent(value), hash = managedTelemetryEventHash(event);
-    if (event.outcome === 'budget_limited' && ![5,6,7].includes(this.#config.metricVersion)) {
+    if (event.outcome === 'budget_limited' && ![5,6,7,8].includes(this.#config.metricVersion)) {
       throw new TypeError('Budget observations require explicit metricVersion=5 or later');
     }
     input(options, ['signal']);
@@ -350,6 +353,16 @@ export class PostgresManagedTelemetryStore {
       return Object.freeze({ windows: Object.freeze(rows.rows.slice(0,64).map((row) => readMetricWindow(row,this.#config.metricSettings))),
         truncated: rows.rows.length > 64,...counts.rows[0],coverage: 'ingested_observations_only',production_qualified: false });
     });
+  }
+  async readBacklogGauge(options) {
+    if (this.#config.metricVersion !== 8) throw new TypeError('Backlog custody requires explicit metricVersion=8');
+    input(options,['tenant_hash','signal']); const tenant = requireSha256(options.tenant_hash,'tenant_hash');
+    return this.#transaction(options.signal,(client) => readBacklogGauge(client,this.#config,tenant));
+  }
+  async appendBacklogSnapshot(value, options = {}) {
+    if (this.#config.metricVersion !== 8) throw new TypeError('Backlog custody requires explicit metricVersion=8');
+    input(options,['signal']); const packet = backlogGaugeInput(value,this.#config.backlogSettings);
+    return this.#transaction(options.signal,(client,now) => appendBacklogGauge(client,this.#config,packet,now));
   }
   async close() { if (this.#closed) return; this.#closed = true; if (this.#ownsPool) await this.#pool.end(); }
 }
