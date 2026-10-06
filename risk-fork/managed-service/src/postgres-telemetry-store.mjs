@@ -103,8 +103,8 @@ export class PostgresManagedTelemetryStore {
   async append(value, options = {}) {
     if (this.#config.eventKind !== 'policy') throw new TypeError('Only policy packets use append; lifecycle/alerts require atomic source projection');
     const event = normalizeManagedTelemetryEvent(value), hash = managedTelemetryEventHash(event);
-    if (event.outcome === 'budget_limited' && this.#config.metricVersion !== 5) {
-      throw new TypeError('Budget observations require explicit metricVersion=5');
+    if (event.outcome === 'budget_limited' && ![5,6].includes(this.#config.metricVersion)) {
+      throw new TypeError('Budget observations require explicit metricVersion=5 or later');
     }
     input(options, ['signal']);
     return this.#transaction(options.signal, async (client, now) => {

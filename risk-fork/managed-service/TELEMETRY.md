@@ -258,7 +258,7 @@ time, not the source event's occurrence time or all real traffic:
 | `lease_expiry_observed` | execution/cleanup/recovery `*_lease_expired` audit label | actual lease age, backlog size, provider destruction |
 
 Unknown rules, request-supplied formulas, duplicate rule IDs and accessor fields
-are rejected. Configure 1–6 rules in v3 (up to 7 in opt-in v4 or 8 in opt-in v5), each with threshold 1–1,000,000 and fixed
+are rejected. Configure 1–6 rules in v3 (up to 7 in opt-in v4, 8 in opt-in v5 or 10 in opt-in v6), each with threshold 1–1,000,000 and fixed
 window 1,000–86,400,000 ms. Rules are canonically sorted and immutable settings
 and every migration/catalog hash for the selected version must match. Changing thresholds or
 capacities is a separately reviewed migration, not a hot reload.
@@ -502,3 +502,56 @@ custody, at-least-once delivery, permanent capacity limits,
 Disposable PostgreSQL/TLS/role tests are local evidence only; hosted sinks,
 operator alert drills, accurate balances/expenditure, managed operations and
 activation remain open.
+
+### Opt-in v6 terminal cleanup and recovery verification observations
+
+Two distinct lifecycle rules count only the exact committed audit labels:
+`cleanup_verified` and `recovery_absence_verified`. The control plane already
+emits the first after all recorded-resource cleanup evidence and the exact
+provider binding's verifier succeed; it emits the second after fresh,
+exact-bound total-absence evidence and its recovery verifier succeed. Failed,
+stale, incomplete or rejected evidence cannot emit either verification label.
+No producer, provider callback, control-plane transition or authority is added.
+
+The authenticated `audit:read` lifecycle observer projects these labels without
+raw details, resource IDs, invocation references, errors or original arguments.
+Counts remain by DB ingestion time, with `control_plane_self_attested` evidence,
+`ingested_observations_only` coverage and `production_qualified:false`. A count
+does not establish independent provider deletion, exhaustive resource search,
+cleanup backlog/failure, callback termination, actual spend or live protection.
+Unknown cleanup and rejected attestations remain unresolved, never successes.
+
+Select `metricVersion:6`, `lifecycle:true`, `metrics:true` and explicit trusted
+`metricSettings` on migration and every store sharing the schema. For example:
+
+```js
+const rules = [
+  { rule_id: 'cleanup_verified', threshold: 1, window_ms: 60000 },
+  { rule_id: 'recovery_absence_verified', threshold: 1, window_ms: 60000 },
+]; // Example thresholds only, not qualified production alert sizing.
+```
+
+Additive `011_managed_cleanup_metrics.pg.sql` is version **6 of the independent
+telemetry ledger**. Frozen `005`/`006`/`007`/`009`/`010` remain unchanged. Only
+the ledger-version and metric-window rule CHECKs widen; no tables, columns,
+grants, policy packets or authority change. Capture the separate PG16 v6
+catalog with `node managed-service/scripts/capture-metrics-catalog.mjs --v6`
+only in the explicitly disposable lab. Existing telemetry/lifecycle/metric
+role templates still apply.
+
+Fresh schemas and v1/v2 upgrades may select these rules; surviving old packets
+remain `legacy_uncounted`. Existing v3/v4/v5 schemas may upgrade catalog-only
+with identical persisted metric settings. Adding either rule to those settings
+fails before DDL/custody mutation, even if empty. Enabling new rules therefore
+requires a separately reviewed fresh observer schema/coverage boundary or a
+future versioned settings-custody migration, not hash rewriting or a reset.
+Drain old runtimes before upgrading: v1–v5 stores reject the v6 catalog.
+Earlier current-source lifecycle observers can project these existing labels
+without counting them. Pair every store/drainer with the selected version.
+
+Exact-source replay, atomic source/window/alert/checkpoint commits, immutable
+settings, ACK/pruning custody, at-least-once delivery and global/tenant lifetime
+caps remain unchanged. Disposable PG16/TLS/role tests are local source evidence,
+not deployed sink delivery, a provider qualification receipt, an operator
+response drill or production activation. Typed failure/backlog/dependency/DB
+health metrics and hosted qualification remain separate work.

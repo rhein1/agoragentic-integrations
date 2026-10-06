@@ -5,6 +5,50 @@ E2B sandbox, installs credentials, deploys a gateway, or enables live traffic.
 All production gates in [DEPLOYMENT_GATES.md](./DEPLOYMENT_GATES.md) remain open
 until retained evidence from the exact hosted candidate establishes them.
 
+## Production-entry gate: implementation and approval prerequisites
+
+Before any production-entry request, record the concrete remaining source
+gaps. The reviewed production qualification class is not implemented, the
+managed-service production configuration/activation path remains fail-closed,
+and provider qualification evidence is not interchangeable with local-test
+evidence. Do not describe a source merge or passing local suite as completion
+of these production requirements.
+
+For any provider call, first bind the exact provider SDK, runtime/template,
+adapter, account/project and qualification environment. Before the first
+call, retain an owner-approved total ceiling and a hard enforceable cap that
+covers lifetime, concurrency, retries, teardown, delayed charges and the
+finalized provider charge. Retain the exact cap, enforcement mechanism, and
+independent pinned-observer evidence; a payment card, alert, estimate or
+provider-free test is not a cap proof. The provider path remains blocked when
+any cap, isolation, cleanup, absence, observer or finalized-cost property is
+unknown.
+
+Use separate approvals and evidence packets for each operational step:
+
+1. authorize the exact qualification run, environment, provider account,
+   credential custody, roles, run limit, total ceiling and expiry;
+2. qualify provider calls with the pinned adapter and independent observer,
+   including isolation, TTL, teardown, verified absence, latency and finalized
+   cost;
+3. provision and qualify managed resources, migrations, TLS and secret-manager
+   custody with separate owner, migrator, runtime, worker and observer roles;
+4. approve publication of the exact versioned artifact, SBOM, signatures and
+   provenance;
+5. approve deployment to default-off staging with no live agent traffic and
+   complete hosted multi-instance conformance;
+6. approve a narrow enrolled-tenant canary with an immediate kill switch,
+   out-of-band cleanup/absence verification, finalized cost and rollback
+   evidence; and
+7. conduct an independent activation review before any production enrollment
+   or traffic expansion.
+
+The historical card/$5 ceiling is context only. It is not a blanket grant for
+the current run, provider account, credential, environment or expiry, and it
+does not prove that the whole qualification sequence can be completed within
+$5. A fresh approval must state the current enforceable ceiling and scope; do
+not invent a pricing estimate or provider guarantee.
+
 ## Common evidence boundary
 
 Record the commit/tree, locked dependency and runtime digests, provider adapter
