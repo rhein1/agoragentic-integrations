@@ -55,6 +55,7 @@ const REQUIRED_STORE_METHODS = Object.freeze([
   'claimLease',
   'renewLease',
   'transitionInvocation',
+  'recordCleanupIncomplete',
   'settleExecutionOutcome',
   'requestCancellation',
   'observeCancellation',
@@ -773,6 +774,26 @@ export function createManagedRiskForkControlPlane(options = {}) {
         result_hash: resultHash,
         now,
       });
+    },
+
+    async recordCleanupIncomplete(principalValue, input = {}) {
+      enabled();
+      const principal = await normalizePrincipal(principalValue, workerWriteScope('cleanup'), requirePrincipal);
+      assertPlainRecord(input, 'cleanup incomplete observation');
+      assertAllowedKeys(input, ['invocation_ref', 'lease_token', 'lease_generation', 'expected_lease_kind'],
+        'cleanup incomplete observation');
+      if (input.expected_lease_kind != null && input.expected_lease_kind !== 'cleanup') {
+        throw managedError('Cleanup route is required', 'LEASE_PREFLIGHT_FAILED', 409);
+      }
+      const invocation = await ownedInvocation(principal, input.invocation_ref, false);
+      // Audit-only observation does not dispatch/verify a provider. A missing or
+      // drifted registry binding must not conceal an otherwise authorized
+      // incomplete attempt; exact current cleanup authority is checked atomically.
+      return store.recordCleanupIncomplete({ tenant_id: principal.tenant_id, claimant_key_id: principal.key_id,
+        invocation_ref: invocation.invocation_ref,
+        lease_token_hash: hashOpaque('agoragentic-risk-fork-managed-lease-v1', requireLeaseToken(input.lease_token)),
+        lease_generation: requireInteger(input.lease_generation, 'lease_generation', { min: 1, max: 2_147_483_647 }),
+        now: requireIso(clock(), 'clock result') });
     },
 
     async completeCleanup(principalValue, input = {}) {

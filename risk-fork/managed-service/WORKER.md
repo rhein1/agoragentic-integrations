@@ -159,6 +159,36 @@ objects, and objects from another controller. This worker never automatically
 commits or mutates the parent. Any clean commit must use the original controller
 and the existing exact-bound parent authorization gate.
 
+### Incomplete cleanup observations (source/local-test only)
+
+After a successful cleanup claim, a non-aborted attempt that fails before a
+confirmed `completeCleanup` result best-effort calls `recordCleanupIncomplete`.
+The worker awaits completion before retiring the attempt, so asynchronous
+evidence/attestation/database rejection is observed too. A raw provider rejection
+remains uncertain and stops further callbacks; it is not classified using the
+provider's error code. `stopExecution()` still permits cleanup, whereas full
+close/abort suppresses this observation. Failed claims emit no such event.
+
+The control plane requires current cleanup-write authority and the exact active
+tenant, invocation, lease owner, token hash and generation in `cleanup_pending`.
+Memory serializes the append; PostgreSQL locks invocation and credential, then
+rechecks database-clock authority after the locks and replay lookup. The existing
+append-only invocation audit stores one deterministic `cleanup_incomplete` event
+per lease generation, with only a hashed attempt binding and fixed classification
+in its details hash. Exact replay returns the same audit event even after renewal;
+expired, revoked, taken-over or terminal authority cannot replay it. It changes
+only the audit anchor, not state, outcome, cost, resources, cleanup plan or lease.
+There is no provider retry, new receipt family or authority extension.
+
+Observation failure never masks the original cleanup error. Unknown completion
+may already have committed, in which case the store rejects an incomplete event
+on the terminal invocation. A failed/unknown observation append is not claimed
+durable. This is self-attested incompletion, not provider failure, verified
+destruction, absence, termination or finalized cost. The redacted lifecycle
+observer recognizes the exact label, but current v3–v6 metric settings do not
+count it. Opt-in incomplete-attempt thresholds/catalog and real alert delivery
+remain separate work; audit retention alone does not complete Gate 5.
+
 ## Ambiguity, restart, and shutdown
 
 The worker creates fresh 32-byte CSPRNG claim tokens and never logs them. Without

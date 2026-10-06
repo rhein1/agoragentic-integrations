@@ -422,6 +422,7 @@ a separately supplied worker authenticator and exposes internal routes only.
 | `POST` | `/internal/v1/invocations/:ref/outcome` | `worker:execution:write` | record bounded outcome and cost |
 | `POST` | `/internal/v1/invocations/:ref/claim-cleanup` | `worker:cleanup:claim` | claim cleanup lease |
 | `POST` | `/internal/v1/invocations/:ref/cleanup` | `worker:cleanup:write` | verify cleanup and enter a terminal state |
+| `POST` | `/internal/v1/invocations/:ref/cleanup-incomplete` | `worker:cleanup:write` | append/replay one incomplete-attempt audit observation under the exact active cleanup generation; no state/lease authority change |
 | `POST` | `/internal/v1/invocations/:ref/claim-recovery` | `worker:recovery:claim` | claim resource recovery lease |
 | `POST` | `/internal/v1/invocations/:ref/resources-recovery` | `worker:recovery:write` | journal attested recovery resources |
 | `POST` | `/internal/v1/invocations/:ref/recovery-absent` | `worker:recovery:write` | submit provider absence attestation |
@@ -446,6 +447,21 @@ cleanup. `execute`, `cleanup`, `recover`, and delivery recovery remain clean-hos
 capabilities, never HTTP routes. No public demo or hosted protection is activated.
 
 ## Evidence truth
+
+### Incomplete cleanup audit observations
+
+`recordCleanupIncomplete(principal, { invocation_ref, lease_token, lease_generation })`
+requires a current cleanup-write principal and the exact active cleanup lease.
+The internal-only route accepts token/generation in its closed body; the URL owns
+the invocation/purpose. No caller error, provider code, resource or authority field
+is accepted. A deterministic existing audit event provides same-attempt replay
+without another append, including a lost acknowledgement; current credential,
+owner, state, generation and expiry are rechecked even on replay. The cleanup
+obligation, budget, outcome and lease remain intact. Worker production and the
+redacted lifecycle label are described in [WORKER.md](./WORKER.md#incomplete-cleanup-observations-sourcelocal-test-only).
+Current v3–v6 metric rules do not count this label. It is not provider root-cause,
+destruction/absence/termination evidence, a delivered alert or operational
+qualification. The opt-in incomplete-attempt metric/catalog extension remains open.
 
 ### Current cleanup/recovery backlog health
 

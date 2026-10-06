@@ -27,7 +27,7 @@ export function createManagedRiskForkWorker(options = {}) {
     throw managedError('Worker source is restricted to enabled local_test control planes', 'WORKER_NOT_QUALIFIED', 503);
   }
   for (const name of ['claimExecution', 'claimCleanup', 'claimRecovery', 'renewLease',
-    'recordResources', 'recordExecutionOutcome', 'completeCleanup', 'completeRecoveryAbsence',
+    'recordResources', 'recordExecutionOutcome', 'completeCleanup', 'recordCleanupIncomplete', 'completeRecoveryAbsence',
     'observeExecutionCancellation']) {
     if (typeof control[name] !== 'function') throw new TypeError(`controlPlane.${name} is required`);
   }
@@ -337,9 +337,21 @@ export function createManagedRiskForkWorker(options = {}) {
     }
     if (failed) throw incomplete();
     await fence(attempt);
-    return control.completeCleanup(principals.cleanup, {
+    return await control.completeCleanup(principals.cleanup, {
       invocation_ref: ref, lease_token: attempt.leaseToken, cleanup_evidence: evidence,
     });
+    } catch (error) {
+      // No callback retry and no provider/root-cause claim. Unknown completion
+      // may already have committed: the store rejects terminal/stale authority.
+      // Abort/close alone is not an incomplete-observation classification.
+      if (!closed && !attempt.abort.signal.aborted) {
+        try {
+          await control.recordCleanupIncomplete(principals.cleanup, {
+            invocation_ref: ref, lease_token: attempt.leaseToken, lease_generation: attempt.claimGeneration,
+          });
+        } catch { /* Preserve the original failure and the cleanup obligation. */ }
+      }
+      throw error;
     } finally { finishAttempt(attempt); }
   }
 

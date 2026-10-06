@@ -174,7 +174,7 @@ function createHandler(controlPlane, authenticator, allowPublicRoutes, allowWork
         });
       }
 
-      const workerMatch = /^\/internal\/v1\/invocations\/([A-Za-z0-9][A-Za-z0-9._:@-]{0,199})\/(claim-execution|claim-cleanup|claim-recovery|renew|renew-execution|renew-cleanup|renew-recovery|resources|resources-execution|resources-recovery|outcome|cleanup|recovery-absent)$/.exec(path);
+      const workerMatch = /^\/internal\/v1\/invocations\/([A-Za-z0-9][A-Za-z0-9._:@-]{0,199})\/(claim-execution|claim-cleanup|claim-recovery|renew|renew-execution|renew-cleanup|renew-recovery|resources|resources-execution|resources-recovery|outcome|cleanup|cleanup-incomplete|recovery-absent)$/.exec(path);
       if (allowWorkerRoutes && method === 'POST' && workerMatch) {
         const [, ref, action] = workerMatch;
         const purpose = action.includes('execution') || action === 'outcome'
@@ -208,6 +208,7 @@ function createHandler(controlPlane, authenticator, allowPublicRoutes, allowWork
           'resources-recovery': 'recordResources',
           outcome: 'recordExecutionOutcome',
           cleanup: 'completeCleanup',
+          'cleanup-incomplete': 'recordCleanupIncomplete',
           'recovery-absent': 'completeRecoveryAbsence',
         };
         return response(200, await controlPlane[methods[action]](principal, input));

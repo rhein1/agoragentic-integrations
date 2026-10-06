@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { assertCleanupIncompleteLease, cleanupIncompleteAuditBinding,
+  normalizeCleanupIncompleteInput, verifyCleanupIncompleteReplay } from './cleanup-incomplete.mjs';
 import { readFile } from 'node:fs/promises';
 import {
   acquirePostgresAuthorityClient,
@@ -468,9 +470,9 @@ export class PostgresManagedServiceStore {
     }
   }
 
-  async #appendAudit(client, row, eventType, occurredAt, details = {}) {
+  async #appendAudit(client, row, eventType, occurredAt, details = {}, eventRef = undefined) {
     const event = createManagedAuditEvent({
-      event_ref: requireOpaqueRef(this.#eventRef(), 'event reference'),
+      event_ref: requireOpaqueRef(eventRef ?? this.#eventRef(), 'event reference'),
       tenant_id: row.tenant_id,
       invocation_ref: row.invocation_ref,
       sequence: pgInteger(row.audit_event_count, 'audit_event_count') + 1,
@@ -534,6 +536,7 @@ export class PostgresManagedServiceStore {
     }
     row.audit_head_hash = event.event_hash;
     row.audit_event_count = event.sequence;
+    return event;
   }
 
   async resolveCredential(keyHashValue) {
@@ -1210,6 +1213,44 @@ export class PostgresManagedServiceStore {
         lease_generation: pgInteger(row.lease_generation, 'lease generation'),
       });
       return normalizeInvocationRow(updatedRow);
+    }, input.now);
+  }
+
+  async recordCleanupIncomplete(inputValue) {
+    const input = normalizeCleanupIncompleteInput(inputValue);
+    return this.#withTransaction(async (client) => {
+      await this.#lockTenantStatus(client, input.tenant_id);
+      const row = await this.#selectInvocation(client, input.tenant_id, input.invocation_ref, true);
+      if (!row) throw managedError('Invocation was not found', 'INVOCATION_NOT_FOUND', 404);
+      await this.#assertClaimantCredentialActive(client, input.tenant_id, input.claimant_key_id, workerWriteScope('cleanup'));
+      const binding = cleanupIncompleteAuditBinding(input);
+      const prior = await client.query(`SELECT event_ref, tenant_id, invocation_ref, sequence,
+        event_type, occurred_at, details_hash, prior_event_hash, event_hash, evidence_class
+        FROM ${this.#schema}.managed_audit_events
+        WHERE tenant_id = $1 AND invocation_ref = $2 AND event_ref = $3`,
+      [input.tenant_id, input.invocation_ref, binding.event_ref]);
+      // Recheck after every authority-bearing lock and the replay lookup. A
+      // durable event is not authority to replay through an expired/taken lease.
+      const guarded = await client.query(`WITH observation_clock AS MATERIALIZED (
+        SELECT clock_timestamp() AS now
+      ) SELECT target.*, observation_clock.now AS observation_at
+        FROM ${this.#schema}.managed_invocations AS target CROSS JOIN observation_clock
+        WHERE target.tenant_id = $1 AND target.invocation_ref = $2
+          AND target.state = 'cleanup_pending' AND target.lease_kind = 'cleanup'
+          AND target.lease_owner = $3 AND target.lease_token_hash = $4
+          AND target.lease_generation = $5 AND target.lease_expires_at > observation_clock.now
+          AND EXISTS (SELECT 1 FROM ${this.#schema}.managed_api_keys AS credential
+            WHERE credential.tenant_id = $1 AND credential.key_id = $3
+              AND credential.revoked_at IS NULL AND credential.not_before <= observation_clock.now
+              AND credential.expires_at > observation_clock.now AND credential.scopes ? $6)`,
+      [input.tenant_id, input.invocation_ref, input.claimant_key_id, input.lease_token_hash,
+        input.lease_generation, workerWriteScope('cleanup')]);
+      const now = guarded.rowCount === 1
+        ? pgIso(guarded.rows[0].observation_at, 'cleanup observation time') : await this.#databaseNow(client);
+      assertCleanupIncompleteLease({ ...normalizeInvocationRow(row), lease_token_hash: row.lease_token_hash }, input, now);
+      if (guarded.rowCount !== 1) throw managedError('Cleanup lease authority changed', 'LEASE_AUTHORITY_LOST', 409);
+      if (prior.rowCount === 1) return verifyCleanupIncompleteReplay(normalizeAuditRows(prior.rows)[0], input, normalizeInvocationRow(row));
+      return this.#appendAudit(client, row, 'cleanup_incomplete', now, binding.details, binding.event_ref);
     }, input.now);
   }
 
