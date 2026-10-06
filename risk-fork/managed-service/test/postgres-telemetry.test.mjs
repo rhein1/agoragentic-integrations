@@ -118,7 +118,24 @@ test('offline delivery retry/restart/backoff preserves event reference and exhau
     const e = event(); await a.append(e); const seen = new Set(); let failure = true;
     const deliver = async (packet) => { if (failure) throw new Error('SECRET-ERROR'); seen.add(packet.event_ref); return { event_ref: packet.event_ref,delivered: true }; };
     const first = createManagedTelemetryDrainer({ store: a,deliver,maxBatch: 1 });
-    assert.equal((await first.runOnce()).failed,1); assert.equal((await a.stats()).pending,1); await first.close();
+    assert.equal((await first.runOnce()).failed,1);
+    // The retry and logical-clock write share one transaction. Verify the
+    // unchanged configured schedule before stats advances that logical clock.
+    const retried = (await pool.query(`SELECT e.state,e.generation,e.attempts,e.claim_hash,e.lease_expires_ms,e.last_error_code,
+      e.next_attempt_ms-c.last_seen_ms AS retry_delay_ms FROM ${s}.telemetry_events e
+      CROSS JOIN ${s}.telemetry_clock c WHERE e.event_ref=$1 AND c.singleton=true`,[e.event_ref])).rows;
+    assert.equal(retried.length,1); assert.equal(retried[0].state,'pending');
+    assert.equal(Number(retried[0].generation),1); assert.equal(retried[0].attempts,1);
+    assert.equal(retried[0].claim_hash,null); assert.equal(retried[0].lease_expires_ms,null);
+    assert.equal(retried[0].last_error_code,'SINK_UNAVAILABLE'); assert.equal(Number(retried[0].retry_delay_ms),limits.retryMs);
+    assert.equal((await a.stats()).pending,1); await first.close();
+    // Owner-only disposable fixture state: test before-due rejection without
+    // assuming the CI runner reaches the claim within the 200ms retry delay.
+    // The original schedule arithmetic is asserted above; runtime timeouts
+    // and retry configuration remain unchanged. The following update to zero
+    // then exercises actual due/restart delivery through the original store.
+    const held = await pool.query(`UPDATE ${s}.telemetry_events SET next_attempt_ms=$2 WHERE event_ref=$1`,[e.event_ref,Number.MAX_SAFE_INTEGER]);
+    assert.equal(held.rowCount,1);
     assert.equal(await b.claim({ claimToken: token() }),null);
     await pool.query(`UPDATE ${s}.telemetry_events SET next_attempt_ms=0 WHERE event_ref=$1`,[e.event_ref]);
     failure = false; const second = createManagedTelemetryDrainer({ store: b,deliver,maxBatch: 1 });
