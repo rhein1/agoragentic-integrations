@@ -62,7 +62,7 @@ async function fixture(run, overrides = {}) {
     return sql === 'SELECT floor(extract(epoch FROM clock_timestamp()) * 1000)::bigint AS now_ms'
       ? { ...result, rows: [{ now_ms: String(Number(result.rows[0].now_ms) + offset) }] } : result;
   } }; } };
-  const options = { pool, schemaName, limits, lifecycle: true, metrics: true, metricVersion: 6, metricSettings: settings,
+  const options = { schemaName, limits, lifecycle: true, metrics: true, metricVersion: 6, metricSettings: settings,
     requireTls: false, disposableDb: true, ...configOverrides, pool: timed };
   const make = async (eventKind = 'lifecycle', more = {}) => {
     const store = await createPostgresManagedTelemetryStore({ ...options, eventKind, ...more }); stores.push(store); return store;
