@@ -14,15 +14,20 @@ and provider qualification evidence is not interchangeable with local-test
 evidence. Do not describe a source merge or passing local suite as completion
 of these production requirements.
 
-For any provider call, first bind the exact provider SDK, runtime/template,
-adapter, account/project and qualification environment. Before the first
-call, retain an owner-approved total ceiling and a hard enforceable cap that
-covers lifetime, concurrency, retries, teardown, delayed charges and the
-finalized provider charge. Retain the exact cap, enforcement mechanism, and
-independent pinned-observer evidence; a payment card, alert, estimate or
-provider-free test is not a cap proof. The provider path remains blocked when
-any cap, isolation, cleanup, absence, observer or finalized-cost property is
-unknown.
+For any controlled qualification call, first bind the exact provider SDK,
+runtime/template, adapter, account/project and approved qualification
+environment. Before the first call, retain a current exact owner grant, an
+owner-approved total ceiling and a hard enforceable cap covering lifetime,
+concurrency, retries, teardown, delayed and finalized charges. Establish the
+approved synthetic workload and independent privilege-separated pinned-observer
+boundary. A payment card, alert, estimate or provider-free test is not cap proof.
+If these pre-call prerequisites cannot be established, do not allocate.
+
+The controlled run may produce provisional evidence: isolation, cleanup,
+absence, latency and finalized provider cost are collected during or after
+the run. Production qualification and live protection remain false until
+that exact-bound per-run evidence is independently observed, signed and
+verified. Unknown cleanup or unfinalized cost is not a successful qualification.
 
 Use separate approvals and evidence packets for each operational step:
 
