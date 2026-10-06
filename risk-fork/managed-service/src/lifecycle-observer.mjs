@@ -31,21 +31,31 @@ export function createManagedLifecycleObserver(options) {
   const batch = requireInteger(options.maxTenantsPerTick ?? 4,'maxTenantsPerTick',{ min: 1,max: 64 });
   const stop = new AbortController(), pending = new Map();
   let timer, current, closed = false, cursor = 0, recorded = 0, failed = 0, timedOut = 0;
-  const health = () => Object.freeze({ recorded,failed,timed_out: timedOut,in_flight: pending.size,running: timer !== undefined,closed,production_qualified: false });
+  const failureCounts = { lifecycle_sweep_read: 0,audit_invocations_read: 0,lifecycle_checkpoint_read: 0,audit_window_read: 0,lifecycle_window_append: 0 };
+  const health = () => Object.freeze({ recorded,failed,timed_out: timedOut,failure_counts: Object.freeze({ ...failureCounts }),
+    in_flight: pending.size,running: timer !== undefined,closed,production_qualified: false });
   const active = (signal) => { if (closed || signal.aborted) throw new DOMException('Lifecycle observer stopped','AbortError'); };
   async function step(principal) {
     const deadline = createManagedDeadline(timeout,{ signal: stop.signal }), signal = deadline.signal;
     const scope = Object.freeze({ observer_hash: observerHash,tenant_hash: lifecycleTenantHash(principal.tenant_id) });
+    // Classify from our own dispatch phase, never from thrown properties.
+    // The result is unconfirmed here; it says nothing about the root cause.
+    let boundary = 'lifecycle_sweep_read';
+    const observeFailure = () => { failed = bump(failed); failureCounts[boundary] = bump(failureCounts[boundary]); };
     const work = Promise.resolve().then(async () => {
       active(signal);
       const sweep = lifecycleSweep(await readSweep(scope,{ signal })); active(signal);
+      boundary = 'audit_invocations_read';
       const page = await list(principal,{ after_ref: sweep?.after_ref ?? null,upper_ref: sweep?.upper_ref ?? null,limit: 1 }); active(signal);
       const ref = page.invocations[0]?.invocation_ref;
       let checkpoint = null, window = null;
       if (ref !== undefined) {
+        boundary = 'lifecycle_checkpoint_read';
         checkpoint = lifecycleCheckpoint(await readPrefix(scope,ref,{ signal })); active(signal);
+        boundary = 'audit_window_read';
         window = await read(principal,ref,{ after_sequence: checkpoint?.sequence ?? 0,prior_event_hash: checkpoint?.event_hash ?? null,limit: 64 }); active(signal);
       }
+      boundary = 'lifecycle_window_append';
       const result = await append({ scope,tenant_id: principal.tenant_id,expected_sweep: sweep,expected_checkpoint: checkpoint,page,window },{ signal }); active(signal);
       assertPlainRecord(result,'lifecycle append acknowledgement');
       assertAllowedKeys(result,['batch_hash','persisted','projected','sweep'],'lifecycle append acknowledgement');
@@ -56,8 +66,9 @@ export function createManagedLifecycleObserver(options) {
     void work.finally(() => { if (pending.get(principal.tenant_id) === work) pending.delete(principal.tenant_id); });
     try {
       const result = await Promise.race([work,deadline.aborted]);
-      if (signal.aborted) { if (!closed) { timedOut = bump(timedOut); failed = bump(failed); } }
-      else if (result.failed) failed = bump(failed);
+      // Only this bounded outcome counts; late settlement and shutdown do not.
+      if (signal.aborted) { if (!closed) { timedOut = bump(timedOut); observeFailure(); } }
+      else if (result.failed) observeFailure();
       else recorded = Math.min(2_147_483_647,recorded+result.projected);
     } finally { deadline.dispose(); }
     // The underlying slot remains occupied until actual settlement. A source

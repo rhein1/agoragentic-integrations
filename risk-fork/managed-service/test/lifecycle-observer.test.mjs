@@ -9,6 +9,11 @@ import { createManagedAuditEvent } from '../src/audit.mjs';
 import { createFixture, invocationRequest } from './helpers.mjs';
 
 const turn = () => new Promise((resolve) => setImmediate(resolve));
+const boundaries = ['lifecycle_sweep_read','audit_invocations_read','lifecycle_checkpoint_read','audit_window_read','lifecycle_window_append'];
+const countsAt = (boundary) => Object.fromEntries(boundaries.map((key) => [key,Number(key === boundary)]));
+const methods = { lifecycle_sweep_read: 'readLifecycleSweep',audit_invocations_read: 'listAuditInvocations',
+  lifecycle_checkpoint_read: 'readLifecycleCheckpoint',audit_window_read: 'readAuditWindow',lifecycle_window_append: 'appendLifecycleWindow' };
+const isSourceBoundary = (boundary) => ['audit_invocations_read','audit_window_read'].includes(boundary);
 function recordingStore() {
   const packets = [];
   return { packets,async readLifecycleSweep() { return null; },async readLifecycleCheckpoint() { return null; },
@@ -142,4 +147,63 @@ test('lifecycle delivery uses the existing bounded fenced drainer without wideni
   } });
   try { assert.equal((await lifecycle.runOnce()).delivered,1); assert.equal(delivered,1); assert.equal(acknowledged,1); }
   finally { await lifecycle.close(); }
+});
+
+test('lifecycle failure health names only the unconfirmed boundary without inspecting thrown reasons', async () => {
+  for (const boundary of boundaries) {
+    const f = await admitted(), store = recordingStore(); let touches = 0, fail = true;
+    const source = { ...f.controlPlane }, owner = isSourceBoundary(boundary) ? source : store;
+    const original = owner[methods[boundary]].bind(owner);
+    const reason = new Proxy({},Object.fromEntries(['get','getOwnPropertyDescriptor','ownKeys','getPrototypeOf'].map((key) => [key,() => { touches += 1; throw new Error('private error accessed'); }])));
+    owner[methods[boundary]] = (...args) => { if (fail) throw reason; return original(...args); };
+    const observer = createManagedLifecycleObserver({ controlPlane: source,store,auditPrincipals: [f.principal],observerId: boundary });
+    try {
+      const initial = observer.health(), first = await observer.runOnce();
+      assert.deepEqual(first.failure_counts,countsAt(boundary)); assert.equal(first.failed,1); assert.equal(first.recorded,0);
+      assert.equal(touches,0); assert.equal(Object.isFrozen(first.failure_counts),true);
+      assert.deepEqual(initial.failure_counts,countsAt(null));
+      assert.throws(() => { first.failure_counts[boundary] = 0; });
+      fail = false; const recovered = await observer.runOnce();
+      assert.equal(recovered.recorded,1); assert.deepEqual(recovered.failure_counts,countsAt(boundary));
+      assert.equal(recovered.failed,1); assert.equal(touches,0);
+    } finally { await observer.close(); }
+  }
+});
+
+test('malformed lifecycle replies stay at the unconfirmed boundary and never record success', async () => {
+  // Window content is validated by the trusted append store, not by the
+  // scheduler. Do not attribute store validation to the earlier source read.
+  for (const boundary of boundaries.filter((key) => key !== 'audit_window_read')) {
+    const f = await admitted(), store = recordingStore(), source = { ...f.controlPlane };
+    const owner = isSourceBoundary(boundary) ? source : store;
+    owner[methods[boundary]] = () => ({ invalid: true });
+    const observer = createManagedLifecycleObserver({ controlPlane: source,store,auditPrincipals: [f.principal],observerId: boundary });
+    try {
+      const health = await observer.runOnce();
+      assert.deepEqual(health.failure_counts,countsAt(boundary));
+      assert.equal(health.failed,1); assert.equal(health.recorded,0); assert.equal(store.packets.length,0);
+    } finally { await observer.close(); }
+  }
+});
+
+test('each lifecycle boundary timeout counts once; late rejection and shutdown are not new failures', async () => {
+  for (const boundary of boundaries) {
+    for (const shutdown of [false,true]) {
+      const f = await admitted(), store = recordingStore(), source = { ...f.controlPlane }; let reject, touches = 0;
+      const owner = isSourceBoundary(boundary) ? source : store;
+      owner[methods[boundary]] = () => new Promise((resolve,rejectPromise) => { reject = rejectPromise; });
+      const observer = createManagedLifecycleObserver({ controlPlane: source,store,auditPrincipals: [f.principal],observerId: boundary,timeoutMs: 50 });
+      try {
+        const pending = observer.runOnce(); await turn(); assert.equal(typeof reject,'function');
+        if (shutdown) assert.equal((await observer.close({ timeoutMs: 50 })).settled,false);
+        const first = await pending;
+        assert.deepEqual(first.failure_counts,countsAt(shutdown ? null : boundary));
+        assert.equal(first.failed,shutdown ? 0 : 1); assert.equal(first.timed_out,shutdown ? 0 : 1); assert.equal(first.in_flight,1);
+        reject(new Proxy({}, { get() { touches += 1; throw new Error('private reason accessed'); } }));
+        await turn(); await turn(); const late = observer.health();
+        assert.deepEqual(late.failure_counts,first.failure_counts); assert.equal(late.failed,first.failed); assert.equal(late.timed_out,first.timed_out);
+        assert.equal(late.recorded,0); assert.equal(late.in_flight,0); assert.equal(store.packets.length,0); assert.equal(touches,0);
+      } finally { reject?.(null); await observer.close(); }
+    }
+  }
 });
