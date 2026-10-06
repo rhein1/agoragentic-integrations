@@ -8,6 +8,8 @@ import { MANAGED_BACKLOG_COUNT_FIELDS } from '../src/backlog-snapshot.mjs';
 import { createFixture } from './helpers.mjs';
 
 const tick = () => new Promise((resolve) => setImmediate(resolve));
+const boundaries = ['backlog_gauge_read','backlog_source_read','backlog_snapshot_append'];
+const countsAt = (boundary) => Object.fromEntries(boundaries.map((key) => [key,Number(key === boundary)]));
 function observerStore() {
   const rows = new Map(); let writes = 0;
   const store = { async readBacklogGauge({ tenant_hash }) { return rows.get(tenant_hash) ?? null; },async appendBacklogSnapshot(packet) {
@@ -95,4 +97,67 @@ test('awaited source timeout owns a timer and idle polling does not hold a proce
     const h=await o.runOnce(); if(h.timed_out!==1)process.exit(2);o.start();`;
   const result = spawnSync(process.execPath,['--input-type=module','-e',code],{ encoding: 'utf8',timeout: 5000,windowsHide: true });
   assert.equal(result.status,0,result.stderr); assert.equal(result.error,undefined);
+});
+
+test('backlog failure health names only the unconfirmed boundary and never inspects thrown reasons', async () => {
+  for (const boundary of boundaries) {
+    const f = await createFixture(), s = observerStore(); let touches = 0, fail = true;
+    const reason = new Proxy({},Object.fromEntries(['get','getOwnPropertyDescriptor','ownKeys','getPrototypeOf'].map((key) => [key,() => { touches += 1; throw new Error('private error accessed'); }])));
+    const source = { readCleanupRecoveryBacklog: (...args) => f.controlPlane.readCleanupRecoveryBacklog(...args) };
+    const owner = boundary === 'backlog_source_read' ? source : s.store;
+    const method = { backlog_gauge_read: 'readBacklogGauge',backlog_source_read: 'readCleanupRecoveryBacklog',backlog_snapshot_append: 'appendBacklogSnapshot' }[boundary];
+    const original = owner[method].bind(owner);
+    owner[method] = (...args) => { if (fail) throw reason; return original(...args); };
+    const observer = createManagedBacklogObserver({ controlPlane: source,store: s.store,auditPrincipals: [f.principal],observerId: boundary });
+    try {
+      const initial = observer.health(), first = await observer.runOnce();
+      assert.deepEqual(first.failure_counts,countsAt(boundary)); assert.equal(first.failed,1); assert.equal(first.sampled,0);
+      assert.equal(touches,0); assert.equal(Object.isFrozen(first.failure_counts),true);
+      assert.deepEqual(initial.failure_counts,countsAt(null));
+      assert.throws(() => { first.failure_counts[boundary] = 0; });
+      fail = false; const recovered = await observer.runOnce();
+      assert.equal(recovered.sampled,1); assert.deepEqual(recovered.failure_counts,countsAt(boundary));
+      assert.equal(recovered.failed,1); assert.equal(touches,0);
+    } finally { await observer.close(); }
+  }
+});
+
+test('malformed backlog replies remain unconfirmed at their read or append boundary', async () => {
+  for (const boundary of boundaries) {
+    const f = await createFixture(), s = observerStore();
+    const source = { readCleanupRecoveryBacklog: (...args) => f.controlPlane.readCleanupRecoveryBacklog(...args) };
+    if (boundary === 'backlog_gauge_read') s.store.readBacklogGauge = () => ({ invalid: true });
+    if (boundary === 'backlog_source_read') source.readCleanupRecoveryBacklog = () => ({ invalid: true });
+    if (boundary === 'backlog_snapshot_append') s.store.appendBacklogSnapshot = () => ({ persisted: false });
+    const observer = createManagedBacklogObserver({ controlPlane: source,store: s.store,auditPrincipals: [f.principal],observerId: boundary });
+    try {
+      const health = await observer.runOnce(); assert.deepEqual(health.failure_counts,countsAt(boundary));
+      assert.equal(health.failed,1); assert.equal(health.sampled,0); assert.equal(s.writes(),0);
+    } finally { await observer.close(); }
+  }
+});
+
+test('each backlog boundary timeout counts once while late rejection and shutdown do not add failures', async () => {
+  for (const boundary of boundaries) {
+    for (const shutdown of [false,true]) {
+      const f = await createFixture(), s = observerStore(); let reject, touches = 0;
+      const source = { readCleanupRecoveryBacklog: (...args) => f.controlPlane.readCleanupRecoveryBacklog(...args) };
+      const owner = boundary === 'backlog_source_read' ? source : s.store;
+      const method = { backlog_gauge_read: 'readBacklogGauge',backlog_source_read: 'readCleanupRecoveryBacklog',backlog_snapshot_append: 'appendBacklogSnapshot' }[boundary];
+      owner[method] = () => new Promise((resolve,rejectPromise) => { reject = rejectPromise; });
+      const observer = createManagedBacklogObserver({ controlPlane: source,store: s.store,auditPrincipals: [f.principal],observerId: boundary,timeoutMs: 50 });
+      try {
+        const pending = observer.runOnce(); await tick(); assert.equal(typeof reject,'function');
+        if (shutdown) assert.equal((await observer.close({ timeoutMs: 50 })).settled,false);
+        const first = await pending;
+        assert.deepEqual(first.failure_counts,countsAt(shutdown ? null : boundary));
+        assert.equal(first.timed_out,shutdown ? 0 : 1); assert.equal(first.failed,shutdown ? 0 : 1); assert.equal(first.in_flight,1);
+        reject(new Proxy({}, { get() { touches += 1; throw new Error('private reason accessed'); } }));
+        await tick(); await tick();
+        const late = observer.health(); assert.deepEqual(late.failure_counts,first.failure_counts);
+        assert.equal(late.failed,first.failed); assert.equal(late.timed_out,first.timed_out);
+        assert.equal(late.sampled,0); assert.equal(late.in_flight,0); assert.equal(s.writes(),0); assert.equal(touches,0);
+      } finally { reject?.(null); await observer.close(); }
+    }
+  }
 });

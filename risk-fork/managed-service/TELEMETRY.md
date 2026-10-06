@@ -356,6 +356,41 @@ require separate operational measurement and qualification.
 
 ## Evidence and remaining Gate 5 work
 
+### Observer-local unconfirmed-boundary health
+
+Both observers expose a frozen, zero-filled `failure_counts` snapshot in their
+existing trusted `health()`, `runOnce()` and `close()` results. These fixed labels
+name the host operation whose result was not confirmed, including its existing
+reply validation; they do not diagnose the source, audit database or provider.
+
+| Observer | Fixed boundaries |
+| --- | --- |
+| Backlog | `backlog_gauge_read`, `backlog_source_read`, `backlog_snapshot_append` |
+| Lifecycle | `lifecycle_sweep_read`, `audit_invocations_read`, `lifecycle_checkpoint_read`, `audit_window_read`, `lifecycle_window_append` |
+
+A rejected operation, invalid checked reply or deadline increments `failed` and
+one boundary counter exactly once. A deadline also increments `timed_out`;
+neither it nor an unconfirmed append establishes cancellation, non-commit,
+provider failure or absence. Classification uses only the observer's private
+dispatch phase: thrown values and their properties, messages, codes and proxy
+traps are never inspected. Validation performed by the append store belongs to
+the append boundary, not a reconstructed earlier source failure.
+
+Counters aggregate all configured tenants for this observer's process lifetime,
+independently saturate at 2,147,483,647 and reset on restart. They contain no
+tenant/credential/provider/error labels. Intentional shutdown and late settlement
+add nothing; later successful passes do not reset historical failures. Pending
+tenant slots, fair scheduling and append/checkpoint custody are unchanged. No
+failed read becomes a zero backlog, a cleared alert or a verification success.
+
+These counters are **not durable observations, deduplicated incidents or new
+threshold rules**. There is no database migration, new event family, provider
+callback, public endpoint or automatic startup. Independent host monitoring must
+observe recorder failure/overflow: a failing telemetry database cannot reliably
+record its own outage through that same database. Safe typed durable boundary
+observations and thresholds, independent outage monitoring, hosted sink custody
+and an observed alert/response drill remain open Gate 5 work.
+
 Focused deterministic tests and guarded real PostgreSQL tests cover capacity,
 replay/restart, unknown/late commits, stale claims, roles, retention, drift, abort,
 backoff and factory TLS positive/wrong-CA rejection. CI supplies disposable PG16

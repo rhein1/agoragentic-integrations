@@ -29,18 +29,26 @@ export function createManagedBacklogObserver(options) {
   const batch = requireInteger(options.maxTenantsPerTick ?? 4,'maxTenantsPerTick',{ min: 1,max: 64 });
   const stop = new AbortController(), pending = new Map();
   let timer, current, closed = false, cursor = 0, sampled = 0, failed = 0, timedOut = 0;
-  const health = () => Object.freeze({ sampled,failed,timed_out: timedOut,in_flight: pending.size,running: timer !== undefined,closed,production_qualified: false });
+  const failureCounts = { backlog_gauge_read: 0,backlog_source_read: 0,backlog_snapshot_append: 0 };
+  const health = () => Object.freeze({ sampled,failed,timed_out: timedOut,failure_counts: Object.freeze({ ...failureCounts }),
+    in_flight: pending.size,running: timer !== undefined,closed,production_qualified: false });
   const active = (signal) => { if (closed || signal.aborted) throw new DOMException('Backlog observer stopped','AbortError'); };
   async function step(principal) {
     const deadline = createManagedDeadline(timeout,{ signal: stop.signal }), signal = deadline.signal;
     const tenantHash = lifecycleTenantHash(principal.tenant_id);
+    // Private host phase only: rejection, invalid reply and timeout all mean
+    // unconfirmed at this boundary, never a diagnosed dependency/root cause.
+    let boundary = 'backlog_gauge_read';
+    const observeFailure = () => { failed = bump(failed); failureCounts[boundary] = bump(failureCounts[boundary]); };
     const work = Promise.resolve().then(async () => {
       active(signal);
       const expected = normalizeBacklogGauge(await read({ tenant_hash: tenantHash,signal })); active(signal);
       if (expected && expected.tenant_hash !== tenantHash) throw new TypeError('Backlog state tenant mismatch');
       // Preserve the ORIGINAL branded principal. Source reauthorizes it after
       // its own wait; this observer's deadline is not source cancellation proof.
+      boundary = 'backlog_source_read';
       const snapshot = normalizeManagedBacklogSnapshot(await sample(principal),principal.tenant_id); active(signal);
+      boundary = 'backlog_snapshot_append';
       const result = await append({ tenant_id: principal.tenant_id,observer_hash: observerHash,expected_state: expected,snapshot },{ signal }); active(signal);
       assertPlainRecord(result,'backlog acknowledgement'); assertAllowedKeys(result,['persisted','batch_hash','state'],'backlog acknowledgement');
       requireSha256(result.batch_hash,'batch_hash');
@@ -57,8 +65,10 @@ export function createManagedBacklogObserver(options) {
     void work.finally(() => { if (pending.get(principal.tenant_id) === work) pending.delete(principal.tenant_id); });
     try {
       const result = await Promise.race([work,deadline.aborted]);
-      if (signal.aborted) { if (!closed) { timedOut = bump(timedOut); failed = bump(failed); } }
-      else if (result.failed) failed = bump(failed);
+      // Count only the bounded wait's outcome. Late rejection/settlement and
+      // intentional shutdown never add another failure or manufacture success.
+      if (signal.aborted) { if (!closed) { timedOut = bump(timedOut); observeFailure(); } }
+      else if (result.failed) observeFailure();
       else sampled = bump(sampled);
     } finally { deadline.dispose(); }
   }
