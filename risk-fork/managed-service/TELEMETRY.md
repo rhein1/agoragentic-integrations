@@ -258,7 +258,7 @@ time, not the source event's occurrence time or all real traffic:
 | `lease_expiry_observed` | execution/cleanup/recovery `*_lease_expired` audit label | actual lease age, backlog size, provider destruction |
 
 Unknown rules, request-supplied formulas, duplicate rule IDs and accessor fields
-are rejected. Configure 1–6 rules, each with threshold 1–1,000,000 and fixed
+are rejected. Configure 1–6 rules in v3 (up to 7 in opt-in v4), each with threshold 1–1,000,000 and fixed
 window 1,000–86,400,000 ms. Rules are canonically sorted and immutable settings
 and all three migration/catalog hashes must match. Changing thresholds or
 capacities is a separately reviewed migration, not a hot reload.
@@ -366,7 +366,7 @@ monitoring SLOs, HA/restore/rotation, WAF, real alert delivery or an observed
 operator response drill. Opt-in v3 adds source-count thresholds and an alert
 outbox, not a hosted alert service. Accurate historical budget/cost/lease
 measurements, cleanup backlog/failure, typed dependency/provider/audit/DB-failure
-events, broader cooldown policy, hosted sink custody and an observed
+root-cause events, broader cooldown policy, hosted sink custody and an observed
 alert/response drill remain separate work. No provider or live agent traffic is
 protected by this tranche. See [OPERATIONAL_QUALIFICATION.md](./OPERATIONAL_QUALIFICATION.md).
 
@@ -386,3 +386,48 @@ delivery contract are unchanged. The six existing metric rules do not count it
 or emit a new alert. Disposable tests cover the real PostgreSQL cancellation
 writer with v2/v3 projection, lost-COMMIT replay, restart, acknowledged retention
 and later sweep progress; local success is not hosted sink/provider proof.
+
+### Opt-in v4 failed execution observations
+
+`execution_failure_observed` counts only an explicit failed execution outcome
+accepted and committed by the control plane. Both memory and PostgreSQL stores
+emit this new audit label for `outcome:'failed'`; successful outcomes keep
+`execution_outcome_recorded`. This is `control_plane_self_attested` evidence,
+not independent provider-failure diagnosis, cancellation/termination, verified
+cleanup, cost, or live protection. Historical `execution_outcome_recorded`
+events are never reclassified from hidden audit details. Cancellation, cleanup
+and other lifecycle labels do not match the new rule.
+
+Enable `metricVersion:4`, `lifecycle:true` and `metrics:true` on the owner
+migration and **every** store sharing the schema. Include the new fixed rule in
+the trusted `metricSettings.rules` array, for example
+`{ rule_id:'execution_failure_observed', threshold:1, window_ms:60000 }`.
+Omitting `metricVersion` still selects v3 and rejects this rule. V4 adds
+`009_managed_execution_metrics.pg.sql` as version **4 of the telemetry ledger**;
+`008` belongs to the independent control-plane ledger. Frozen `005`/`006`/`007`
+are unchanged. The PG16 v4 catalog is separately captured with
+`node managed-service/scripts/capture-metrics-catalog.mjs --v4` against an
+explicitly disposable database. No tables, columns or additional runtime grants
+are introduced; the existing telemetry/lifecycle/metrics role templates apply.
+
+Fresh schemas and v1/v2 upgrades may select the new rule. Surviving v1/v2 rows
+remain `legacy_uncounted`, including historical failed outcomes with the old
+label. A v3 schema may upgrade to v4 **only with identical persisted metric
+settings**; that catalog-only upgrade does not enable the new rule. Adding it
+to existing v3 settings fails before DDL/custody changes, even for an empty
+schema. Settings hashes bind retained sources, windows and alert acknowledgements:
+never clear custody, rewrite hashes, or reproject history to bypass this check.
+Provision a separately reviewed fresh v4 observer schema, or design a separate
+versioned rule-set custody migration; this tranche does not provide the latter.
+
+Drain old metric runtimes before a schema upgrade: v3 stores reject a v4 catalog.
+Upgrade the lifecycle observer/projector **before** enabling new writers: old
+observer source rejects the new audit label. Earlier v2 observers using current
+source can project it without counting it; only v4 metrics enable the new rule.
+Alert schema, redaction, deterministic identity, source custody, ACK/pruning,
+ingestion-time windows, capacity bounds, `ingested_observations_only` coverage
+and `production_qualified:false` are unchanged. Disposable PG16/TLS tests cover
+actual failed/successful PostgreSQL producers, multi-instance exact replay,
+lost COMMIT/ACK, pruning, rollback/caps, migration compatibility, least-privilege
+roles and catalog drift. These are source/local-test evidence, not hosted alert
+delivery, provider qualification or production activation.

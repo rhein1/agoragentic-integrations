@@ -54,7 +54,7 @@ export class PostgresManagedTelemetryStore {
       applicationName: 'risk-fork-managed-telemetry' });
     const store = new PostgresManagedTelemetryStore({ pool, limits: config.limits, schemaName: config.schemaName,
       requireTls: false, disposableDb: true, statementTimeoutMs: config.statementTimeoutMs,lifecycle: config.lifecycle,eventKind: config.eventKind,
-      metrics: config.metrics,metricSettings: config.metricSettings });
+      metrics: config.metrics,metricSettings: config.metricSettings,metricVersion: config.metricVersion });
     store.#config = config; store.#ownsPool = owned;
     try { await store.initialize(); return store; } catch (error) { if (owned) await pool.end().catch(() => {}); throw error; }
   }
@@ -74,10 +74,10 @@ export class PostgresManagedTelemetryStore {
         await client.query(`SET LOCAL lock_timeout = ${this.#config.statementTimeoutMs}`);
         await client.query(`SET LOCAL idle_in_transaction_session_timeout = ${this.#config.statementTimeoutMs}`);
         const s = this.#config.quotedSchema;
-        await verifyPostgresManagedTelemetryAttestation(client, { schemaName: this.#config.schemaName, expectedOwner: this.#config.expectedOwner,lifecycle: this.#config.lifecycle,metrics: this.#config.metrics });
+        await verifyPostgresManagedTelemetryAttestation(client, { schemaName: this.#config.schemaName, expectedOwner: this.#config.expectedOwner,lifecycle: this.#config.lifecycle,metrics: this.#config.metrics,metricVersion: this.#config.metricVersion });
         const clock = await client.query(`SELECT last_seen_ms FROM ${s}.telemetry_clock WHERE singleton=true FOR UPDATE`);
         if (clock.rowCount !== 1) throw new TypeError('Missing telemetry clock');
-        await verifyPostgresManagedTelemetryAttestation(client, { schemaName: this.#config.schemaName, expectedOwner: this.#config.expectedOwner,lifecycle: this.#config.lifecycle,metrics: this.#config.metrics });
+        await verifyPostgresManagedTelemetryAttestation(client, { schemaName: this.#config.schemaName, expectedOwner: this.#config.expectedOwner,lifecycle: this.#config.lifecycle,metrics: this.#config.metrics,metricVersion: this.#config.metricVersion });
         await verifyTelemetrySettings(client, this.#config, migration.hash);
         await verifyMetricTotals(client,this.#config);
         const sample = await client.query('SELECT floor(extract(epoch FROM clock_timestamp()) * 1000)::bigint AS now_ms');

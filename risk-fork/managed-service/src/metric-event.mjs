@@ -5,8 +5,8 @@ import { normalizeManagedLifecycleEvent } from './lifecycle-event.mjs';
 
 // These count accepted observer packets, not all traffic, actual budget, current
 // cleanup backlog or independent provider outcomes. No request-supplied formula.
-export const METRIC_RULE_IDS = Object.freeze(['control_disabled','control_failed','lease_expiry_observed','policy_failure','policy_timeout','rate_denied']);
-export const metricRuleKind = (id) => requireEnum(id,METRIC_RULE_IDS,'rule_id') === 'lease_expiry_observed' ? 'lifecycle' : 'policy';
+export const METRIC_RULE_IDS = Object.freeze(['control_disabled','control_failed','execution_failure_observed','lease_expiry_observed','policy_failure','policy_timeout','rate_denied']);
+export const metricRuleKind = (id) => ['lease_expiry_observed','execution_failure_observed'].includes(requireEnum(id,METRIC_RULE_IDS,'rule_id')) ? 'lifecycle' : 'policy';
 const CAP_FIELDS = ['maxSources','maxSourcesPerTenant','maxWindows','maxWindowsPerTenant','maxAlerts','maxAlertsPerTenant'];
 export function normalizeMetricSettings(value) {
   assertPlainRecord(value,'metric settings'); assertAllowedKeys(value,[...CAP_FIELDS,'rules'],'metric settings');
@@ -34,7 +34,8 @@ export const metricSettingsHash = (settings) => sha256Ref({ domain: 'risk-fork-m
 export function matchingMetricRules(value,kind,settings) {
   requireEnum(kind,['policy','lifecycle'],'metric source kind');
   const event = kind === 'policy' ? normalizeManagedTelemetryEvent(value) : normalizeManagedLifecycleEvent(value);
-  const matches = kind === 'lifecycle' ? (event.source_event_type.endsWith('_lease_expired') ? ['lease_expiry_observed'] : [])
+  const matches = kind === 'lifecycle' ? (event.source_event_type === 'execution_failure_observed' ? ['execution_failure_observed']
+    : event.source_event_type.endsWith('_lease_expired') ? ['lease_expiry_observed'] : [])
     : event.event === 'rate_denied' ? ['rate_denied']
       : event.event === 'control_denied' ? [event.outcome === 'disabled' ? 'control_disabled' : 'control_failed']
         : event.event === 'policy_error' ? [event.outcome === 'timeout' ? 'policy_timeout' : 'policy_failure'] : [];
