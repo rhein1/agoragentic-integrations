@@ -9,7 +9,7 @@ const FIELDS = ['event_ref','event','tenant_hash','invocation_hash','source_sequ
 export const LIFECYCLE_SOURCE_EVENT_TYPES = Object.freeze(['invocation_admitted','stale_admission_expired',
   ...['execution','cleanup','recovery'].flatMap((kind) => ['claimed','renewed','expired'].map((action) => `${kind}_lease_${action}`)),
   'provider_resource_journaled','provider_resources_recorded','provider_resources_recovered',
-  'execution_outcome_recorded','cleanup_verified','recovery_absence_verified']);
+  'execution_outcome_recorded','cleanup_verified','recovery_absence_verified','cancellation_requested']);
 export const lifecycleTenantHash = (tenant) => sha256Ref({ domain: 'risk-fork-lifecycle-tenant-v1',tenant });
 export const lifecycleInvocationHash = (tenantHash, ref) => sha256Ref({ domain: 'risk-fork-lifecycle-invocation-v1',tenant_hash: tenantHash,invocation_ref: ref });
 function refFor(fields) { return `evt_${sha256Ref({ domain: 'risk-fork-lifecycle-event-v1',...fields }).slice(7,55)}`; }

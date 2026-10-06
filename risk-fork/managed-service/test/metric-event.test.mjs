@@ -36,6 +36,10 @@ test('rules retain exact policy semantics and never fabricate missing budget/pro
   const lifecycle = projectManagedLifecycleEvent({ tenant_id: 'tenant_alpha',invocation_ref: 'rfi_only',sequence: 1,event_hash: sha256Ref('event'),
     event_type: 'execution_lease_expired',occurred_at: '2026-10-05T00:00:00.000Z' });
   assert.deepEqual(matchingMetricRules(lifecycle,'lifecycle',settings).map((r) => r.rule_id),['lease_expiry_observed']);
+  const cancellation = projectManagedLifecycleEvent({ tenant_id: 'tenant_alpha',invocation_ref: 'rfi_only',sequence: 2,event_hash: sha256Ref('cancellation'),
+    event_type: 'cancellation_requested',occurred_at: '2026-10-05T00:00:00.000Z' });
+  assert.deepEqual(matchingMetricRules(cancellation,'lifecycle',settings),[],
+    'a cancellation request is not lease expiry, provider termination or a budget/backlog measurement');
   assert.throws(() => matchingMetricRules(lifecycle,'policy',settings));
 });
 

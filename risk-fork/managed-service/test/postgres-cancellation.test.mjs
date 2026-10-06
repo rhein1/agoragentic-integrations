@@ -11,6 +11,12 @@ import { createManagedRiskForkControlPlane } from '../src/control-plane.mjs';
 import { managedProviderRecoveryKey } from '../src/invocation-integrity.mjs';
 import { migrateManagedServicePostgres } from '../src/postgres-migrator.mjs';
 import { PostgresManagedServiceStore } from '../src/postgres-store.mjs';
+import { createPostgresManagedTelemetryStore } from '../src/postgres-telemetry-store.mjs';
+import { migratePostgresManagedTelemetry } from '../src/postgres-telemetry-migrator.mjs';
+import { prunePostgresManagedTelemetry } from '../src/postgres-telemetry-maintenance.mjs';
+import { createManagedLifecycleObserver } from '../src/lifecycle-observer.mjs';
+import { lifecycleTenantHash } from '../src/lifecycle-event.mjs';
+import { createManagedTelemetryDrainer } from '../src/telemetry-drainer.mjs';
 import { createManagedProviderRegistry } from '../src/provider-registry.mjs';
 import { invocationRequest, SAME_TENANT_TOKEN, testLeaseToken, TestProvider, TEST_TOKEN, WORKER_SCOPES } from './helpers.mjs';
 
@@ -108,6 +114,95 @@ async function assertAuditAnchor(f) {
   assert.equal(events.at(-1).event_hash, invocation.audit_head_hash);
   for (let i = 1; i < events.length; i += 1) assert.equal(events[i].prior_event_hash, events[i - 1].event_hash);
   return events;
+}
+
+for (const metrics of [false,true]) {
+  test(`PG cancellation lifecycle v${metrics ? 3 : 2} advances, replays unknown COMMIT and delivers redacted observations`, { skip,timeout: 60_000 }, async () => {
+    await fixture(async (f) => {
+      const schemaName = `telemetry_cancel_${randomUUID().replaceAll('-','')}`, s = quotePostgresAuthorityIdentifier(schemaName);
+      const limits = { maxEvents: 100,maxEventsPerTenant: 100,leaseMs: 10_000,retryMs: 200,retentionMs: 1000 };
+      const metricSettings = { maxSources: 100,maxSourcesPerTenant: 100,maxWindows: 100,maxWindowsPerTenant: 100,maxAlerts: 100,maxAlertsPerTenant: 100,
+        rules: [{ rule_id: 'lease_expiry_observed',threshold: 1,window_ms: 60_000 }] };
+      // Real DB transactions with a shared, forward-only synthetic sample
+      // offset exercise retention without sleeps or rewriting clock/ACK rows.
+      let clockOffset = 0;
+      const clockPool = wrapper(f.pool,async (client,sql,params) => {
+        const result = await client.query(sql,params);
+        return sql === 'SELECT floor(extract(epoch FROM clock_timestamp()) * 1000)::bigint AS now_ms'
+          ? { ...result,rows: [{ now_ms: String(Number(result.rows[0].now_ms)+clockOffset) }] } : result;
+      });
+      const options = { pool: clockPool,schemaName,limits,requireTls: false,disposableDb: true,lifecycle: true,eventKind: 'lifecycle',metrics,
+        ...(metrics ? { metricSettings } : {}) };
+      const stores = []; let observer, drainer;
+      try {
+        await migratePostgresManagedTelemetry(options);
+        const makeStore = async (pool = clockPool) => {
+          const store = await createPostgresManagedTelemetryStore({ ...options,pool }); stores.push(store); return store;
+        };
+        const a = await makeStore(), b = await makeStore(), observerId = 'pg_cancellation_lifecycle';
+        const scope = { observer_hash: sha256Ref({ domain: 'risk-fork-lifecycle-observer-v1',observer_id: observerId }),
+          tenant_hash: lifecycleTenantHash('tenant_alpha') };
+        observer = createManagedLifecycleObserver({ controlPlane: f.control,store: a,auditPrincipals: [f.principal],observerId });
+        assert.equal((await observer.runOnce()).recorded,1);
+        const input = cancel(f.ref);
+        await f.control.requestCancellation(f.principal,input);
+        await f.control.requestCancellation(f.principal,input);
+        const checkpoint = await b.readLifecycleCheckpoint(scope,f.ref);
+        const packet = { scope,tenant_id: 'tenant_alpha',expected_sweep: await b.readLifecycleSweep(scope),expected_checkpoint: checkpoint,
+          page: await f.control.listAuditInvocations(f.principal,{ limit: 1 }),
+          window: await f.control.readAuditWindow(f.principal,f.ref,{ after_sequence: checkpoint.sequence,prior_event_hash: checkpoint.event_hash,limit: 64 }) };
+        assert.deepEqual(packet.window.events.map((event) => event.event_type),['cancellation_requested']);
+        let armed = false;
+        const unreliable = wrapper(clockPool,async (client,sql,params) => {
+          const result = await client.query(sql,params);
+          if (armed && sql === 'COMMIT') { armed = false; throw new Error('synthetic lost cancellation projection COMMIT'); }
+          return result;
+        });
+        const lost = await makeStore(unreliable); armed = true;
+        await assert.rejects(lost.appendLifecycleWindow(packet),{ code: 'TELEMETRY_UNAVAILABLE' });
+        assert.equal((await b.readLifecycleCheckpoint(scope,f.ref)).sequence,2);
+        const sweep = await b.readLifecycleSweep(scope);
+        assert.equal((await b.appendLifecycleWindow(packet)).persisted,true);
+        assert.deepEqual(await a.readLifecycleSweep(scope),sweep);
+        assert.equal((await a.stats()).pending,2);
+        const delivered = new Map();
+        drainer = createManagedTelemetryDrainer({ store: b,eventKind: 'lifecycle',maxBatch: 64,deliver: async (event) => {
+          delivered.set(event.event_ref,event); return { event_ref: event.event_ref,delivered: true };
+        } });
+        assert.equal((await drainer.runOnce()).delivered,2);
+        assert.equal(delivered.size,2);
+        assert.equal([...delivered.values()].filter((event) => event.source_event_type === 'cancellation_requested').length,1);
+        for (const privateValue of [f.ref,TEST_TOKEN,input.idempotency_key,input.reason_hash,f.principal.key_id,
+          f.invocation.provider_recovery_key,'bounded input']) assert.equal(JSON.stringify([...delivered.values()]).includes(privateValue),false);
+        if (metrics) {
+          const view = await b.readMetrics({ tenant_hash: scope.tenant_hash });
+          assert.equal(view.retained_sources,2); assert.deepEqual(view.windows,[]);
+          assert.equal((await f.pool.query(`SELECT count(*)::integer AS count FROM ${s}.telemetry_metric_alerts`)).rows[0].count,0);
+        }
+        const owner = (await f.pool.query('SELECT current_user AS name')).rows[0].name;
+        clockOffset += 2000;
+        assert.equal((await prunePostgresManagedTelemetry({ ...options,expectedOwner: owner })).removed,2);
+        const restarted = await makeStore();
+        assert.equal((await restarted.appendLifecycleWindow(packet)).persisted,true);
+        assert.equal((await restarted.stats()).pending,0);
+        assert.equal((await restarted.readLifecycleCheckpoint(scope,f.ref)).sequence,2);
+        if (metrics) assert.equal((await restarted.readMetrics({ tenant_hash: scope.tenant_hash })).retained_sources,2);
+        await f.control.admitInvocation(f.principal,invocationRequest({ idempotency_key: 'after-cancellation-observer-regression' }));
+        await observer.close();
+        observer = createManagedLifecycleObserver({ controlPlane: f.control,store: restarted,auditPrincipals: [f.principal],observerId });
+        await observer.runOnce(); await observer.runOnce();
+        assert.equal(observer.health().failed,0); assert.equal(observer.health().recorded,1);
+        assert.equal((await restarted.stats()).pending,1,'later invocations progress instead of stalling at cancellation');
+      } finally {
+        const errors = [], cleanup = async (fn) => { try { await fn(); } catch (error) { errors.push(error); } };
+        await cleanup(() => observer?.close()); await cleanup(() => drainer?.close());
+        for (const store of stores) await cleanup(() => store.close());
+        await cleanup(() => f.pool.query(`DROP SCHEMA IF EXISTS ${s} CASCADE`));
+        await cleanup(async () => assert.equal((await f.pool.query('SELECT 1 FROM pg_namespace WHERE nspname=$1',[schemaName])).rowCount,0));
+        if (errors.length) throw new AggregateError(errors,'Cancellation telemetry disposable cleanup failed');
+      }
+    });
+  });
 }
 
 test('PG cancellation concurrent exact replay releases the reservation once and keeps the audit anchor', { skip }, async () => {

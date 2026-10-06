@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { sha256Ref } from '../../src/canonical.mjs';
 import { createManagedLifecycleObserver } from '../src/lifecycle-observer.mjs';
 import { normalizeManagedLifecycleEvent, projectManagedLifecycleEvent } from '../src/lifecycle-event.mjs';
 import { normalizeManagedTelemetryEvent } from '../src/telemetry-event.mjs';
@@ -33,6 +34,27 @@ test('lifecycle observations preserve source labels but never manufacture succes
   for (const changed of [{ ...packet,details: {} },{ ...packet,event: 'provider_succeeded' },{ ...packet,source_sequence: 0 },{ ...packet,event_ref: `evt_${'a'.repeat(48)}` }]) assert.throws(() => normalizeManagedLifecycleEvent(changed));
   assert.throws(() => normalizeManagedTelemetryEvent(packet));
   assert.throws(() => projectManagedLifecycleEvent({ ...source,event_type: 'unknown_provider_success' }));
+});
+
+test('original-owner cancellation projects its audit label without exporting cancellation authority or details', async () => {
+  const f = await createFixture();
+  const { invocation } = await f.controlPlane.admitInvocation(f.principal,invocationRequest());
+  const reasonHash = sha256Ref('synthetic private cancellation reason');
+  const request = { invocation_ref: invocation.invocation_ref,idempotency_key: 'observer-cancellation-regression',reason_hash: reasonHash };
+  await f.controlPlane.requestCancellation(f.principal,request);
+  await f.controlPlane.requestCancellation(f.principal,request);
+  const window = await f.controlPlane.readAuditWindow(f.principal,invocation.invocation_ref,{ limit: 64 });
+  assert.deepEqual(window.events.map((event) => event.event_type),['invocation_admitted','cancellation_requested']);
+  const packets = window.events.map(projectManagedLifecycleEvent);
+  const cancellation = packets[1];
+  assert.deepEqual(normalizeManagedLifecycleEvent(cancellation),cancellation);
+  assert.equal(cancellation.source_sequence,2);
+  assert.equal(cancellation.evidence_class,'control_plane_self_attested');
+  assert.equal(cancellation.source_event_type,'cancellation_requested');
+  for (const privateValue of [reasonHash,request.idempotency_key,f.principal.key_id,invocation.invocation_ref,
+    invocation.provider_recovery_key,'bounded input']) assert.equal(JSON.stringify(packets).includes(privateValue),false);
+  assert.throws(() => projectManagedLifecycleEvent({ ...window.events[1],event_type: 'cancellation_completed' }));
+  assert.throws(() => normalizeManagedLifecycleEvent({ ...cancellation,termination_proven: true }));
 });
 
 test('hung tenant retains its slot; another tenant progresses and late read cannot append', async () => {

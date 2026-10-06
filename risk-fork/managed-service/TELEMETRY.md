@@ -369,3 +369,20 @@ measurements, cleanup backlog/failure, typed dependency/provider/audit/DB-failur
 events, broader cooldown policy, hosted sink custody and an observed
 alert/response drill remain separate work. No provider or live agent traffic is
 protected by this tranche. See [OPERATIONAL_QUALIFICATION.md](./OPERATIONAL_QUALIFICATION.md).
+
+### Cancellation observer compatibility
+
+The closed lifecycle vocabulary includes the actual `cancellation_requested`
+label emitted by both control-plane stores. Earlier observer source rejected
+this label and could repeatedly stop before advancing a canceled invocation's
+prefix/sweep. Upgrade the observer/projector and drainer together. No database
+migration, catalog recapture or grant change is needed: frozen v2/v3 lifecycle
+payload storage does not constrain the source label in SQL.
+
+This is an observation of a cancellation request, not cancellation completion,
+provider termination, verified resource absence, actual spend or cleanup backlog.
+Its original deterministic ID, redaction, prefix custody and at-least-once
+delivery contract are unchanged. The six existing metric rules do not count it
+or emit a new alert. Disposable tests cover the real PostgreSQL cancellation
+writer with v2/v3 projection, lost-COMMIT replay, restart, acknowledged retention
+and later sweep progress; local success is not hosted sink/provider proof.
