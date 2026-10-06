@@ -258,7 +258,7 @@ time, not the source event's occurrence time or all real traffic:
 | `lease_expiry_observed` | execution/cleanup/recovery `*_lease_expired` audit label | actual lease age, backlog size, provider destruction |
 
 Unknown rules, request-supplied formulas, duplicate rule IDs and accessor fields
-are rejected. Configure 1–6 rules in v3 (up to 7 in opt-in v4, 8 in opt-in v5 or 10 in opt-in v6), each with threshold 1–1,000,000 and fixed
+are rejected. Configure 1–6 rules in v3 (up to 7 in opt-in v4, 8 in opt-in v5, 10 in opt-in v6 or 11 in opt-in v7), each with threshold 1–1,000,000 and fixed
 window 1,000–86,400,000 ms. Rules are canonically sorted and immutable settings
 and every migration/catalog hash for the selected version must match. Changing thresholds or
 capacities is a separately reviewed migration, not a hot reload.
@@ -365,7 +365,7 @@ process exit and listener disposal. Local tests cannot establish hosted sink cus
 monitoring SLOs, HA/restore/rotation, WAF, real alert delivery or an observed
 operator response drill. Opt-in v3 adds source-count thresholds and an alert
 outbox, not a hosted alert service. Accurate historical budget/cost/lease
-measurements, cleanup backlog/failure, typed dependency/provider/audit/DB-failure
+measurements, durable cleanup backlog, safe typed dependency/provider/audit/DB-failure
 root-cause events, broader cooldown policy, hosted sink custody and an observed
 alert/response drill remain separate work. No provider or live agent traffic is
 protected by this tranche. See [OPERATIONAL_QUALIFICATION.md](./OPERATIONAL_QUALIFICATION.md).
@@ -555,3 +555,63 @@ caps remain unchanged. Disposable PG16/TLS/role tests are local source evidence,
 not deployed sink delivery, a provider qualification receipt, an operator
 response drill or production activation. Typed failure/backlog/dependency/DB
 health metrics and hosted qualification remain separate work.
+
+### Opt-in v7 incomplete cleanup attempts
+
+`cleanup_incomplete_observed` counts only the exact `cleanup_incomplete` audit
+label committed through the current-authority, active-cleanup-lease-bound
+[incomplete-attempt producer](./WORKER.md). That producer retains one event per
+cleanup lease generation; exact replay does not create another attempt. A new
+generation can emit a new event even for the same unresolved invocation. Counts
+are incomplete **attempt observations**, not unique unresolved invocations,
+current backlog, provider failures, root cause or eventual outcome.
+
+Select `metricVersion:7`, `lifecycle:true`, `metrics:true` and explicit trusted
+`metricSettings` on migration and every store sharing the schema. Configure,
+for example, `{rule_id:'cleanup_incomplete_observed',threshold:1,window_ms:60000}`.
+Example sizing is not a qualified production alert policy. Default metrics stay
+v3; v3–v6 reject this rule. Earlier rules retain their exact meanings. The
+`cleanup_verified`/`recovery_absence_verified` rules still require v6 or later;
+none of those labels counts as an incomplete attempt, and provider text or
+unknown labels can never be used as an alternative source.
+
+Additive `012_managed_cleanup_incomplete_metrics.pg.sql` is version **7 of the
+independent telemetry ledger**. Frozen `005`/`006`/`007`/`009`/`010`/`011` and
+their v1–v6 catalogs remain unchanged. Only ledger-version and metric-window
+rule CHECKs widen; there are no new tables, columns, grants, authority,
+receipts or provider calls. Capture the separate v7 catalog with
+`node managed-service/scripts/capture-metrics-catalog.mjs --v7` only against the
+explicitly disposable PG16 loopback lab. Existing role templates still apply;
+`expectedOwner` is required for distinct runtime privilege assurance.
+
+Fresh v7 schemas and v1/v2 upgrades can bind the new rule. Historical retained
+v1/v2 `cleanup_incomplete` packets remain `legacy_uncounted`: no counters or
+alerts are backfilled. Existing v3–v6 schemas may upgrade catalog-only **with
+identical persisted settings**. Adding the new rule to those settings fails
+before DDL/custody mutation, even if empty. Such a catalog-only upgrade does
+not enable incomplete-attempt counting. Enable new rules only with a separately
+reviewed fresh observer schema/coverage boundary or a future versioned
+settings-custody migration; never erase custody, rewrite hashes or silently
+reproject unavailable history. Drain old runtimes before upgrading: they reject
+the v7 catalog. Rollback disables new observation while preserving custody,
+not a down migration or destructive reset.
+
+The existing authenticated lifecycle observer projects redacted audit labels,
+then atomically advances its checkpoint with exact-source custody, ingestion-
+time windows and at most one deterministic threshold alert per rule/window.
+Concurrent/lost-response/restart replay does not double-count. Original lifetime
+global/tenant caps, ACK/pruning proof and bounded at-least-once drainer remain;
+external consumers must deduplicate event_ref. Source occurrence times are not
+metric-window clocks. Recorded attempts lost before audit commit or observer
+ingestion are not manufactured, and telemetry outage is not diagnosed from a
+missing event. No new cooldown/hysteresis policy is implied.
+
+Alerts retain `control_plane_self_attested`, `ingested_observations_only` and
+`production_qualified:false`. Neither an incomplete alert nor a later verified
+label independently proves resource absence, callback termination, isolation,
+finalized cost, delivered external alert or live protection. The read-only
+current-obligation health snapshot is separate and is not a durable alert source.
+Actual disposable producer/observer/restart, replay/capacity/custody and PG16
+pinned-CA/restricted-role tests remain source/local evidence. Real external sink
+custody/delivery and response drill, durable backlog and safe typed dependency
+failure classes, hosted qualification and activation remain separate gates.

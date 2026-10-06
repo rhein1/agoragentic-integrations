@@ -1,5 +1,5 @@
 import { acquirePostgresAuthorityClient, createPostgresAuthorityPool } from '../../src/adapters/postgres-authority-migrator.mjs';
-import { budgetMetricsMigration, cleanupMetricsMigration, executionMetricsMigration, lifecycleMigration, metricsMigration, normalizeTelemetryOptions, telemetryDbInteger, telemetryMigration, verifyTelemetrySettings } from './postgres-telemetry-config.mjs';
+import { budgetMetricsMigration, cleanupIncompleteMetricsMigration, cleanupMetricsMigration, executionMetricsMigration, lifecycleMigration, metricsMigration, normalizeTelemetryOptions, telemetryDbInteger, telemetryMigration, verifyTelemetrySettings } from './postgres-telemetry-config.mjs';
 import { verifyPostgresManagedTelemetryAttestation } from './postgres-telemetry-attestation.mjs';
 import { managedError } from './validation.mjs';
 import { metricSettingsHash } from './metric-event.mjs';
@@ -89,7 +89,7 @@ export async function migratePostgresManagedTelemetry(options = {}) {
             await client.query(`INSERT INTO ${s}.telemetry_schema_migrations VALUES (5,$1)`,[extension.hash]);
           }
         }
-        if (config.metricVersion === 6) {
+        if (config.metricVersion >= 6) {
           const ledger = await client.query(`SELECT version FROM ${s}.telemetry_schema_migrations ORDER BY version`);
           if (ledger.rowCount === 5) {
             // Existing settings remain byte-equivalent in meaning. Adding the
@@ -100,6 +100,19 @@ export async function migratePostgresManagedTelemetry(options = {}) {
             const extension = await cleanupMetricsMigration(config.schemaName);
             await client.query(extension.sql);
             await client.query(`INSERT INTO ${s}.telemetry_schema_migrations VALUES (6,$1)`,[extension.hash]);
+          }
+        }
+        if (config.metricVersion === 7) {
+          const ledger = await client.query(`SELECT version FROM ${s}.telemetry_schema_migrations ORDER BY version`);
+          if (ledger.rowCount === 6) {
+            // Exact prior settings/custody are immutable, even for an empty v6
+            // schema. This adds catalog vocabulary, never a rule-set rewrite.
+            await verifyPostgresManagedTelemetryAttestation(client,{ schemaName: config.schemaName,lifecycle: true,metrics: true,metricVersion: 6 });
+            await verifyTelemetrySettings(client,{ ...config,metricVersion: 6 },migration.hash);
+            await verifyMetricTotals(client,config);
+            const extension = await cleanupIncompleteMetricsMigration(config.schemaName);
+            await client.query(extension.sql);
+            await client.query(`INSERT INTO ${s}.telemetry_schema_migrations VALUES (7,$1)`,[extension.hash]);
           }
         }
         await verifyPostgresManagedTelemetryAttestation(client, { schemaName: config.schemaName,lifecycle: config.lifecycle,metrics: config.metrics,metricVersion: config.metricVersion });
