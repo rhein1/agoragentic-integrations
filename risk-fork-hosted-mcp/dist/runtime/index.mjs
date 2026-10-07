@@ -69509,6 +69509,7 @@ var E2B_QUALIFICATION_SCHEMA = "agoragentic.risk-fork.e2b-qualification-evidence
 var E2B_QUALIFICATION_TRUST_SCHEMA = "agoragentic.risk-fork.e2b-qualification-trust.v1";
 var E2B_EXTERNAL_QUALIFICATION_OBSERVATION_SCHEMA = "agoragentic.risk-fork.e2b-external-qualification-observation.v1";
 var E2B_RUNTIME_SDK_INTEGRITY_SCHEMA = "agoragentic.risk-fork.e2b-runtime-sdk-dependency-closure.v2";
+var E2B_ADAPTER_ARTIFACT_EVIDENCE_REF = "evidence:e2b-risk-fork-adapter-artifact";
 var QUALIFICATION_TRUST_VERIFIERS = /* @__PURE__ */ new WeakSet();
 var EXTERNAL_QUALIFICATION_OBSERVATION_VERIFIERS = /* @__PURE__ */ new WeakSet();
 var RUNTIME_SDK_INTEGRITY_VERIFIERS = /* @__PURE__ */ new WeakSet();
@@ -70021,7 +70022,13 @@ function normalizeExpectedBindings(value) {
     throw new TypeError(`${field} must contain only own string-keyed data`);
   }
   const descriptors = Object.getOwnPropertyDescriptors(value);
-  const keys = ["templateId", "templateHash", "bootstrapArtifactHash", "runnerArtifactHash"];
+  const keys = [
+    "templateId",
+    "templateHash",
+    "bootstrapArtifactHash",
+    "runnerArtifactHash",
+    "adapterArtifactHash"
+  ];
   const normalized = /* @__PURE__ */ Object.create(null);
   for (const [key, descriptor] of Object.entries(descriptors)) {
     if (!keys.includes(key) || !descriptor.enumerable || !Object.hasOwn(descriptor, "value")) {
@@ -70036,6 +70043,12 @@ function normalizeExpectedBindings(value) {
   return Object.freeze(normalized);
 }
 function assertExpectedBindings(evidence, expected) {
+  if (expected.adapterArtifactHash != null) {
+    const artifact = evidence.evidence_refs.find((entry) => entry.ref === E2B_ADAPTER_ARTIFACT_EVIDENCE_REF);
+    if (!artifact || !safeEqual(artifact.hash, expected.adapterArtifactHash)) {
+      throw new Error("E2B qualification adapter artifact binding mismatch");
+    }
+  }
   const bindings = [
     ["template_id_hash", expected.templateId == null ? null : sha256Ref(expected.templateId)],
     ["template_evidence_hash", expected.templateHash],
@@ -74786,11 +74799,15 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
     if (hasQualificationTrust !== hasQualificationVerifier) {
       throw new TypeError("E2B qualification trust and its verifier are required together");
     }
+    if (options.trustedAdapterArtifactHash != null && (options.qualificationEvidence == null || !hasQualificationTrust)) {
+      throw new TypeError("trustedAdapterArtifactHash requires qualification evidence and signed trust");
+    }
     const expectedBindings = Object.freeze({
       templateId: options.cleanTemplateId,
       templateHash: options.cleanTemplateHash,
       bootstrapArtifactHash: options.trustedBootstrapArtifactHash,
-      runnerArtifactHash: options.trustedRunnerArtifactHash
+      runnerArtifactHash: options.trustedRunnerArtifactHash,
+      ...options.trustedAdapterArtifactHash == null ? {} : { adapterArtifactHash: options.trustedAdapterArtifactHash }
     });
     let cleanupProvenance = null;
     let qualificationCurrent = true;
@@ -74900,12 +74917,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
     this.externalQualificationObservationVerifier = options.externalQualificationObservationVerifier ?? null;
     this.qualificationTrust = qualificationTrust;
     this.qualificationTrustVerifier = options.qualificationTrustVerifier ?? null;
-    this.qualificationExpectedBindings = configured ? Object.freeze({
-      templateId: options.cleanTemplateId,
-      templateHash: options.cleanTemplateHash,
-      bootstrapArtifactHash: options.trustedBootstrapArtifactHash,
-      runnerArtifactHash: options.trustedRunnerArtifactHash
-    }) : Object.freeze({});
+    this.qualificationExpectedBindings = configured ? expectedBindings : Object.freeze({});
     this.qualificationEligible = qualificationEligible;
     this.qualified = E2B_LIVE_FORK_SOURCE_ENABLED && qualificationEligible;
     this.#qualificationState = Object.freeze({
@@ -77385,7 +77397,7 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
 }
 
 // risk-fork-hosted-mcp/src/index.mjs
-var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:0d4ce5b1d29fec8dd0916d045b3bd6dc550ca2211aa1efb9eb8f20c1d3247887" : null;
+var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:8cfe236708f3df9ee467cf436099e10c7d0e3ae0b7cf7a8a117c8fa31ae68f9b" : null;
 var HOSTED_MCP_BUNDLE_METADATA = Object.freeze({
   package_name: "@agoragentic/risk-fork-hosted-mcp",
   package_version: "0.1.0-alpha.0",

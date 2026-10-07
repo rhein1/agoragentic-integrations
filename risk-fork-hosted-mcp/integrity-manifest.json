@@ -9,7 +9,7 @@
     "schema": "agoragentic.risk-fork-hosted-mcp.reviewed-sources.v2",
     "normalization": "utf8_crlf_to_lf_lone_cr_preserved",
     "files": 70,
-    "sha256": "sha256:0d4ce5b1d29fec8dd0916d045b3bd6dc550ca2211aa1efb9eb8f20c1d3247887"
+    "sha256": "sha256:8cfe236708f3df9ee467cf436099e10c7d0e3ae0b7cf7a8a117c8fa31ae68f9b"
   },
   "reviewed_sources": [
     {
@@ -114,8 +114,8 @@
     },
     {
       "path": "risk-fork/src/adapters/e2b.mjs",
-      "bytes": 125275,
-      "sha256": "sha256:dc2d3ed010d49f4bef471d7d885aa4b5214c9ad89378f031ea82f08f7b579da7"
+      "bytes": 125402,
+      "sha256": "sha256:78e4bf3f629cbe7d0f4f90a7e6b4a231354dbb76387d7c354918bd660f8c1ae0"
     },
     {
       "path": "risk-fork/src/adapters/local-reference.mjs",
@@ -194,8 +194,8 @@
     },
     {
       "path": "risk-fork/src/e2b-qualification.mjs",
-      "bytes": 84715,
-      "sha256": "sha256:f89e48ae48cacfc471524afcb7989beeda124aa1b94571be44cf0977597a33ed"
+      "bytes": 85331,
+      "sha256": "sha256:38c1d85c1570af7ad98b9c2e9102d3e154bc63fb0c9f66f5a349f28510488118"
     },
     {
       "path": "risk-fork/src/framework-tool-adapter.mjs",
@@ -2288,8 +2288,8 @@
     {
       "path": "risk-fork/src/adapters/e2b.mjs",
       "source": "reviewed_source",
-      "bytes": 125275,
-      "sha256": "sha256:dc2d3ed010d49f4bef471d7d885aa4b5214c9ad89378f031ea82f08f7b579da7"
+      "bytes": 125402,
+      "sha256": "sha256:78e4bf3f629cbe7d0f4f90a7e6b4a231354dbb76387d7c354918bd660f8c1ae0"
     },
     {
       "path": "risk-fork/src/adapters/postgres-authority-migrator.mjs",
@@ -2354,8 +2354,8 @@
     {
       "path": "risk-fork/src/e2b-qualification.mjs",
       "source": "reviewed_source",
-      "bytes": 84715,
-      "sha256": "sha256:f89e48ae48cacfc471524afcb7989beeda124aa1b94571be44cf0977597a33ed"
+      "bytes": 85331,
+      "sha256": "sha256:38c1d85c1570af7ad98b9c2e9102d3e154bc63fb0c9f66f5a349f28510488118"
     },
     {
       "path": "risk-fork/src/host-boundary.mjs",
@@ -2681,8 +2681,8 @@
   },
   "artifact": {
     "path": "dist/runtime/index.mjs",
-    "bytes": 3234694,
-    "sha256": "sha256:d1d70b6befe168e10b953b42dd1e85e070cb983e73aac5747523a0ae8b8b8467"
+    "bytes": 3235280,
+    "sha256": "sha256:04cb2bc3956aab31ce2e9240ab351264a9ff1c09e1a25d793195339953052e59"
   },
   "packaged_assets": [
     {
