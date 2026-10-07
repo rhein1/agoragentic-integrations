@@ -65,6 +65,17 @@ redacted labels and hashes. Local fixture attestations are not independently
 signed provider evidence. Preserve failures and cleanup evidence, not only a
 success summary.
 
+The existing E2B qualification validator and trust-verifier entry points accept
+only the current `expected` pin names: `templateId`, `templateHash`,
+`bootstrapArtifactHash`, and `runnerArtifactHash`. This host-supplied policy must
+be a non-Proxy plain object with own enumerable data properties; misspellings,
+unknown fields, symbols, hidden fields and accessors fail closed before external
+observation verification. Omitted, `null` and `undefined` pins retain their existing
+unset meaning. Supplied values must be canonical. This check does not add an
+adapter-digest binding, a production qualification class, provider authority or
+an activation path; an opaque registry receipt hash is still not proof that
+signed E2B evidence covers the exact managed adapter.
+
 ## 1. Source, CI and protected merge
 
 Run both package checks/tests, the mandatory disposable PostgreSQL tests,

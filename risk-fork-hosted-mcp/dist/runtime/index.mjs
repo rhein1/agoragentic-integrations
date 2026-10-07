@@ -36364,7 +36364,7 @@ var require_mcp_server = __commonJS({
   "risk-fork-hosted-mcp/.build/upstream/mcp/mcp-server.js"(exports, module) {
     "use strict";
     var crypto2 = __require("crypto");
-    var { TextDecoder: TextDecoder4, types: { isProxy } } = __require("node:util");
+    var { TextDecoder: TextDecoder4, types: { isProxy: isProxy2 } } = __require("node:util");
     var { version: PACKAGE_VERSION } = require_package();
     var DEFAULT_REMOTE_MCP_URL = "https://agoragentic.com/api/mcp";
     var REMOTE_MCP_URL = process.env.AGORAGENTIC_MCP_URL || DEFAULT_REMOTE_MCP_URL;
@@ -36536,7 +36536,7 @@ var require_mcp_server = __commonJS({
       if (!value || typeof value !== "object" || Array.isArray(value)) {
         throw new TypeError(`${field} must be a plain object`);
       }
-      if (isProxy(value)) throw new TypeError(`${field} must not be a Proxy`);
+      if (isProxy2(value)) throw new TypeError(`${field} must not be a Proxy`);
       const prototype = Object.getPrototypeOf(value);
       if (prototype !== Object.prototype && prototype !== null) {
         throw new TypeError(`${field} must be a plain object`);
@@ -36595,7 +36595,7 @@ var require_mcp_server = __commonJS({
         if (!current || typeof current !== "object") {
           throw new TypeError(`${path8} is not a JSON value`);
         }
-        if (isProxy(current)) throw new TypeError(`${path8} must not be a Proxy`);
+        if (isProxy2(current)) throw new TypeError(`${path8} must not be a Proxy`);
         if (ancestors.has(current)) throw new TypeError(`${path8} contains a cycle`);
         ancestors.add(current);
         try {
@@ -69504,6 +69504,7 @@ import { constants } from "node:fs";
 import { createRequire } from "node:module";
 import path3 from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { isProxy } from "node:util/types";
 var E2B_QUALIFICATION_SCHEMA = "agoragentic.risk-fork.e2b-qualification-evidence.v1";
 var E2B_QUALIFICATION_TRUST_SCHEMA = "agoragentic.risk-fork.e2b-qualification-trust.v1";
 var E2B_EXTERNAL_QUALIFICATION_OBSERVATION_SCHEMA = "agoragentic.risk-fork.e2b-external-qualification-observation.v1";
@@ -70007,6 +70008,30 @@ function normalizeEvidence3(value, { includeComputedFields }) {
     authority_flags: authorityFlags,
     evidence_hash: includeComputedFields ? requireSha256Ref(value.evidence_hash, "E2B qualification evidence.evidence_hash") : null
   };
+}
+function normalizeExpectedBindings(value) {
+  const field = "expected E2B bindings";
+  if (!value || typeof value !== "object" || isProxy(value) || Array.isArray(value)) {
+    throw new TypeError(`${field} must be a non-Proxy plain object`);
+  }
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null || Object.getOwnPropertySymbols(value).length !== 0) {
+    throw new TypeError(`${field} must contain only own string-keyed data`);
+  }
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  const keys = ["templateId", "templateHash", "bootstrapArtifactHash", "runnerArtifactHash"];
+  const normalized = /* @__PURE__ */ Object.create(null);
+  for (const [key, descriptor] of Object.entries(descriptors)) {
+    if (!keys.includes(key) || !descriptor.enumerable || !Object.hasOwn(descriptor, "value")) {
+      throw new TypeError(`${field} contains unsupported or non-data fields`);
+    }
+    const entry = descriptor.value;
+    if (entry == null) continue;
+    const validated = key === "templateId" ? requireOpaqueRef(entry, `${field}.templateId`, { maxLength: 500 }) : requireSha256Ref(entry, `${field}.${key}`);
+    if (validated !== entry) throw new TypeError(`${field} must use canonical pin values`);
+    normalized[key] = validated;
+  }
+  return Object.freeze(normalized);
 }
 function assertExpectedBindings(evidence, expected) {
   const bindings = [
@@ -71418,6 +71443,7 @@ function createE2BQualificationEvidence(input = {}) {
   return evidence;
 }
 function validateE2BQualificationEvidence(value, expected = {}, externalObservationVerifier = null) {
+  const expectedBindings = normalizeExpectedBindings(expected);
   const normalized = normalizeEvidence3(value, { includeComputedFields: true });
   const expectedHash = sha256Ref({ ...normalized, evidence_hash: null });
   if (!safeEqual(normalized.evidence_hash, expectedHash)) {
@@ -71426,7 +71452,7 @@ function validateE2BQualificationEvidence(value, expected = {}, externalObservat
   if (canonicalize(normalized) !== canonicalize(value)) {
     throw new Error("E2B qualification evidence is not canonical and closed");
   }
-  assertExpectedBindings(normalized, expected);
+  assertExpectedBindings(normalized, expectedBindings);
   if (normalized.external_observation_receipt !== null) {
     assertFinalizedEvidenceMatchesReceipt(normalized, externalObservationVerifier);
   }
@@ -77160,7 +77186,7 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
 }
 
 // risk-fork-hosted-mcp/src/index.mjs
-var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:78c1a0777874cae7da766e154c2f3fb0d79170147bdd140d6323b97d2ccec272" : null;
+var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:a08a0c7b07893c852d0d0e1da8cb4b9fc3a7ce75423fc68f939a2124d20fd8e6" : null;
 var HOSTED_MCP_BUNDLE_METADATA = Object.freeze({
   package_name: "@agoragentic/risk-fork-hosted-mcp",
   package_version: "0.1.0-alpha.0",
