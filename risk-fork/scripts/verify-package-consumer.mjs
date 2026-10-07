@@ -73,6 +73,7 @@ try {
     'managed-service/ops/postgres/lifecycle-grants.sql.template',
     'managed-service/ops/postgres/metrics-grants.sql.template',
     'managed-service/ops/postgres/diagnostic-grants.sql.template',
+    'managed-service/ops/postgres/worker-diagnostic-grants.sql.template',
     'clients/one-tool-stdio-gate.mjs',
     'assets/risk-fork-social-preview.svg', 'src/host-boundary.mjs',
     'src/skillspector-admission.mjs',
@@ -89,6 +90,10 @@ try {
   ]) assert.ok(included.has(expected), `Packed file missing: ${expected}`);
   assert.equal(included.has('managed-service/src/index.mjs'), false,
     'Source-only managed-service runtime must not become a public SDK export');
+  assert.equal(included.has('managed-service/src/worker-diagnostic.mjs'), false,
+    'Worker diagnostics remain checkout-only managed-service source');
+  assert.equal(included.has('managed-service/migrations/016_managed_worker_diagnostic_metrics.pg.sql'), false,
+    'Managed-service DDL must not become a public SDK migration export');
   for (const file of included) {
     assert.ok(!/(?:^|\/)(?:node_modules|\.git|\.env|test|hackathon)(?:\/|$)/.test(file), `Unexpected package path: ${file}`);
     assert.ok(!file.endsWith('.tgz') && !file.endsWith('.zip'), 'Nested release artifact');

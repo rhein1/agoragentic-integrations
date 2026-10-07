@@ -362,3 +362,67 @@ effect fencing, verifier deadlines, deployed roles, managed PostgreSQL operation
 redacted telemetry, and hosted conformance remain in
 [DEPLOYMENT_GATES.md](./DEPLOYMENT_GATES.md). All returned production/live flags
 remain false, regardless of source test success.
+
+## Optional worker-boundary observations (v11 source/local-test only)
+
+The worker always exposes zero-filled, saturating process-local
+`status().diagnostics.failure_counts` for twelve closed phases. Optional
+`workerDiagnosticSettings` plus an original
+`workerDiagnosticStore.appendWorkerDiagnosticObservation` records hash-only
+buckets through the existing telemetry store; omitting settings makes no
+diagnostic store call. See [v11 telemetry](./TELEMETRY.md#opt-in-v11-durable-worker-boundary-unconfirmed-observations)
+for explicit migration, settings, grants, counting and delivery semantics.
+The local host accepts these options only in trusted `workerOptions`.
+They add no HTTP route, provider entitlement, execution retry or authority.
+
+The phases are `lease_fence`, `cancellation_read`, `provider_call`,
+`broker_contract`, `resource_journal`, `cleanup_completion`,
+`cleanup_incomplete_append`, `recovery_lookup`, `recovery_absence_completion`,
+`preparation_read`, `cost_read` and `execution_outcome`. An exception or invalid
+phase reply means **unconfirmed**, not its root cause. Raw thrown values are
+never reflected, matched by error code or put into the diagnostic packet.
+The worker's immutable same-tenant execution/cleanup/recovery principals anchor
+tenant identity; mismatched claim/renewal tenants fail closed. Pre-claim failures
+are not recorded as owned attempt phases. Stable worker identity is hashed;
+no invocation, lease token, resource reference, payload or raw worker ID is saved.
+
+`provider_call` covers a rejected/invalid response after entering the locally
+bound adapter method. It is not evidence that a remote provider received,
+performed, stopped or charged for an operation. Reserving the one-use broker
+capability before a denied preflight is not provider entry. A propagated
+preflight denial with original object/function identity is not a broker contract
+violation. A provider rejection with that same private identity is counted only
+as `provider_call`; a broker swallowing or
+rewriting it, returning fabricated bytes or dropping an unfinished call also
+records `broker_contract`. These observations cannot authorize cleanup/import
+or resolve ambiguous allocation.
+Equal primitive rejection values cannot prove propagation rather than rewriting;
+they conservatively leave the broker boundary unconfirmed too. That extra bucket
+does not allege broker misconduct or establish the reason for failure.
+
+Worker phases have no new callback deadline. A broker, provider, preparation,
+cost or control callback that **never settles** produces no rejection event by
+itself. `pending_attempts`/`pending_provider_callbacks` and independent host
+monitoring remain necessary; missing events never mean health or destruction.
+An early-returning broker is a different, observed contract violation.
+The nonblocking recorder bounds only its own acknowledgement wait, not the
+worker callback, database termination or remote effect.
+
+There is at most one pending actual recorder call per fixed phase (twelve per
+single-tenant worker). A still-hung phase drops later local observations rather
+than queueing or retrying them; other phases can progress. `recorded` counts
+timely exact persistence acknowledgements, including bucket replays, not unique
+durable events. `failed`, `timed_out`, `dropped` and `in_flight` are process-local
+recorder health. `flushDiagnostics({timeoutMs})` waits at most 50–30,000 ms and
+reports settlement, never termination. Closing the local host first revokes
+effects, then waits at most 1,000 ms for recorder settlement and preserves
+`telemetry_close.worker_diagnostics.settled:false` for hung appends. Actual
+pending slots remain retained; late responses after close/deadline cannot
+manufacture confirmation. Store lifetime is still owned by the caller.
+
+Worker/event unit tests and actual disposable PostgreSQL16 tests cover all
+twelve labels, hostile failures, preflight-versus-entry classification, wrong
+tenant replies, recovery without execution, hangs and bounded shutdown,
+producer-to-existing-drainer flow, atomic replay/caps/custody and separate-role
+TLS. These are self-attested local source observations, not managed monitoring,
+provider qualification, an alert-response drill, deployment or live protection.
