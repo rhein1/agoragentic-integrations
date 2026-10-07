@@ -236,7 +236,11 @@ exact-ID cleanup; SIGKILL/power loss or unresolved allocation is still unknown.
 
 These redacted lifecycle status/counter/duration snapshots use hashed container
 references, not raw PIDs, scope paths, keys or SDK diagnostics. They are local
-CLI evidence, **not durable hosted metrics or delivered alerts**. They always
+CLI evidence, **not durable hosted metrics or delivered alerts**.
+`workload_completed` records only completion of the synthetic scenario;
+`workload_passed` also requires `cleanup_status:verified` and no uncertainty.
+A completed workload with unknown cleanup never reports a passed custody run.
+They always
 retain `credential_released:false`, `provider_calls:0`,
 `provider_cleanup_verified:false`, `provider_billing_observed:false`, and
 `production_qualified:false`. This lab does not wire the production SDK adapter

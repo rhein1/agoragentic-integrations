@@ -59,6 +59,11 @@ export function cleanupStatus({ bound, readonly, killed, empty, removed, absent,
     && removed === true && absent === true && uncertain === false ? 'verified' : 'unknown';
 }
 
+export function workloadStatus({ completed, uncertain, cleanup }) {
+  const workload_completed = completed === true;
+  return { workload_completed, workload_passed: workload_completed && uncertain === false && cleanup === 'verified' };
+}
+
 export function assertKeylessImageEnvironment(entries) {
   assert.ok(Array.isArray(entries) && entries.length === 3);
   assert.ok(entries.every((entry) => typeof entry === 'string' && entry.length <= 4_096
@@ -343,7 +348,8 @@ export async function runSdkTreeLab(sourceRoot, fixtureRoot, scenario = 'detache
     metrics.container_ref = id ? HASH(id) : null;
     if (id && !removed) metrics.unresolved_container_ref = HASH(id);
   }
-  return Object.freeze({ ...metrics, scenario, workload_passed: workloadOk && !uncertain });
+  return Object.freeze({ ...metrics, scenario,
+    ...workloadStatus({ completed: workloadOk, uncertain, cleanup: metrics.cleanup_status }) });
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -353,7 +359,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     process.stdout.write(`${JSON.stringify(result)}\n`);
     if (!result.workload_passed || result.cleanup_status !== 'verified') process.exitCode = 1;
   } catch {
-    process.stdout.write('{"workload_passed":false,"cleanup_status":"unknown","provider_calls":0,"credential_released":false,"production_qualified":false}\n');
+    process.stdout.write('{"workload_completed":false,"workload_passed":false,"cleanup_status":"unknown","provider_calls":0,"credential_released":false,"production_qualified":false}\n');
     process.exitCode = 1;
   }
 }

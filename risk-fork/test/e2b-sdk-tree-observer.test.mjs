@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { parseProcStat, parseCgroup, parsePids, parseEvents, cleanupStatus, assertKeylessImageEnvironment } from '../scripts/verify-e2b-sdk-tree-observer.mjs';
+import { parseProcStat, parseCgroup, parsePids, parseEvents, cleanupStatus, workloadStatus, assertKeylessImageEnvironment } from '../scripts/verify-e2b-sdk-tree-observer.mjs';
 
 test('outside observer independently rejects inherited credentials and missing or duplicate image environment names', () => {
   const clean = ['PATH=/usr/bin:/bin', 'NODE_VERSION=24.20.0', 'YARN_VERSION=1.22.22'];
@@ -49,4 +49,26 @@ test('cleanup verification requires kernel binding, empty-scope proof, removal, 
   assert.equal(cleanupStatus({ ...proof, uncertain: undefined }), 'unknown');
   assert.equal(cleanupStatus({ ...proof, bound: 'verified' }), 'unknown');
   assert.equal(cleanupStatus({}), 'unknown');
+});
+
+test('completed workload is not a passed custody run while cleanup is unknown', () => {
+  assert.deepEqual(workloadStatus({ completed: true, uncertain: false, cleanup: 'unknown' }), {
+    workload_completed: true, workload_passed: false,
+  });
+  assert.deepEqual(workloadStatus({ completed: true, uncertain: false, cleanup: 'verified' }), {
+    workload_completed: true, workload_passed: true,
+  });
+  for (const completed of [false, undefined, 'true']) {
+    assert.deepEqual(workloadStatus({ completed, uncertain: false, cleanup: 'verified' }), {
+      workload_completed: false, workload_passed: false,
+    });
+  }
+  for (const uncertain of [true, undefined, 'false']) {
+    assert.deepEqual(workloadStatus({ completed: true, uncertain, cleanup: 'verified' }), {
+      workload_completed: true, workload_passed: false,
+    });
+  }
+  for (const cleanup of [undefined, true, 'observed', 'not_run']) {
+    assert.equal(workloadStatus({ completed: true, uncertain: false, cleanup }).workload_passed, false);
+  }
 });
