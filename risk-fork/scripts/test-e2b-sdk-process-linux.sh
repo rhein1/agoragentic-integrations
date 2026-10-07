@@ -18,7 +18,7 @@ cleanup() {
   original=$?
   trap - EXIT INT TERM
   cleanup_ok=true
-  for name in "$prepare" "$verify"; do
+  for name in "$prepare" "$verify" "${lab_id}-tree"; do
     if docker container inspect "$name" >/dev/null 2>&1; then
       actual=$(docker inspect --format '{{index .Config.Labels "agoragentic.risk-fork.sdk-process-lab"}}' "$name")
       if [[ "$actual" == "$lab_id" ]]; then docker rm -f "$name" >/dev/null || cleanup_ok=false; else cleanup_ok=false; fi
@@ -28,7 +28,7 @@ cleanup() {
   if [[ "$(realpath -- "$lab")" == "$lab" && "$lab" =~ ^/tmp/risk-fork-sdk-process\.[A-Za-z0-9]{8}$ ]]; then
     rm -rf -- "$lab" || cleanup_ok=false
   else cleanup_ok=false; fi
-  printf '{"lab":"%s","cleanup_verified":%s,"original_exit_code":%s,"provider_calls":0,"provider_billing_observed":false,"production_qualified":false}\n' "$lab_id" "$cleanup_ok" "$original"
+  printf '{"lab":"%s","lab_resources_cleanup_verified":%s,"original_exit_code":%s,"provider_calls":0,"provider_billing_observed":false,"production_qualified":false}\n' "$lab_id" "$cleanup_ok" "$original"
   [[ "$cleanup_ok" == true ]] || exit 90
   exit "$original"
 }
@@ -51,3 +51,10 @@ timeout --signal=TERM --kill-after=10s 120s docker run --rm --pull never \
   --mount "type=bind,src=$lab/fixtures,dst=/fixtures,readonly" \
   --mount "type=bind,src=$lab/fixtures/writable-dependency/node_modules/synthetic-sdk-dependency,dst=/fixtures/writable-dependency/node_modules/synthetic-sdk-dependency" \
   "$image" node /source/risk-fork/scripts/verify-e2b-sdk-process.mjs --verify /fixtures /source/risk-fork-hosted-mcp/dist/runtime/index.mjs
+# Privilege-separated HOST observer. No --pid=host observer container, socket
+# mount, provider key, image pull or network. It independently observes the
+# real cgroup and detached PID incarnations, then tears down only its exact ID.
+timeout --signal=TERM --kill-after=10s 90s node \
+  "$source_root/risk-fork/scripts/verify-e2b-sdk-tree-observer.mjs" "$source_root" "$lab/fixtures"
+timeout --signal=TERM --kill-after=10s 90s node \
+  "$source_root/risk-fork/scripts/verify-e2b-sdk-tree-observer.mjs" "$source_root" "$lab/fixtures" cancel_before_handoff
