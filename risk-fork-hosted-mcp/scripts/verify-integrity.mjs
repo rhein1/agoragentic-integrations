@@ -194,6 +194,7 @@ const EXPECTED_EXPORTS = Object.freeze([
   'importRiskForkProviderResult',
   'isE2BQualificationEvidenceCanonical',
   'isE2BRuntimeSdkIntegrityVerifier',
+  'isE2BRuntimeSdkProcessIntegrityVerifier',
   'isMcpPortableHandlePreEffectBoundary',
   'isMcpPortableHandleRegistry',
   'isPostgresDistributedCommitAuthority',

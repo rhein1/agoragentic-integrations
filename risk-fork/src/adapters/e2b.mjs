@@ -20,11 +20,13 @@ import {
 import {
   createE2BRuntimeSdkIntegrityVerifier,
   isE2BRuntimeSdkIntegrityVerifier,
+  isE2BRuntimeSdkProcessIntegrityVerifier,
   loadVerifiedE2BRuntimeSdk,
   validateE2BQualificationEvidence,
   verifyE2BCleanupQualificationProvenance,
   verifyE2BQualificationTrust,
 } from '../e2b-qualification.mjs';
+import { createE2BRuntimeSdkProcessBoundary } from '../e2b-sdk-process.mjs';
 import {
   assertFreshForkIdentity,
   networkPolicy,
@@ -1308,6 +1310,8 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
 
   #sdkIntegrityVerified;
 
+  #sdkProcessBoundary;
+
   #qualificationState;
 
   #qualificationExpiryObserved;
@@ -1434,6 +1438,10 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
     if (!qualificationEligible && !cleanupProvenance && options.sdkIntegrityVerifier !== undefined) {
       throw new TypeError('sdkIntegrityVerifier is only valid with signed qualified evidence');
     }
+    if (options.sdkProcessOptions !== undefined
+      && (!(qualificationEligible || cleanupProvenance) || options.sdkIntegrityVerifier !== undefined)) {
+      throw new TypeError('sdkProcessOptions requires signed qualification provenance and cannot be combined with an injected verifier');
+    }
     if (qualificationEligible && [
       options.SandboxClass,
       options.sdkLoader,
@@ -1480,10 +1488,15 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
     this.#sdkVersion = options.sdkVersion ?? null;
     this.#sdkVersionLoader = options.sdkVersionLoader ?? defaultSdkVersionLoader;
     this.#sdkVersionVerified = false;
-    this.#sdkIntegrityVerifier = qualificationEligible
-      ? options.sdkIntegrityVerifier ?? createE2BRuntimeSdkIntegrityVerifier()
+    this.#sdkIntegrityVerifier = qualificationEligible || cleanupProvenance
+      ? options.sdkIntegrityVerifier ?? null
       : null;
     this.#sdkIntegrityVerified = false;
+    this.#sdkProcessBoundary = options.sdkProcessOptions === undefined
+      ? null : createE2BRuntimeSdkProcessBoundary(options.sdkProcessOptions);
+    if (this.#sdkProcessBoundary) {
+      this.#sdkIntegrityVerifier = createE2BRuntimeSdkIntegrityVerifier({ processBoundary: this.#sdkProcessBoundary });
+    }
     this.clock = options.clock ?? (() => new Date());
     if (typeof this.clock !== 'function') throw new TypeError('clock must be a function');
     this.bootstrapCommand = requireFixedCommand(
@@ -1546,6 +1559,16 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
     this.reconciliationEligibleRecordIds = new Set();
     this.initialization = null;
     this.initialized = false;
+  }
+
+  async closeSdkProcess() {
+    if (this.#sdkProcessBoundary) return this.#sdkProcessBoundary.close();
+    return Object.freeze({ sdk_process_terminated: true, sdk_process_tree_cleanup_verified: false,
+      provider_cleanup_verified: false, provider_outcome: 'unknown' });
+  }
+
+  sdkProcessMetrics() {
+    return this.#sdkProcessBoundary?.metrics() ?? null;
   }
 
   #requireConfigured(operation) {
@@ -1634,9 +1657,12 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
     // restart reconciliation reached indirectly from createSavepoint(). An
     // injected class is reachable only through the explicit mock-only seam.
     this.#requireForkRuntimeEnabled(operation);
-    if (this.qualificationEligible && !this.#sdkIntegrityVerified) {
+    if (this.#qualificationState.evidence && !this.#sdkIntegrityVerified) {
+      if (!isE2BRuntimeSdkProcessIntegrityVerifier(this.#sdkIntegrityVerifier)) {
+        throw new Error('Qualified and historical-cleanup E2B SDK effects require a host-owned fresh process verifier');
+      }
       const verified = await loadVerifiedE2BRuntimeSdk(
-        this.qualificationEvidence.sdk,
+        this.#qualificationState.evidence.sdk,
         this.#sdkIntegrityVerifier,
       );
       this.#SandboxClass = normalizeSandboxClass(verified.module);
@@ -1775,6 +1801,7 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
     }
     const matches = [];
     let pages = 0;
+    try {
     while (paginator.hasNext === true) {
       pages += 1;
       if (pages > MAX_LIST_PAGES) throw new Error('E2B sandbox listing exceeded the page bound');
@@ -1798,6 +1825,11 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
       if (typeof paginator.hasNext !== 'boolean') {
         throw new TypeError('E2B sandbox paginator stopped reporting hasNext');
       }
+    }
+    } finally {
+      // A process-backed paginator owns a bounded private cursor. Its release
+      // is independent of the remote sandbox-absence observation below.
+      if (typeof paginator.close === 'function') await paginator.close();
     }
     const sandboxIds = [...new Set(matches)].sort();
     const observation = {

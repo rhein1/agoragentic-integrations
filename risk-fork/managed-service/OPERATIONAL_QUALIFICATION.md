@@ -116,6 +116,80 @@ a controlled fresh worker, authentic exact release pins and an immutable/read-on
 installed closure before import; host module/cache custody is part of that
 boundary. Keep live qualification false until that actual boundary is proved.
 
+### Fresh host-owned SDK process boundary (source, not live qualification)
+
+The internal SDK-process factory and the integrity verifier's
+`{ processBoundary }` option now provide a closed Sandbox RPC facade. The factory
+is not exported by the public core root, qualification subpath or hosted bundle.
+Signed qualified/historical adapter construction can accept `sdkProcessOptions`
+with exact artifact/Node/SDK paths and pins; the adapter privately constructs and
+retains the process capability. No raw Sandbox facade is handed to its caller.
+Qualified
+and authentic historical-cleanup adapter paths require this original branded
+process verifier at the last SDK-use fence; they cannot fall back to the legacy
+same-process loader. The adapter's live source switch remains false. Template
+build and live-qualification CLIs still use their existing same-process path;
+this tranche does not qualify or activate those paths.
+
+The host must provision a clean Linux controller, an authentic pinned Node
+binary and runtime bundle, and a complete canonical read-only SDK closure.
+The boundary checks non-root UID/GID, no root supplementary group, zero
+effective/permitted/ambient capabilities, no-new-privileges, actual read-only
+mount custody (including every resolved transitive file), and exact runtime and
+Node hashes before import. It does not create a namespace, read-only mount,
+network policy, immutable release, credential account or billing cap. Mount and
+installer custody remain host prerequisites; chmod alone is not immutability.
+
+The child uses fixed code and `process.execPath`, not inherited Node preload
+arguments, a shell or an alternate loader. Environment inheritance is empty;
+only an explicitly host-supplied provider key may be passed. No ambient provider
+credential is retrieved. This process runs the trusted SDK, not untrusted MCP
+code, and its provider methods are host-owned primitives, not an activation
+grant. Host authorization, provider qualification and spend controls are still
+required before any real provider call.
+
+The factory owns a fresh Linux process group and attempts to kill that group
+on retirement while its direct process is still owned and live. It cannot
+prove custody of descendants that start a new session. The host must enforce
+and observe an entire disposable cgroup/container before credentialed use;
+this factory does not create that host fence. `sdk_process_terminated` means
+only the direct process exit was observed (or no process was started), while
+`sdk_process_tree_cleanup_verified` remains false. A provider-free detached
+descendant test preserves that distinction; do not promote direct PID exit
+into credential destruction or whole-tree cleanup proof.
+
+IPC admits only fixed Sandbox operations, bounded plain results and opaque
+private handles. Limits include eight retained processes, four pending calls,
+2 MiB frames, 64 KiB binary chunks, 32 MiB aggregate upload buffers, 4 MiB reads,
+256 MiB Node heap and a ten-minute maximum lifetime. Same-child mutations
+reject concurrent entry rather than queue; emergency kill may interrupt a hung
+command. Acknowledged kill retires local handles, not remote absence. Failed
+effectful calls, timeouts, exit or malformed transport retire the boundary with
+an unknown outcome; they never replay. Existing parent-owned journals and exact
+metadata discovery remain responsible for recovery and independent absence.
+
+`adapter.sdkProcessMetrics()` returns detached local counters for sent/completed RPCs,
+worker-rejected pre-SDK calls, ambiguous effects, deadlines and observed process
+starts/exits. These are not provider billing, managed-service telemetry, remote
+cleanup evidence or production qualification. `adapter.closeSdkProcess()` separately reports
+observed SDK-process termination and always leaves provider cleanup unverified.
+
+Provider-free conformance from a reviewed public checkout (Docker/Linux with the
+exact locally available image pinned in the launcher):
+
+```sh
+bash risk-fork/scripts/test-e2b-sdk-process-linux.sh /absolute/public/worktree
+```
+
+It uses a synthetic SDK, no network, no provider key, non-root read-only mounts,
+dropped capabilities and no-new-privileges. It exercises fresh cache/env custody,
+binary streams, cancellation, ambiguous allocation/command/write errors,
+timeouts, emergency cleanup, cursor bounds, artifact-pin rejection and a
+writable transitive submount. Its actual adapter recovery drill preserves the
+journal across SDK-process exit, then requires new-process exact discovery,
+kill and separate absence checks. This is local source proof only; no real E2B
+allocation, final provider cost or independent production observer is exercised.
+
 ### Cleanup recovery is not current qualification
 
 The E2B adapter can recover already-journaled local export obligations after an

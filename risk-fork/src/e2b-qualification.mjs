@@ -19,6 +19,10 @@ import { isProxy } from 'node:util/types';
 
 import { canonicalize, sha256Ref } from './canonical.mjs';
 import {
+  assertE2BRuntimeSdkReadonlyCustody,
+  isE2BRuntimeSdkProcessBoundary,
+} from './e2b-sdk-process.mjs';
+import {
   assertAllowedKeys,
   assertPlainObject,
   boundedInteger,
@@ -49,6 +53,7 @@ export const E2B_ADAPTER_ARTIFACT_EVIDENCE_REF =
 const QUALIFICATION_TRUST_VERIFIERS = new WeakSet();
 const EXTERNAL_QUALIFICATION_OBSERVATION_VERIFIERS = new WeakSet();
 const RUNTIME_SDK_INTEGRITY_VERIFIERS = new WeakSet();
+const RUNTIME_SDK_PROCESS_VERIFIERS = new WeakSet();
 // A disk digest must not relabel modules already evaluated in this process.
 // These fences cover verifier-mediated imports and visible CommonJS cache
 // entries; they are NOT an immutable-install or fresh-process attestation.
@@ -1808,7 +1813,21 @@ async function loadRuntimeSdkWithCacheFence(expected, inspect) {
 
 export function createE2BRuntimeSdkIntegrityVerifier(options = {}) {
   assertPlainObject(options, 'E2B runtime SDK integrity verifier options');
-  assertAllowedKeys(options, ['packageDirectory'], 'E2B runtime SDK integrity verifier options');
+  assertAllowedKeys(options, ['packageDirectory', 'processBoundary', 'readOnlyRuntime'], 'E2B runtime SDK integrity verifier options');
+  if (options.processBoundary !== undefined) {
+    if (!isE2BRuntimeSdkProcessBoundary(options.processBoundary)
+      || options.packageDirectory !== undefined || options.readOnlyRuntime !== undefined) {
+      throw new TypeError('E2B SDK process verifier requires only an original host-owned process boundary');
+    }
+    const boundary = options.processBoundary;
+    const verifier = Object.freeze({
+      async inspect() { return normalizeRuntimeSdkBinding(await boundary.inspect()); },
+      async load(value) { return boundary.load(normalizeRuntimeSdkBinding(value)); },
+    });
+    RUNTIME_SDK_INTEGRITY_VERIFIERS.add(verifier);
+    RUNTIME_SDK_PROCESS_VERIFIERS.add(verifier);
+    return verifier;
+  }
   const packageDirectory = options.packageDirectory == null
     ? null
     : path.resolve(requireString(
@@ -1816,15 +1835,38 @@ export function createE2BRuntimeSdkIntegrityVerifier(options = {}) {
         'E2B runtime SDK packageDirectory',
         { maxLength: 4_000 },
       ));
+  let readOnlyRuntime = null;
+  if (options.readOnlyRuntime !== undefined) {
+    assertAllowedKeys(options.readOnlyRuntime, ['runtimeArtifactPath', 'runtimeArtifactHash', 'nodeArtifactHash'], 'E2B read-only runtime profile');
+    const runtimeArtifactPath = requireString(options.readOnlyRuntime.runtimeArtifactPath, 'runtimeArtifactPath');
+    if (!packageDirectory || !path.isAbsolute(runtimeArtifactPath)
+      || runtimeArtifactPath !== path.resolve(runtimeArtifactPath)) {
+      throw new TypeError('E2B read-only runtime requires explicit canonical artifact and package paths');
+    }
+    readOnlyRuntime = Object.freeze({
+      packageDirectory, runtimeArtifactPath, nodePath: process.execPath,
+      runtimeArtifactHash: requireSha256Ref(options.readOnlyRuntime.runtimeArtifactHash, 'runtimeArtifactHash'),
+      nodeArtifactHash: requireSha256Ref(options.readOnlyRuntime.nodeArtifactHash, 'nodeArtifactHash'),
+    });
+  }
+  const inspect = async () => {
+    const inspected = await inspectRuntimeSdkPackage(packageDirectory);
+    if (readOnlyRuntime) {
+      // Every resolved transitive file must share verified immutable custody;
+      // a read-only package root alone does not exclude writable submounts.
+      await assertE2BRuntimeSdkReadonlyCustody(readOnlyRuntime, inspected.runtimeFiles.map((file) => file.path));
+    }
+    return inspected;
+  };
   const verifier = {
     async inspect() {
-      const inspected = await inspectRuntimeSdkPackage(packageDirectory);
+      const inspected = await inspect();
       return inspected.binding;
     },
     async load(value) {
       const expected = normalizeRuntimeSdkBinding(value);
       const pending = runtimeSdkLoadTail.then(() => loadRuntimeSdkWithCacheFence(
-        expected, () => inspectRuntimeSdkPackage(packageDirectory),
+        expected, inspect,
       ));
       runtimeSdkLoadTail = pending.then(() => undefined, () => undefined);
       return pending;
@@ -1836,6 +1878,10 @@ export function createE2BRuntimeSdkIntegrityVerifier(options = {}) {
 
 export function isE2BRuntimeSdkIntegrityVerifier(value) {
   return Boolean(value && RUNTIME_SDK_INTEGRITY_VERIFIERS.has(value));
+}
+
+export function isE2BRuntimeSdkProcessIntegrityVerifier(value) {
+  return Boolean(value && RUNTIME_SDK_PROCESS_VERIFIERS.has(value));
 }
 
 export async function loadVerifiedE2BRuntimeSdk(value, verifier) {
