@@ -129,11 +129,9 @@ test('source-disabled reconciliation cannot load a provider and injected paths r
     injectedLoaderCalls += 1;
     return { Sandbox };
   };
-  await assert.rejects(
-    adapter.reconcilePendingCleanup(),
-    (error) => error?.code === E2B_LIVE_FORK_DISABLED_UNTRUSTED_WATCHER
-      && error?.operation === 'reconcilePendingCleanup',
-  );
+  assert.deepEqual(await adapter.reconcilePendingCleanup(), { reconciled: [], unresolved: [] });
+  await assert.rejects(adapter.createFork({}),
+    (error) => error?.code === E2B_LIVE_FORK_DISABLED_UNTRUSTED_WATCHER);
   assert.equal(providerCalls, 0);
   assert.equal(injectedLoaderCalls, 0);
 });
