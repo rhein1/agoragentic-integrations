@@ -209,12 +209,16 @@ Those checks do not prove hosted routing, provider containment, deployment, enab
 
 ### OAuth development dependency closure
 
-The source-checkout tooling pins `@modelcontextprotocol/client@2.2.0` and
-`@modelcontextprotocol/sdk@1.31.0`, the patched versions for
+The source-checkout tooling pins `@modelcontextprotocol/client@2.3.0` and
+`@modelcontextprotocol/sdk@1.31.0`, retaining the fixes for
 [GHSA-6qxp-vccf-f47h](https://github.com/advisories/GHSA-6qxp-vccf-f47h).
 The hosted bundle's tooling uses the same pins; Claude SDK qualification tooling
 overrides its transitive MCP SDK to the same reviewed `1.31.0` pin. Checkout tests
-reject vulnerable duplicate lock entries. Unaffected server/node pins are retained.
+reject vulnerable duplicate lock entries. The coordinated modern SDK inventory
+also pins `@modelcontextprotocol/server@2.3.0` and
+`@modelcontextprotocol/node@2.1.1`; both client and server use exactly
+`@modelcontextprotocol/core@2.3.0`. The hosted bundle's generated runtime,
+source inventory, and third-party notices must match that same reviewed closure.
 
 This is a dependency-closure repair, not live OAuth or provider qualification.
 The package's SDK HTTP-client uses are synthetic, loopback test fixtures, not a

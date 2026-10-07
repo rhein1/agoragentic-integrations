@@ -3,8 +3,8 @@ THIRD-PARTY NOTICES
 This file is generated deterministically from the exact packages bundled into dist/runtime/index.mjs.
 
 ========================================================================
-@modelcontextprotocol/core@2.0.0
-Declared license: MIT
+@modelcontextprotocol/core@2.3.0
+Declared license: Apache-2.0
 Notice source: risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/core/LICENSE
 Notice source method: standalone_license_file
 Notice source bytes: 12227
@@ -229,8 +229,8 @@ CC-BY-4.0. See https://creativecommons.org/licenses/by/4.0/legalcode for
 the full license text.
 
 ========================================================================
-@modelcontextprotocol/server@2.0.0
-Declared license: MIT
+@modelcontextprotocol/server@2.3.0
+Declared license: Apache-2.0
 Notice source: risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/server/LICENSE
 Notice source method: standalone_license_file
 Notice source bytes: 12227
