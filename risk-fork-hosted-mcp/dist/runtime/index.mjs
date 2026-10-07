@@ -69513,6 +69513,12 @@ var E2B_ADAPTER_ARTIFACT_EVIDENCE_REF = "evidence:e2b-risk-fork-adapter-artifact
 var QUALIFICATION_TRUST_VERIFIERS = /* @__PURE__ */ new WeakSet();
 var EXTERNAL_QUALIFICATION_OBSERVATION_VERIFIERS = /* @__PURE__ */ new WeakSet();
 var RUNTIME_SDK_INTEGRITY_VERIFIERS = /* @__PURE__ */ new WeakSet();
+var RUNTIME_SDK_LOADED_ENTRIES = /* @__PURE__ */ new Map();
+var RUNTIME_SDK_CACHE_PROVENANCE = /* @__PURE__ */ new Map();
+var RUNTIME_SDK_COMMONJS_CACHE = createRequire(import.meta.url).cache;
+var MAX_RUNTIME_SDK_LOADED_ENTRIES = 32;
+var MAX_RUNTIME_SDK_CACHE_PROVENANCE = 32768;
+var runtimeSdkLoadTail = Promise.resolve();
 var CLEANUP_OBSERVATION_VERIFIERS = /* @__PURE__ */ new WeakMap();
 var CLEANUP_TRUST_VERIFIERS = /* @__PURE__ */ new WeakMap();
 var MAX_RUNTIME_SDK_PACKAGES = 128;
@@ -70997,6 +71003,9 @@ async function inspectRuntimeSdkPackage(packageDirectory) {
   if (sdk.manifest.main !== "dist/index.js" || !sdk.filePaths.has(sdk.manifest.main)) {
     throw new Error("E2B runtime SDK package entrypoint is not the reviewed dist/index.js");
   }
+  if (sdk.manifest.type != null && sdk.manifest.type !== "commonjs") {
+    throw new Error("E2B runtime SDK entry requires the reviewed CommonJS package profile");
+  }
   const packages = [...packagesByRoot.values()].map((entry) => entry.record).sort((left, right) => left.location === right.location ? 0 : left.location < right.location ? -1 : 1);
   edges.sort((left, right) => {
     const leftKey = `${left.from_location}\0${left.requested_name}`;
@@ -71017,12 +71026,78 @@ async function inspectRuntimeSdkPackage(packageDirectory) {
   });
   return {
     binding,
-    entry: path3.join(root, sdk.manifest.main)
+    entry: path3.join(root, sdk.manifest.main),
+    runtimeFiles: [...packagesByRoot.values()].flatMap((entry) => entry.record.files.map((file) => ({
+      path: path3.join(entry.root, ...file.path.split("/")),
+      hash: file.hash
+    })))
   };
 }
 function assertRuntimeSdkBindingMatches(observed, expected) {
   if (observed.package !== expected.package || observed.version !== expected.version || !safeEqual(observed.integrity_hash, expected.integrity_hash)) {
     throw new Error("E2B runtime SDK integrity binding mismatch");
+  }
+}
+function runtimeSdkCachedModule(file) {
+  const descriptor = Object.getOwnPropertyDescriptor(RUNTIME_SDK_COMMONJS_CACHE, file);
+  if (descriptor && !Object.hasOwn(descriptor, "value")) {
+    throw new Error("E2B runtime SDK cached module has unverified provenance; restart required");
+  }
+  return descriptor?.value;
+}
+function assertRuntimeSdkCacheProvenance(files) {
+  for (const file of files) {
+    const cached = runtimeSdkCachedModule(file.path);
+    const known = RUNTIME_SDK_CACHE_PROVENANCE.get(file.path);
+    if (cached && (!known || known.module !== cached || !safeEqual(known.hash, file.hash))) {
+      throw new Error("E2B runtime SDK cached module has unverified or changed provenance; restart required");
+    }
+    if (known && (!cached || known.module !== cached || !safeEqual(known.hash, file.hash))) {
+      throw new Error("E2B runtime SDK loaded module binding changed; restart required");
+    }
+  }
+}
+async function loadRuntimeSdkWithCacheFence(expected, inspect) {
+  const before = await inspect();
+  assertRuntimeSdkBindingMatches(before.binding, expected);
+  let loaded = RUNTIME_SDK_LOADED_ENTRIES.get(before.entry);
+  if (loaded && (loaded.state !== "verified" || !safeEqual(loaded.hash, before.binding.integrity_hash))) {
+    throw new Error("E2B runtime SDK loaded binding changed or failed; restart required");
+  }
+  assertRuntimeSdkCacheProvenance(before.runtimeFiles);
+  if (!loaded) {
+    if (RUNTIME_SDK_LOADED_ENTRIES.size >= MAX_RUNTIME_SDK_LOADED_ENTRIES || RUNTIME_SDK_CACHE_PROVENANCE.size + before.runtimeFiles.length > MAX_RUNTIME_SDK_CACHE_PROVENANCE) {
+      throw new Error("E2B runtime SDK cache provenance capacity reached; restart required");
+    }
+    loaded = { hash: before.binding.integrity_hash, state: "loading", module: null };
+    RUNTIME_SDK_LOADED_ENTRIES.set(before.entry, loaded);
+  }
+  try {
+    const module = await import(pathToFileURL(before.entry).href);
+    const after = await inspect();
+    assertRuntimeSdkBindingMatches(after.binding, expected);
+    if (!safeEqual(before.binding.integrity_hash, after.binding.integrity_hash)) {
+      throw new Error("E2B runtime SDK package changed while it was loaded");
+    }
+    if (loaded.module && loaded.module !== module) {
+      throw new Error("E2B runtime SDK cached namespace changed; restart required");
+    }
+    const additions = [];
+    for (const file of after.runtimeFiles) {
+      const cached = runtimeSdkCachedModule(file.path);
+      const known = RUNTIME_SDK_CACHE_PROVENANCE.get(file.path);
+      if (known && (!cached || known.module !== cached || !safeEqual(known.hash, file.hash))) {
+        throw new Error("E2B runtime SDK cached provenance changed during load; restart required");
+      }
+      if (cached && !known) additions.push([file.path, { hash: file.hash, module: cached }]);
+    }
+    for (const [file, provenance] of additions) RUNTIME_SDK_CACHE_PROVENANCE.set(file, provenance);
+    loaded.module = module;
+    loaded.state = "verified";
+    return Object.freeze({ module, ...after.binding });
+  } catch (error) {
+    loaded.state = "failed";
+    throw error;
   }
 }
 function createE2BRuntimeSdkIntegrityVerifier(options = {}) {
@@ -71040,15 +71115,12 @@ function createE2BRuntimeSdkIntegrityVerifier(options = {}) {
     },
     async load(value) {
       const expected = normalizeRuntimeSdkBinding(value);
-      const before = await inspectRuntimeSdkPackage(packageDirectory);
-      assertRuntimeSdkBindingMatches(before.binding, expected);
-      const module = await import(pathToFileURL(before.entry).href);
-      const after = await inspectRuntimeSdkPackage(packageDirectory);
-      assertRuntimeSdkBindingMatches(after.binding, expected);
-      if (!safeEqual(before.binding.integrity_hash, after.binding.integrity_hash)) {
-        throw new Error("E2B runtime SDK package changed while it was loaded");
-      }
-      return Object.freeze({ module, ...after.binding });
+      const pending = runtimeSdkLoadTail.then(() => loadRuntimeSdkWithCacheFence(
+        expected,
+        () => inspectRuntimeSdkPackage(packageDirectory)
+      ));
+      runtimeSdkLoadTail = pending.then(() => void 0, () => void 0);
+      return pending;
     }
   };
   RUNTIME_SDK_INTEGRITY_VERIFIERS.add(verifier);
@@ -77397,7 +77469,7 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
 }
 
 // risk-fork-hosted-mcp/src/index.mjs
-var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:8cfe236708f3df9ee467cf436099e10c7d0e3ae0b7cf7a8a117c8fa31ae68f9b" : null;
+var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:e5cf1b08026f751d53b412fc251f5ff646648af686fcfdd4b3033e4614386948" : null;
 var HOSTED_MCP_BUNDLE_METADATA = Object.freeze({
   package_name: "@agoragentic/risk-fork-hosted-mcp",
   package_version: "0.1.0-alpha.0",
