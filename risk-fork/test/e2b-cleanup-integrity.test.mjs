@@ -11,6 +11,7 @@ import { inspectLocalWorkspace } from '../src/adapters/local-reference.mjs';
 import { verifyImmutableWorkspaceExportDestroyed } from '../src/adapters/e2b-workspace-export.mjs';
 import { makeCapsule } from './helpers.mjs';
 import {
+  E2B_ADAPTER_ARTIFACT_EVIDENCE_REF,
   E2B_EXTERNAL_BIRTH_CONTROLS, E2B_EXTERNAL_PROVIDER_CONTROLS,
   E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS, E2B_QUALIFICATION_CONTROLS,
   applyE2BExternalQualificationObservation, createE2BExternalQualificationObservationVerifier,
@@ -27,7 +28,7 @@ const signed = (payload, key) => ({
 });
 
 // Generated keys and claims are synthetic test fixtures, not qualification or spend authority.
-function qualificationFixture() {
+function qualificationFixture(adapterArtifactHash = null) {
   let now = NOW;
   const external = new Set(['first_instruction_ipv4_egress_denied',
     'first_instruction_ipv6_egress_denied', 'cost_within_cap',
@@ -46,7 +47,10 @@ function qualificationFixture() {
     observations: { fork_start_ms: 1, execution_ms: 1, cleanup_ms: 1, observed_cost_usd: null },
     controls: Object.fromEntries(E2B_QUALIFICATION_CONTROLS.map((key) => [key, external.has(key) ? 'unknown' : 'verified'])),
     cleanup: { kill_requested: 'verified', absence_verified: 'verified', orphan_reconciliation: 'verified' },
-    evidence_refs: Object.values(E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS).map((ref) => ({ ref, hash: hash(ref) })),
+    evidence_refs: [
+      ...Object.values(E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS).map((ref) => ({ ref, hash: hash(ref) })),
+      ...(adapterArtifactHash === null ? [] : [{ ref: E2B_ADAPTER_ARTIFACT_EVIDENCE_REF, hash: adapterArtifactHash }]),
+    ],
   });
   const observerKeys = generateKeyPairSync('ed25519');
   const trustKeys = generateKeyPairSync('ed25519');
@@ -137,6 +141,38 @@ test('expired authentic qualification permits local-only journal recovery, not n
   fixture.advance(NOW);
   await assert.rejects(adapter.createSavepoint({}), /cleanup-only/,
     'a cleanup-only constructor must not regain new-effect authority if its clock moves backward');
+});
+
+test('adapter captures a host artifact pin for current and historical qualification without enabling live I/O', async (t) => {
+  const artifactHash = hash('synthetic-artifact-not-loaded-code-proof');
+  const fixture = qualificationFixture(artifactHash);
+  const legacy = qualificationFixture();
+  const dirs = await directories(t);
+  const { record } = await intent(dirs);
+  const options = { ...adapterOptions(dirs, fixture), trustedAdapterArtifactHash: artifactHash };
+  const adapter = new E2BRiskForkAdapter(options);
+  assert.equal(adapter.qualificationExpectedBindings.adapterArtifactHash, artifactHash);
+  assert.equal(adapter.qualified, false);
+  assert.throws(() => new E2BRiskForkAdapter({ ...options,
+    trustedAdapterArtifactHash: hash('other-artifact') }), /adapter artifact/i);
+  assert.throws(() => new E2BRiskForkAdapter({ ...adapterOptions(dirs, legacy),
+    trustedAdapterArtifactHash: artifactHash }), /adapter artifact/i);
+  assert.throws(() => new E2BRiskForkAdapter({ ...adapterOptions(dirs),
+    trustedAdapterArtifactHash: artifactHash }), /qualification evidence and signed trust/i);
+  adapter.qualificationExpectedBindings = {};
+  adapter.qualificationEvidence = legacy.evidence;
+  options.trustedAdapterArtifactHash = hash('mutated-host-options');
+  fixture.advance('2030-01-01T00:01:00.000Z');
+  assert.deepEqual(await adapter.reconcilePendingCleanup(), { reconciled: [record.record_id], unresolved: [] });
+  assert.equal(adapter.qualificationEligible, false);
+  await assert.rejects(adapter.createSavepoint({}), /cleanup-only/);
+  const restarted = new E2BRiskForkAdapter({ ...adapterOptions(dirs, fixture), trustedAdapterArtifactHash: artifactHash });
+  assert.equal(restarted.qualified, false);
+  assert.equal(restarted.qualificationEligible, false);
+  assert.deepEqual(await restarted.reconcilePendingCleanup(), { reconciled: [], unresolved: [] });
+  assert.throws(() => new E2BRiskForkAdapter({ ...adapterOptions(dirs, fixture),
+    trustedAdapterArtifactHash: hash('other-artifact') }), /adapter artifact/i);
+  await assert.rejects(restarted.createFork({}), /source|watcher|disabled/i);
 });
 
 test('expiry does not strand an existing immutable savepoint or its request-bound absence proof',

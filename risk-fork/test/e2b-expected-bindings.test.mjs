@@ -3,6 +3,7 @@ import { generateKeyPairSync, sign } from 'node:crypto';
 import test from 'node:test';
 import { canonicalize, sha256Ref } from '../src/canonical.mjs';
 import {
+  E2B_ADAPTER_ARTIFACT_EVIDENCE_REF,
   E2B_EXTERNAL_BIRTH_CONTROLS,
   E2B_EXTERNAL_PROVIDER_CONTROLS,
   E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS,
@@ -19,7 +20,9 @@ import {
 
 // Synthetic, provider-free provisional evidence. This never claims isolation,
 // finalized billing, independent observation or production qualification.
-function evidenceFixture() {
+const ADAPTER_ARTIFACT_REF = 'evidence:e2b-risk-fork-adapter-artifact';
+
+function evidenceFixture(adapterArtifactHash = null) {
   return createE2BQualificationEvidence({
     provider: { name: 'e2b', project_ref_hash: sha256Ref('synthetic-project'), region: 'test-region' },
     sdk: { package: 'e2b', version: '2.39.0', integrity_hash: sha256Ref('synthetic-sdk') },
@@ -48,9 +51,12 @@ function evidenceFixture() {
       key, 'unknown',
     ])),
     cleanup: { kill_requested: 'unknown', absence_verified: 'unknown', orphan_reconciliation: 'unknown' },
-    evidence_refs: Object.values(E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS).map((ref) => ({
-      ref, hash: sha256Ref(`synthetic:${ref}`),
-    })),
+    evidence_refs: [
+      ...Object.values(E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS).map((ref) => ({
+        ref, hash: sha256Ref(`synthetic:${ref}`),
+      })),
+      ...(adapterArtifactHash === null ? [] : [{ ref: ADAPTER_ARTIFACT_REF, hash: adapterArtifactHash }]),
+    ],
   });
 }
 
@@ -136,8 +142,31 @@ test('E2B expected-binding policy rejects noncanonical and non-string pin values
   }
 });
 
+test('adapter artifact pin requires the exact existing signed evidence reference', () => {
+  assert.equal(E2B_ADAPTER_ARTIFACT_EVIDENCE_REF, ADAPTER_ARTIFACT_REF);
+  const adapterArtifactHash = sha256Ref('synthetic-artifact-not-loaded-code-proof');
+  const legacy = evidenceFixture();
+  const evidence = evidenceFixture(adapterArtifactHash);
+  assert.deepEqual(validateE2BQualificationEvidence(evidence, { adapterArtifactHash }), evidence);
+  assert.deepEqual(validateE2BQualificationEvidence(legacy), legacy);
+  assert.throws(() => validateE2BQualificationEvidence(legacy, { adapterArtifactHash }), /adapter artifact/i);
+  assert.throws(() => validateE2BQualificationEvidence(evidence, {
+    adapterArtifactHash: sha256Ref('different-artifact'),
+  }), /adapter artifact/i);
+  assert.equal(isE2BQualificationEvidenceCanonical(evidence, {
+    adapterArtifactHash: sha256Ref('different-artifact'),
+  }), false);
+  for (const malformed of ['', {}, ` ${adapterArtifactHash} `, 'sha256:invalid']) {
+    assert.throws(() => validateE2BQualificationEvidence(evidence, { adapterArtifactHash: malformed }),
+      /expected E2B bindings/i);
+  }
+  assert.deepEqual(validateE2BQualificationEvidence(legacy, { adapterArtifactHash: null }), legacy);
+  assert.deepEqual(validateE2BQualificationEvidence(legacy, { adapterArtifactHash: undefined }), legacy);
+});
+
 test('signed E2B trust entry points reject malformed pins before external observation verification', () => {
-  const provisional = evidenceFixture();
+  const adapterArtifactHash = sha256Ref('synthetic-artifact-not-loaded-code-proof');
+  const provisional = evidenceFixture(adapterArtifactHash);
   const observerKeys = generateKeyPairSync('ed25519');
   const trustKeys = generateKeyPairSync('ed25519');
   let clockCalls = 0;
@@ -189,10 +218,49 @@ test('signed E2B trust entry points reject malformed pins before external observ
   const verifier = createE2BQualificationTrustVerifier({
     publicKey: trustKeys.publicKey, publicKeyHash: keyHash(trustKeys.publicKey),
   });
-  const expected = expectedFixture(finalized);
+  const expected = { ...expectedFixture(finalized), adapterArtifactHash };
   const payload = verifier.createPayload(finalized, expected, observer);
   const trust = signed(payload, trustKeys.privateKey);
   assert.deepEqual(verifyE2BQualificationTrust(finalized, trust, verifier, expected, observer), trust);
+  const originalObserverCalls = clockCalls;
+  assert.throws(() => verifyE2BQualificationTrust(finalized, trust, verifier, {
+    ...expected, adapterArtifactHash: sha256Ref('different-artifact'),
+  }, observer), /adapter artifact/i);
+  assert.equal(clockCalls, originalObserverCalls, 'mismatched artifact pin fails before observer callbacks');
+  for (const edit of ['replace', 'remove']) {
+    const changed = structuredClone(finalized);
+    changed.evidence_refs = edit === 'remove'
+      ? changed.evidence_refs.filter((entry) => entry.ref !== ADAPTER_ARTIFACT_REF)
+      : changed.evidence_refs.map((entry) => entry.ref === ADAPTER_ARTIFACT_REF
+        ? { ...entry, hash: sha256Ref('changed-artifact') } : entry);
+    changed.evidence_hash = sha256Ref({ ...changed, evidence_hash: null });
+    // Even a recomputed public self-hash cannot rewrite the original signed
+    // observer's base evidence. Omitting the optional expected pin is no bypass.
+    assert.throws(() => verifyE2BQualificationTrust(changed, trust, verifier, {}, observer),
+      /binding|reconstruct|base|hash/i);
+  }
+  const replacementProvisional = evidenceFixture(sha256Ref('changed-artifact'));
+  const replacementPayload = observer.createPayload(replacementProvisional, {
+    observed_at: observationPayload.observed_at,
+    issued_at: observationPayload.issued_at,
+    expires_at: observationPayload.expires_at,
+    observer_boundary: observationPayload.observer_boundary,
+    birth_controls: observationPayload.birth_controls,
+    first_instruction_ipv4_egress_denied: observationPayload.network.first_instruction_ipv4_egress_denied,
+    first_instruction_ipv6_egress_denied: observationPayload.network.first_instruction_ipv6_egress_denied,
+    ipv6_provider_denial: observationPayload.network.ipv6_provider_denial,
+    provider_controls: observationPayload.provider_controls,
+    cost: {
+      provider_cap: observationPayload.cost.provider_cap,
+      derived_estimate: observationPayload.cost.derived_estimate,
+      aggregate_console_delta: observationPayload.cost.aggregate_console_delta,
+      actual_sandbox: observationPayload.cost.actual_sandbox,
+    },
+  });
+  const replacement = applyE2BExternalQualificationObservation(replacementProvisional,
+    signed(replacementPayload, observerKeys.privateKey), observer);
+  assert.throws(() => verifyE2BQualificationTrust(replacement, trust, verifier, {}, observer),
+    /trust binding mismatch/i, 'a newly signed observer receipt cannot reuse old qualification trust');
   const before = clockCalls;
   for (const badExpected of [{ templateHASH: sha256Ref('wrong') }, Object.create({ templateHash: null })]) {
     assert.throws(() => verifier.createPayload(finalized, badExpected, observer), /expected E2B bindings/i);

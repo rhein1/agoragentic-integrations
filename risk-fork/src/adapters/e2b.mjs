@@ -1338,11 +1338,17 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
     if (hasQualificationTrust !== hasQualificationVerifier) {
       throw new TypeError('E2B qualification trust and its verifier are required together');
     }
+    if (options.trustedAdapterArtifactHash != null
+      && (options.qualificationEvidence == null || !hasQualificationTrust)) {
+      throw new TypeError('trustedAdapterArtifactHash requires qualification evidence and signed trust');
+    }
     const expectedBindings = Object.freeze({
       templateId: options.cleanTemplateId,
       templateHash: options.cleanTemplateHash,
       bootstrapArtifactHash: options.trustedBootstrapArtifactHash,
       runnerArtifactHash: options.trustedRunnerArtifactHash,
+      ...(options.trustedAdapterArtifactHash == null
+        ? {} : { adapterArtifactHash: options.trustedAdapterArtifactHash }),
     });
     let cleanupProvenance = null;
     let qualificationCurrent = true;
@@ -1455,12 +1461,7 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
     this.qualificationTrust = qualificationTrust;
     this.qualificationTrustVerifier = options.qualificationTrustVerifier ?? null;
     this.qualificationExpectedBindings = configured
-      ? Object.freeze({
-          templateId: options.cleanTemplateId,
-          templateHash: options.cleanTemplateHash,
-          bootstrapArtifactHash: options.trustedBootstrapArtifactHash,
-          runnerArtifactHash: options.trustedRunnerArtifactHash,
-        })
+      ? expectedBindings
       : Object.freeze({});
     this.qualificationEligible = qualificationEligible;
     this.qualified = E2B_LIVE_FORK_SOURCE_ENABLED && qualificationEligible;
