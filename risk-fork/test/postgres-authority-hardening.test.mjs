@@ -167,6 +167,7 @@ test('exported audit and status verification paths avoid named inherited Array h
 });
 
 test('TLS fresh-database provisioning, migrator, and least-privilege runtime are separated', {
+  timeout: 30_000,
   skip: ADMIN_URL && TLS_CA
     ? false
     : 'set local TLS PostgreSQL test URL and CA to run the role-separation test',
@@ -210,6 +211,7 @@ test('TLS fresh-database provisioning, migrator, and least-privilege runtime are
     requireTls: true,
     tls: { ca: TLS_CA },
     maxConnections: 2,
+    statementTimeoutMs: 5_000,
     applicationName: 'risk-fork-hardening-test-admin',
   });
   let databaseCreated = false;
@@ -220,26 +222,50 @@ test('TLS fresh-database provisioning, migrator, and least-privilege runtime are
   let runtimePool = null;
   let authority = null;
   t.after(async () => {
-    await authority?.close().catch(() => {});
-    await runtimePool?.end().catch(() => {});
-    await migratorPool?.end().catch(() => {});
-    await ownerPool?.end().catch(() => {});
-    if (databaseCreated) {
-      await adminPool.query(
-        `SELECT pg_terminate_backend(pid)
-           FROM pg_catalog.pg_stat_activity
-          WHERE datname = $1 AND pid <> pg_backend_pid()`,
-        [databaseName],
-      ).catch(() => {});
-      await adminPool.query(`DROP DATABASE IF EXISTS ${quotedDatabase}`).catch(() => {});
+    const cleanupErrors = [];
+    async function cleanup(operation) {
+      try {
+        await operation();
+      } catch (error) {
+        cleanupErrors.push(error);
+      }
     }
-    if (runtimeCreated) {
-      await adminPool.query(`DROP ROLE IF EXISTS ${quotedRuntimeRole}`).catch(() => {});
+    try {
+      await cleanup(() => authority?.close());
+      await cleanup(() => runtimePool?.end());
+      await cleanup(() => migratorPool?.end());
+      await cleanup(() => ownerPool?.end());
+      if (databaseCreated) {
+        await cleanup(async () => {
+          // pg-pool can settle end() before the server sees every socket close.
+          // Do not administratively kill those clients during graceful shutdown.
+          const drainDeadline = Date.now() + 5_000;
+          for (;;) {
+            const sessions = await adminPool.query(
+              `SELECT count(*)::integer AS count
+                 FROM pg_catalog.pg_stat_activity
+                WHERE datname = $1 AND pid <> pg_backend_pid()`,
+              [databaseName],
+            );
+            if (sessions.rows[0].count === 0) break;
+            assert.ok(Date.now() < drainDeadline, 'fixture database sessions did not drain');
+            await new Promise((resolve) => setTimeout(resolve, 10));
+          }
+          await adminPool.query(`DROP DATABASE IF EXISTS ${quotedDatabase}`);
+        });
+      }
+      if (runtimeCreated) {
+        await cleanup(() => adminPool.query(`DROP ROLE IF EXISTS ${quotedRuntimeRole}`));
+      }
+      if (migratorCreated) {
+        await cleanup(() => adminPool.query(`DROP ROLE IF EXISTS ${quotedMigratorRole}`));
+      }
+    } finally {
+      await cleanup(() => adminPool.end());
     }
-    if (migratorCreated) {
-      await adminPool.query(`DROP ROLE IF EXISTS ${quotedMigratorRole}`).catch(() => {});
+    if (cleanupErrors.length) {
+      throw new AggregateError(cleanupErrors, 'PostgreSQL fixture cleanup failed');
     }
-    await adminPool.end().catch(() => {});
   });
 
   await adminPool.query(
