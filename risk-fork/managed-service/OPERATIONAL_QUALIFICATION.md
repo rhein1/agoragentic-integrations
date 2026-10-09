@@ -96,6 +96,26 @@ establish loaded-byte provenance. That trusted install/load boundary, the review
 production qualification class and actual registry wiring remain incomplete.
 No provider authority or activation path is added by this optional pin.
 
+The SDK closure verifier also fences reuse of evaluated modules. Loads through
+this verifier module are serialized; an entry is pinned to its first verified
+closure digest, and failed evaluation/reinspection leaves it unusable until a
+fresh process. Visible CommonJS cache entries must have the verifier's prior
+exact file hash and module-object provenance. Unknown preloads, changed root or
+transitive bytes, cache eviction/substitution and a new verifier factory do not
+permit relabeling old code with a new disk digest. Unchanged exact verified
+bindings can be reused. The exact SDK root must use its reviewed CommonJS
+package profile; an ESM root claiming that identity is rejected. Provenance is
+bounded to 32 entry attempts and 32,768 cached-file records; capacity requires a
+fresh process, not cache eviction or bypass.
+
+This cache fence still does not establish a clean first module graph, detect
+every prior ESM dependency import, prevent a concurrent external import, or
+make mutable package inspection atomic with evaluation. Node's transitive ESM
+cache is not attested by CommonJS cache checks. Production loading still needs
+a controlled fresh worker, authentic exact release pins and an immutable/read-only
+installed closure before import; host module/cache custody is part of that
+boundary. Keep live qualification false until that actual boundary is proved.
+
 ### Cleanup recovery is not current qualification
 
 The E2B adapter can recover already-journaled local export obligations after an
