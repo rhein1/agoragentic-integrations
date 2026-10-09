@@ -8,8 +8,8 @@
   "source_attestation": {
     "schema": "agoragentic.risk-fork-hosted-mcp.reviewed-sources.v2",
     "normalization": "utf8_crlf_to_lf_lone_cr_preserved",
-    "files": 70,
-    "sha256": "sha256:dfa48a3d94abdd22eb4ba57dafd0a4f270e6b78e5787d3d50b1c4ce5d8dc9c7f"
+    "files": 71,
+    "sha256": "sha256:04788d305d273088b3e4e05244d66c3f7c9543926eef6ae7507f3ca30803c2ab"
   },
   "reviewed_sources": [
     {
@@ -114,8 +114,8 @@
     },
     {
       "path": "risk-fork/src/adapters/e2b.mjs",
-      "bytes": 125402,
-      "sha256": "sha256:78e4bf3f629cbe7d0f4f90a7e6b4a231354dbb76387d7c354918bd660f8c1ae0"
+      "bytes": 126989,
+      "sha256": "sha256:15f103b5f7560b8f81c1686c4abad1f0bc21b83cefca695063a11e97d51e7fd4"
     },
     {
       "path": "risk-fork/src/adapters/local-reference.mjs",
@@ -194,8 +194,13 @@
     },
     {
       "path": "risk-fork/src/e2b-qualification.mjs",
-      "bytes": 89216,
-      "sha256": "sha256:74f165e4a6263a666b07f5e189a9b2ce5dc6221b7024434e064e97d9e9dd482f"
+      "bytes": 91557,
+      "sha256": "sha256:3ee617e42995c53ddfef99df4b8e54fe272126ad913c8d8b04849043f9df0c3b"
+    },
+    {
+      "path": "risk-fork/src/e2b-sdk-process.mjs",
+      "bytes": 39041,
+      "sha256": "sha256:f3615eb5e9a6340422c1813ccd65454915c2f0518ade1829d042280245455b68"
     },
     {
       "path": "risk-fork/src/framework-tool-adapter.mjs",
@@ -224,8 +229,8 @@
     },
     {
       "path": "risk-fork/src/index.mjs",
-      "bytes": 6216,
-      "sha256": "sha256:0a11577f533e4990410a286b6772575b5f0c2ef5a1be56aac6fdd87bb7293ff5"
+      "bytes": 6259,
+      "sha256": "sha256:9daa3656865336f28915102a018c54911b30ab528fb6548a55a1fe5703b7475f"
     },
     {
       "path": "risk-fork/src/interception.mjs",
@@ -391,6 +396,7 @@
       "events",
       "fs",
       "net",
+      "node:child_process",
       "node:crypto",
       "node:fs",
       "node:fs/promises",
@@ -512,6 +518,7 @@
     "importRiskForkProviderResult",
     "isE2BQualificationEvidenceCanonical",
     "isE2BRuntimeSdkIntegrityVerifier",
+    "isE2BRuntimeSdkProcessIntegrityVerifier",
     "isMcpPortableHandlePreEffectBoundary",
     "isMcpPortableHandleRegistry",
     "isPostgresDistributedCommitAuthority",
@@ -2186,8 +2193,8 @@
     {
       "path": "risk-fork-hosted-mcp/src/index.mjs",
       "source": "package_source",
-      "bytes": 5811,
-      "sha256": "sha256:a9d866df15a7e140494977c47397047585a22927c4e1112ee5b8aae6f019957b"
+      "bytes": 5854,
+      "sha256": "sha256:fca1a68bfc5cc1dfea5f4a64bd8738600425d80c117e10f5c1a90b16f1c30410"
     },
     {
       "path": "risk-fork-hosted-mcp/src/pg-native-disabled.js",
@@ -2288,8 +2295,8 @@
     {
       "path": "risk-fork/src/adapters/e2b.mjs",
       "source": "reviewed_source",
-      "bytes": 125402,
-      "sha256": "sha256:78e4bf3f629cbe7d0f4f90a7e6b4a231354dbb76387d7c354918bd660f8c1ae0"
+      "bytes": 126989,
+      "sha256": "sha256:15f103b5f7560b8f81c1686c4abad1f0bc21b83cefca695063a11e97d51e7fd4"
     },
     {
       "path": "risk-fork/src/adapters/postgres-authority-migrator.mjs",
@@ -2354,8 +2361,14 @@
     {
       "path": "risk-fork/src/e2b-qualification.mjs",
       "source": "reviewed_source",
-      "bytes": 89216,
-      "sha256": "sha256:74f165e4a6263a666b07f5e189a9b2ce5dc6221b7024434e064e97d9e9dd482f"
+      "bytes": 91557,
+      "sha256": "sha256:3ee617e42995c53ddfef99df4b8e54fe272126ad913c8d8b04849043f9df0c3b"
+    },
+    {
+      "path": "risk-fork/src/e2b-sdk-process.mjs",
+      "source": "reviewed_source",
+      "bytes": 39041,
+      "sha256": "sha256:f3615eb5e9a6340422c1813ccd65454915c2f0518ade1829d042280245455b68"
     },
     {
       "path": "risk-fork/src/host-boundary.mjs",
@@ -2681,8 +2694,8 @@
   },
   "artifact": {
     "path": "dist/runtime/index.mjs",
-    "bytes": 3262414,
-    "sha256": "sha256:6ecf6add03142c25de39853a9429eeb3bd2e9ac91073f4827be281c53e96ca97"
+    "bytes": 3305617,
+    "sha256": "sha256:f425e058b3d283f5c42d0065358708438abdb3f376c67689a50e660273796c84"
   },
   "packaged_assets": [
     {

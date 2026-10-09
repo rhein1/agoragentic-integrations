@@ -477,10 +477,10 @@ var require_util = __commonJS({
     function cloneDef(schema) {
       return mergeDefs(schema._zod.def);
     }
-    function getElementAtPath(obj, path8) {
-      if (!path8)
+    function getElementAtPath(obj, path9) {
+      if (!path9)
         return obj;
-      return path8.reduce((acc, key) => acc?.[key], obj);
+      return path9.reduce((acc, key) => acc?.[key], obj);
     }
     function promiseAllObject(promisesObj) {
       const keys = Object.keys(promisesObj);
@@ -890,11 +890,11 @@ var require_util = __commonJS({
       }
       return false;
     }
-    function prefixIssues(path8, issues) {
+    function prefixIssues(path9, issues) {
       return issues.map((iss) => {
         var _a;
         (_a = iss).path ?? (_a.path = []);
-        iss.path.unshift(path8);
+        iss.path.unshift(path9);
         return iss;
       });
     }
@@ -1083,16 +1083,16 @@ var require_errors = __commonJS({
     }
     function formatError(error, mapper = (issue) => issue.message) {
       const fieldErrors = { _errors: [] };
-      const processError = (error2, path8 = []) => {
+      const processError = (error2, path9 = []) => {
         for (const issue of error2.issues) {
           if (issue.code === "invalid_union" && issue.errors.length) {
-            issue.errors.map((issues) => processError({ issues }, [...path8, ...issue.path]));
+            issue.errors.map((issues) => processError({ issues }, [...path9, ...issue.path]));
           } else if (issue.code === "invalid_key") {
-            processError({ issues: issue.issues }, [...path8, ...issue.path]);
+            processError({ issues: issue.issues }, [...path9, ...issue.path]);
           } else if (issue.code === "invalid_element") {
-            processError({ issues: issue.issues }, [...path8, ...issue.path]);
+            processError({ issues: issue.issues }, [...path9, ...issue.path]);
           } else {
-            const fullpath = [...path8, ...issue.path];
+            const fullpath = [...path9, ...issue.path];
             if (fullpath.length === 0) {
               fieldErrors._errors.push(mapper(issue));
             } else {
@@ -1119,17 +1119,17 @@ var require_errors = __commonJS({
     }
     function treeifyError(error, mapper = (issue) => issue.message) {
       const result = { errors: [] };
-      const processError = (error2, path8 = []) => {
+      const processError = (error2, path9 = []) => {
         var _a, _b;
         for (const issue of error2.issues) {
           if (issue.code === "invalid_union" && issue.errors.length) {
-            issue.errors.map((issues) => processError({ issues }, [...path8, ...issue.path]));
+            issue.errors.map((issues) => processError({ issues }, [...path9, ...issue.path]));
           } else if (issue.code === "invalid_key") {
-            processError({ issues: issue.issues }, [...path8, ...issue.path]);
+            processError({ issues: issue.issues }, [...path9, ...issue.path]);
           } else if (issue.code === "invalid_element") {
-            processError({ issues: issue.issues }, [...path8, ...issue.path]);
+            processError({ issues: issue.issues }, [...path9, ...issue.path]);
           } else {
-            const fullpath = [...path8, ...issue.path];
+            const fullpath = [...path9, ...issue.path];
             if (fullpath.length === 0) {
               result.errors.push(mapper(issue));
               continue;
@@ -1161,8 +1161,8 @@ var require_errors = __commonJS({
     }
     function toDotPath(_path) {
       const segs = [];
-      const path8 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-      for (const seg of path8) {
+      const path9 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+      for (const seg of path9) {
         if (typeof seg === "number")
           segs.push(`[${seg}]`);
         else if (typeof seg === "symbol")
@@ -16494,13 +16494,13 @@ var require_from_json_schema = __commonJS({
       if (!ref.startsWith("#")) {
         throw new Error("External $ref is not supported, only local refs (#/...) are allowed");
       }
-      const path8 = ref.slice(1).split("/").filter(Boolean);
-      if (path8.length === 0) {
+      const path9 = ref.slice(1).split("/").filter(Boolean);
+      if (path9.length === 0) {
         return ctx.rootSchema;
       }
       const defsKey = ctx.version === "draft-2020-12" ? "$defs" : "definitions";
-      if (path8[0] === defsKey) {
-        const key = path8[1];
+      if (path9[0] === defsKey) {
+        const key = path9[1];
         if (!key || !ctx.defs[key]) {
           throw new Error(`Reference not found: ${ref}`);
         }
@@ -22203,9 +22203,9 @@ var require_src_BhnGYybN = __commonJS({
         });
         const parsed = buildSchemas2026().RequestMetaEnvelopeSchema.safeParse(meta);
         if (!parsed.success) for (const issue of parsed.error.issues) {
-          const path8 = issue.path.map(String);
-          const key = path8.length > 0 ? path8.join(".") : "_meta";
-          if (path8.length === 1 && issues.some((existing) => existing.key === key && existing.problem === "missing")) continue;
+          const path9 = issue.path.map(String);
+          const key = path9.length > 0 ? path9.join(".") : "_meta";
+          if (path9.length === 1 && issues.some((existing) => existing.key === key && existing.problem === "missing")) continue;
           issues.push({
             key,
             problem: issue.message
@@ -22547,29 +22547,29 @@ var require_src_BhnGYybN = __commonJS({
     function scanXMcpHeaderDeclarations(inputSchema) {
       const declarations = [];
       const seenLower = /* @__PURE__ */ new Map();
-      const visit = (node, path8, reachable) => {
+      const visit = (node, path9, reachable) => {
         if (node === null || typeof node !== "object") return void 0;
         const schema = node;
         if (X_MCP_HEADER_KEY in schema) {
-          if (!reachable || path8.length === 0) return `${pathName(path8)}: x-mcp-header is only permitted on properties statically reachable via a chain of 'properties' keys (not under items, additionalProperties, oneOf/anyOf/allOf/not, if/then/else, or $ref)`;
+          if (!reachable || path9.length === 0) return `${pathName(path9)}: x-mcp-header is only permitted on properties statically reachable via a chain of 'properties' keys (not under items, additionalProperties, oneOf/anyOf/allOf/not, if/then/else, or $ref)`;
           const raw = schema[X_MCP_HEADER_KEY];
-          if (typeof raw !== "string" || raw.length === 0) return `${pathName(path8)}: x-mcp-header MUST be a non-empty string`;
-          if (!RFC9110_TOKEN.test(raw)) return `${pathName(path8)}: x-mcp-header '${raw}' is not a valid RFC 9110 token (no spaces, control characters or HTTP delimiters)`;
+          if (typeof raw !== "string" || raw.length === 0) return `${pathName(path9)}: x-mcp-header MUST be a non-empty string`;
+          if (!RFC9110_TOKEN.test(raw)) return `${pathName(path9)}: x-mcp-header '${raw}' is not a valid RFC 9110 token (no spaces, control characters or HTTP delimiters)`;
           const type = typeof schema.type === "string" ? schema.type : void 0;
-          if (type === void 0 || !PERMITTED_X_MCP_HEADER_TYPES.has(type)) return `${pathName(path8)}: x-mcp-header is only permitted on primitive-typed properties (string, integer, boolean); got ${type ?? "<none>"}`;
+          if (type === void 0 || !PERMITTED_X_MCP_HEADER_TYPES.has(type)) return `${pathName(path9)}: x-mcp-header is only permitted on primitive-typed properties (string, integer, boolean); got ${type ?? "<none>"}`;
           const lower = raw.toLowerCase();
           const prior = seenLower.get(lower);
           if (prior !== void 0) return `x-mcp-header '${raw}' is not case-insensitively unique (also declared as '${prior}')`;
           seenLower.set(lower, raw);
           declarations.push({
-            path: path8,
+            path: path9,
             headerName: raw,
             type
           });
         }
         const properties = schema.properties;
         if (properties !== null && typeof properties === "object") for (const [key, child] of Object.entries(properties)) {
-          const fault$1 = visit(child, [...path8, key], reachable);
+          const fault$1 = visit(child, [...path9, key], reachable);
           if (fault$1 !== void 0) return fault$1;
         }
         for (const k of NON_REACHABLE_SUBSCHEMA_KEYWORDS) {
@@ -22577,7 +22577,7 @@ var require_src_BhnGYybN = __commonJS({
           if (sub === void 0) continue;
           const branches = Array.isArray(sub) ? sub : sub !== null && typeof sub === "object" && OBJECT_VALUED_SUBSCHEMA_KEYWORDS.has(k) ? Object.values(sub) : [sub];
           for (const branch of branches) {
-            const fault$1 = visit(branch, [...path8, `<${k}>`], false);
+            const fault$1 = visit(branch, [...path9, `<${k}>`], false);
             if (fault$1 !== void 0) return fault$1;
           }
         }
@@ -22617,8 +22617,8 @@ var require_src_BhnGYybN = __commonJS({
       "$defs",
       "definitions"
     ]);
-    function pathName(path8) {
-      return path8.length === 0 ? "<root>" : path8.join(".");
+    function pathName(path9) {
+      return path9.length === 0 ? "<root>" : path9.join(".");
     }
     var BASE64_SENTINEL_PREFIX = "=?base64?";
     var BASE64_SENTINEL_SUFFIX = "?=";
@@ -22649,9 +22649,9 @@ var require_src_BhnGYybN = __commonJS({
         return;
       }
     }
-    function valueAtPath(root, path8) {
+    function valueAtPath(root, path9) {
       let node = root;
-      for (const key of path8) {
+      for (const key of path9) {
         if (node === null || typeof node !== "object") return void 0;
         node = node[key];
       }
@@ -23160,7 +23160,7 @@ var require_src_BhnGYybN = __commonJS({
       array: shapeKeys([_modelcontextprotocol_core_internal.UntitledMultiSelectEnumSchemaSchema, _modelcontextprotocol_core_internal.TitledMultiSelectEnumSchemaSchema])
     };
     var SUPPORTED_STRING_FORMATS = new Set(_modelcontextprotocol_core_internal.StringSchemaSchema.shape.format.unwrap().options);
-    function walkProperty(node, path8, vendor, unsupported) {
+    function walkProperty(node, path9, vendor, unsupported) {
       if (!isJsonObject(node)) return node;
       const allowedKeys = typeof node.type === "string" && Object.hasOwn(PROPERTY_KEYS_BY_TYPE, node.type) ? PROPERTY_KEYS_BY_TYPE[node.type] : void 0;
       if (allowedKeys === void 0) return node;
@@ -23168,8 +23168,8 @@ var require_src_BhnGYybN = __commonJS({
       for (const [key, value] of Object.entries(node)) if (allowedKeys.has(key) || isAnnotationOnlyJsonSchemaKeyword(key)) pruned[key] = value;
       else if (key === "pattern" && node.type === "string" && typeof node.format === "string") {
         if (!SUPPORTED_STRING_FORMATS.has(node.format)) pruned[key] = value;
-        else if (typeof value !== "string" || !isLibraryFormatPattern(node.format, value, vendor)) unsupported.push(`${path8}.${key}`);
-      } else unsupported.push(`${path8}.${key}`);
+        else if (typeof value !== "string" || !isLibraryFormatPattern(node.format, value, vendor)) unsupported.push(`${path9}.${key}`);
+      } else unsupported.push(`${path9}.${key}`);
       return pruned;
     }
     function walkRequestedSchema(converted, vendor) {
@@ -23186,11 +23186,11 @@ var require_src_BhnGYybN = __commonJS({
       const offenders = Object.entries(pruned.properties).filter(([, node]) => !parseSchema(_modelcontextprotocol_core_internal.PrimitiveSchemaDefinitionSchema, node).success).map(([name]) => `properties.${name}`);
       return offenders.length > 0 ? offenders.join(", ") : fallback;
     }
-    function findDroppedConstraintPaths(original, parsed, path8 = "") {
-      if (Array.isArray(original) && Array.isArray(parsed)) return original.flatMap((item, index) => findDroppedConstraintPaths(item, parsed[index], `${path8}[${index}]`));
+    function findDroppedConstraintPaths(original, parsed, path9 = "") {
+      if (Array.isArray(original) && Array.isArray(parsed)) return original.flatMap((item, index) => findDroppedConstraintPaths(item, parsed[index], `${path9}[${index}]`));
       if (!isJsonObject(original) || !isJsonObject(parsed)) return [];
       return Object.entries(original).flatMap(([key, value]) => {
-        const childPath = path8 ? `${path8}.${key}` : key;
+        const childPath = path9 ? `${path9}.${key}` : key;
         if (!Object.prototype.hasOwnProperty.call(parsed, key)) return isAnnotationOnlyJsonSchemaKeyword(key) ? [] : [childPath];
         return findDroppedConstraintPaths(value, parsed[key], childPath);
       });
@@ -28123,8 +28123,8 @@ var require_ajvProvider_ZaoO9afR = __commonJS({
         for (let i = 0; i < str.length; i++) if (str[i] === token) ind++;
         return ind;
       }
-      function removeDotSegments(path8) {
-        let input = path8;
+      function removeDotSegments(path9) {
+        let input = path9;
         const output = [];
         let nextSlash = -1;
         let len = 0;
@@ -28277,8 +28277,8 @@ var require_ajvProvider_ZaoO9afR = __commonJS({
           wsComponent.secure = void 0;
         }
         if (wsComponent.resourceName) {
-          const [path8, query] = wsComponent.resourceName.split("?");
-          wsComponent.path = path8 && path8 !== "/" ? path8 : void 0;
+          const [path9, query] = wsComponent.resourceName.split("?");
+          wsComponent.path = path9 && path9 !== "/" ? path9 : void 0;
           wsComponent.query = query;
           wsComponent.resourceName = void 0;
         }
@@ -32890,8 +32890,8 @@ data: ${JSON.stringify({
       const rsPath = stripTrailingSlash(resourceServerUrl.pathname);
       return `/.well-known/oauth-protected-resource${rsPath === "/" ? "" : rsPath}`;
     }
-    function stripTrailingSlash(path8) {
-      return path8.length > 1 && path8.endsWith("/") ? path8.slice(0, -1) : path8;
+    function stripTrailingSlash(path9) {
+      return path9.length > 1 && path9.endsWith("/") ? path9.slice(0, -1) : path9;
     }
     var ALLOWED_METHODS = "GET, HEAD, OPTIONS";
     function metadataDocumentResponse(request, metadata) {
@@ -36933,7 +36933,7 @@ var require_mcp_server = __commonJS({
       let nodes = 0;
       let bytes = 0;
       const ancestors = /* @__PURE__ */ new WeakSet();
-      function walk(current, path8, depth) {
+      function walk(current, path9, depth) {
         nodes += 1;
         if (nodes > MAX_ENFORCEMENT_JSON_NODES) {
           throw new TypeError(`${field} exceeds the JSON node limit`);
@@ -36951,60 +36951,60 @@ var require_mcp_server = __commonJS({
         }
         if (typeof current === "number") {
           if (!Number.isFinite(current) || Object.is(current, -0)) {
-            throw new TypeError(`${path8} must be a finite, unambiguous JSON number`);
+            throw new TypeError(`${path9} must be a finite, unambiguous JSON number`);
           }
           if (Number.isInteger(current) && !Number.isSafeInteger(current)) {
-            throw new TypeError(`${path8} is outside the safe integer range`);
+            throw new TypeError(`${path9} is outside the safe integer range`);
           }
           return current;
         }
         if (!current || typeof current !== "object") {
-          throw new TypeError(`${path8} is not a JSON value`);
+          throw new TypeError(`${path9} is not a JSON value`);
         }
-        if (isProxy2(current)) throw new TypeError(`${path8} must not be a Proxy`);
-        if (ancestors.has(current)) throw new TypeError(`${path8} contains a cycle`);
+        if (isProxy2(current)) throw new TypeError(`${path9} must not be a Proxy`);
+        if (ancestors.has(current)) throw new TypeError(`${path9} contains a cycle`);
         ancestors.add(current);
         try {
           const descriptors = Object.getOwnPropertyDescriptors(current);
           if (Object.getOwnPropertySymbols(current).length > 0) {
-            throw new TypeError(`${path8} contains a symbol key`);
+            throw new TypeError(`${path9} contains a symbol key`);
           }
           for (const [key, descriptor] of Object.entries(descriptors)) {
             if (Array.isArray(current) && key === "length") continue;
             if (!descriptor.enumerable || descriptor.get || descriptor.set) {
-              throw new TypeError(`${path8}.<key> is hidden or accessor-backed`);
+              throw new TypeError(`${path9}.<key> is hidden or accessor-backed`);
             }
           }
           if (Array.isArray(current)) {
             if (Object.getPrototypeOf(current) !== Array.prototype) {
-              throw new TypeError(`${path8} must use the standard Array prototype`);
+              throw new TypeError(`${path9} must use the standard Array prototype`);
             }
             const keys = Object.keys(current);
             if (keys.length !== current.length || keys.some((key) => !/^(?:0|[1-9][0-9]*)$/.test(key) || Number(key) >= current.length)) {
-              throw new TypeError(`${path8} is sparse or has extra properties`);
+              throw new TypeError(`${path9} is sparse or has extra properties`);
             }
             const output2 = [];
             for (let index = 0; index < current.length; index += 1) {
               if (!Object.prototype.hasOwnProperty.call(current, index)) {
-                throw new TypeError(`${path8} is sparse`);
+                throw new TypeError(`${path9} is sparse`);
               }
-              output2.push(walk(current[index], `${path8}[${index}]`, depth + 1));
+              output2.push(walk(current[index], `${path9}[${index}]`, depth + 1));
             }
             return output2;
           }
-          assertPlainRecord(current, path8);
+          assertPlainRecord(current, path9);
           const output = {};
           for (const key of Object.keys(current).sort()) {
             if (containsCredentialMaterial(key)) {
               throw new McpEnforcementError(
                 "MCP_CREDENTIAL_MATERIAL_REJECTED",
-                `${path8}.<key> contains credential-shaped material`
+                `${path9}.<key> contains credential-shaped material`
               );
             }
             if (["__proto__", "constructor", "prototype"].includes(key)) {
-              throw new TypeError(`${path8}.<key> is forbidden`);
+              throw new TypeError(`${path9}.<key> is forbidden`);
             }
-            output[key] = walk(current[key], `${path8}.<value>`, depth + 1);
+            output[key] = walk(current[key], `${path9}.<value>`, depth + 1);
           }
           return output;
         } finally {
@@ -37064,30 +37064,30 @@ var require_mcp_server = __commonJS({
       });
       return { sensitive, referenceKind };
     }
-    function assertOpaqueCredentialReference(value, path8, kind) {
+    function assertOpaqueCredentialReference(value, path9, kind) {
       if (value === null) return;
       if (typeof value !== "string" || value.length < 1 || value.length > 500) {
         throw new McpEnforcementError(
           "MCP_CREDENTIAL_MATERIAL_REJECTED",
-          `${path8} must be an opaque ${kind} string or null`
+          `${path9} must be an opaque ${kind} string or null`
         );
       }
       if (kind === "hash" && !/^sha256:[a-f0-9]{64}$/.test(value)) {
         throw new McpEnforcementError(
           "MCP_CREDENTIAL_MATERIAL_REJECTED",
-          `${path8} must be a sha256 reference`
+          `${path9} must be a sha256 reference`
         );
       }
       if (kind === "ref" && !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,499}$/.test(value)) {
         throw new McpEnforcementError(
           "MCP_CREDENTIAL_MATERIAL_REJECTED",
-          `${path8} must be an opaque credential reference`
+          `${path9} must be an opaque credential reference`
         );
       }
       if (containsCredentialMaterial(value)) {
         throw new McpEnforcementError(
           "MCP_CREDENTIAL_MATERIAL_REJECTED",
-          `${path8} contains credential-shaped material`
+          `${path9} contains credential-shaped material`
         );
       }
     }
@@ -37314,19 +37314,19 @@ var require_mcp_server = __commonJS({
         if (singleSchemaKeywords.has(key)) return "schema";
         return null;
       }
-      function rejectSensitiveHeader(name, headerValue, path8) {
+      function rejectSensitiveHeader(name, headerValue, path9) {
         if (typeof name !== "string" || headerValue === null || headerValue === void 0) return;
         if (credentialKeyClassification(name).sensitive) {
           throw new McpEnforcementError(
             "MCP_CREDENTIAL_MATERIAL_REJECTED",
-            `${path8} contains an authority-bearing credential header`
+            `${path9} contains an authority-bearing credential header`
           );
         }
       }
-      function inspectStructuredHeader(current, path8) {
+      function inspectStructuredHeader(current, path9) {
         if (!current || typeof current !== "object") return;
         if (Array.isArray(current) && current.length === 2) {
-          rejectSensitiveHeader(current[0], current[1], `${path8}[0]`);
+          rejectSensitiveHeader(current[0], current[1], `${path9}[0]`);
           return;
         }
         if (Array.isArray(current)) return;
@@ -37337,12 +37337,12 @@ var require_mcp_server = __commonJS({
             rejectSensitiveHeader(
               current[nameField],
               current[valueField],
-              `${path8}.${nameField}`
+              `${path9}.${nameField}`
             );
           }
         }
       }
-      function parseJsonContentText(current, path8, pathTokens) {
+      function parseJsonContentText(current, path9, pathTokens) {
         if (pathTokens.length < 3 || pathTokens.at(-1) !== "text" || !Number.isInteger(pathTokens.at(-2)) || pathTokens.at(-3) !== "content") {
           return null;
         }
@@ -37351,8 +37351,8 @@ var require_mcp_server = __commonJS({
           return null;
         }
         try {
-          assertNoDuplicateJsonObjectKeys(trimmed, `${path8} embedded JSON`);
-          return cloneBoundedJson(JSON.parse(trimmed), `${path8} embedded JSON`);
+          assertNoDuplicateJsonObjectKeys(trimmed, `${path9} embedded JSON`);
+          return cloneBoundedJson(JSON.parse(trimmed), `${path9} embedded JSON`);
         } catch (error) {
           if (error instanceof SyntaxError) return null;
           throw error;
@@ -37361,7 +37361,7 @@ var require_mcp_server = __commonJS({
       function decodeAssignmentToken(token) {
         return token.replace(/\\u([a-fA-F0-9]{4})/g, (_match, hex) => String.fromCharCode(Number.parseInt(hex, 16))).replace(/\\(["'\\])/g, "$1");
       }
-      function assertNoCredentialAssignments(current, path8) {
+      function assertNoCredentialAssignments(current, path9) {
         const assignments = current.matchAll(
           /(?:^|[\s{(\[,;?&:])(?:"((?:\\.|[^"\\\r\n]){1,128})"|'((?:\\.|[^'\\\r\n]){1,128})'|([A-Za-z][A-Za-z0-9_.-]{0,127}))[ \t]{0,256}(?:=|:)[ \t]{0,256}(?:"((?:\\.|[^"\\\r\n]){0,2048})"|'((?:\\.|[^'\\\r\n]){0,2048})'|([^\s,;}\]\r\n]{1,2048}))/g
         );
@@ -37374,7 +37374,7 @@ var require_mcp_server = __commonJS({
           if (classification.referenceKind) {
             assertOpaqueCredentialReference(
               assignmentValue || null,
-              `${path8}<assignment>`,
+              `${path9}<assignment>`,
               classification.referenceKind
             );
             continue;
@@ -37382,28 +37382,28 @@ var require_mcp_server = __commonJS({
           if (assignmentValue.length >= MIN_CREDENTIAL_ASSIGNMENT_VALUE_LENGTH) {
             throw new McpEnforcementError(
               "MCP_CREDENTIAL_MATERIAL_REJECTED",
-              `${path8} contains credential-shaped assignment material`
+              `${path9} contains credential-shaped assignment material`
             );
           }
         }
       }
-      function walk(current, path8, pathTokens = [], state = {}) {
+      function walk(current, path9, pathTokens = [], state = {}) {
         if (typeof current === "string") {
           if (containsCredentialMaterial(current)) {
             throw new McpEnforcementError(
               "MCP_CREDENTIAL_MATERIAL_REJECTED",
-              `${path8} contains credential-shaped material`
+              `${path9} contains credential-shaped material`
             );
           }
-          assertNoCredentialAssignments(current, path8);
-          const parsedContent = parseJsonContentText(current, path8, pathTokens);
+          assertNoCredentialAssignments(current, path9);
+          const parsedContent = parseJsonContentText(current, path9, pathTokens);
           if (parsedContent !== null) {
-            walk(parsedContent, `${path8}<json>`, [...pathTokens, "<json>"]);
+            walk(parsedContent, `${path9}<json>`, [...pathTokens, "<json>"]);
           }
           return;
         }
         if (!current || typeof current !== "object") return;
-        inspectStructuredHeader(current, path8);
+        inspectStructuredHeader(current, path9);
         if (Array.isArray(current)) {
           const childState = {
             sensitiveSchemaDefinition: state.sensitiveSchemaDefinition,
@@ -37411,7 +37411,7 @@ var require_mcp_server = __commonJS({
           };
           current.forEach((child, index) => walk(
             child,
-            `${path8}[${index}]`,
+            `${path9}[${index}]`,
             [...pathTokens, index],
             childState
           ));
@@ -37423,10 +37423,10 @@ var require_mcp_server = __commonJS({
           if (containsCredentialMaterial(key) && !booleanRiskCapabilityDeclaration) {
             throw new McpEnforcementError(
               "MCP_CREDENTIAL_MATERIAL_REJECTED",
-              `${path8}.<key> contains credential-shaped material`
+              `${path9}.<key> contains credential-shaped material`
             );
           }
-          const childPath = `${path8}.<value>`;
+          const childPath = `${path9}.<value>`;
           const childTokens = [...pathTokens, key];
           if (state.sensitiveSchemaDefinition && ["default", "const", "example", "examples", "enum"].includes(key) && child !== null && !(Array.isArray(child) && child.length === 0)) {
             throw new McpEnforcementError(
@@ -38359,7 +38359,7 @@ var require_mcp_server = __commonJS({
       name,
       args,
       method,
-      path: path8,
+      path: path9,
       body
     }) {
       requireEnforcementBoundary(enforcementBoundary);
@@ -38413,8 +38413,8 @@ var require_mcp_server = __commonJS({
         if (safeArgs.query) params.set("q", safeArgs.query);
         if (safeArgs.category) params.set("category", safeArgs.category);
         if (safeArgs.limit !== void 0) params.set("limit", String(safeArgs.limit));
-        const path8 = `/api/capabilities?${params.toString()}`;
-        return enforced({ name, args: safeArgs, method: "GET", path: path8 });
+        const path9 = `/api/capabilities?${params.toString()}`;
+        return enforced({ name, args: safeArgs, method: "GET", path: path9 });
       }
       if (name === "agoragentic_preview_x402") {
         const task = String(safeArgs.task || "").trim();
@@ -38433,8 +38433,8 @@ var require_mcp_server = __commonJS({
         if (safeArgs.prefer_trusted !== void 0) params.set("prefer_trusted", safeArgs.prefer_trusted ? "true" : "false");
         if (safeArgs.payment_network) params.set("payment_network", safeArgs.payment_network);
         if (safeArgs.payment_asset) params.set("payment_asset", safeArgs.payment_asset);
-        const path8 = `/api/x402/execute/match?${params.toString()}`;
-        return enforced({ name, args: safeArgs, method: "GET", path: path8 });
+        const path9 = `/api/x402/execute/match?${params.toString()}`;
+        return enforced({ name, args: safeArgs, method: "GET", path: path9 });
       }
       if (name === "agoragentic_match") {
         const params = new URLSearchParams();
@@ -38442,8 +38442,8 @@ var require_mcp_server = __commonJS({
         if (safeArgs.max_cost !== void 0) params.set("max_cost", String(safeArgs.max_cost));
         if (safeArgs.category) params.set("category", safeArgs.category);
         if (safeArgs.prefer_trusted !== void 0) params.set("prefer_trusted", safeArgs.prefer_trusted ? "true" : "false");
-        const path8 = `/api/execute/match?${params.toString()}`;
-        return enforced({ name, args: safeArgs, method: "GET", path: path8 });
+        const path9 = `/api/execute/match?${params.toString()}`;
+        return enforced({ name, args: safeArgs, method: "GET", path: path9 });
       }
       if (name === "agoragentic_execute") {
         const payload = {
@@ -38466,8 +38466,8 @@ var require_mcp_server = __commonJS({
         if (typeof invocationId !== "string" || !CANONICAL_INVOCATION_ID_PATTERN.test(invocationId)) {
           return buildJsonContent({ ok: false, error: "invalid_invocation_id" });
         }
-        const path8 = `/api/execute/status/${invocationId}`;
-        return enforced({ name, args: safeArgs, method: "GET", path: path8 });
+        const path9 = `/api/execute/status/${invocationId}`;
+        return enforced({ name, args: safeArgs, method: "GET", path: path9 });
       }
       return buildJsonContent({
         ok: false,
@@ -42668,7 +42668,7 @@ var require_split2 = __commonJS({
 var require_helper = __commonJS({
   "risk-fork-hosted-mcp/node_modules/pgpass/lib/helper.js"(exports, module) {
     "use strict";
-    var path8 = __require("path");
+    var path9 = __require("path");
     var Stream = __require("stream").Stream;
     var split = require_split2();
     var util = __require("util");
@@ -42707,7 +42707,7 @@ var require_helper = __commonJS({
     };
     module.exports.getFileName = function(rawEnv) {
       var env = rawEnv || process.env;
-      var file = env.PGPASSFILE || (isWin ? path8.join(env.APPDATA || "./", "postgresql", "pgpass.conf") : path8.join(env.HOME || "./", ".pgpass"));
+      var file = env.PGPASSFILE || (isWin ? path9.join(env.APPDATA || "./", "postgresql", "pgpass.conf") : path9.join(env.HOME || "./", ".pgpass"));
       return file;
     };
     module.exports.usePgPass = function(stats, fname) {
@@ -42839,7 +42839,7 @@ var require_helper = __commonJS({
 var require_lib = __commonJS({
   "risk-fork-hosted-mcp/node_modules/pgpass/lib/index.js"(exports, module) {
     "use strict";
-    var path8 = __require("path");
+    var path9 = __require("path");
     var fs = __require("fs");
     var helper = require_helper();
     module.exports = function(connInfo, cb) {
@@ -47530,8 +47530,8 @@ var require_utils3 = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path8) {
-      let input = path8;
+    function removeDotSegments(path9) {
+      let input = path9;
       const output = [];
       let nextSlash = -1;
       let len = 0;
@@ -47940,8 +47940,8 @@ var require_schemes = __commonJS({
       }
       if (wsComponent.resourceName) {
         const queryIndex = wsComponent.resourceName.indexOf("?");
-        const path8 = queryIndex === -1 ? wsComponent.resourceName : wsComponent.resourceName.slice(0, queryIndex);
-        wsComponent.path = path8 && path8 !== "/" ? path8 : void 0;
+        const path9 = queryIndex === -1 ? wsComponent.resourceName : wsComponent.resourceName.slice(0, queryIndex);
+        wsComponent.path = path9 && path9 !== "/" ? path9 : void 0;
         wsComponent.query = queryIndex === -1 ? void 0 : wsComponent.resourceName.slice(queryIndex + 1);
         wsComponent.resourceName = void 0;
       }
@@ -52364,35 +52364,35 @@ function rawSha256Ref(value) {
 var MAX_DEPTH = 64;
 var MAX_NODES = 1e5;
 var MAX_STRING_BYTES = 16 * 1024 * 1024;
-function assertJsonValue(value, state, path8, depth) {
-  if (depth > MAX_DEPTH) throw new TypeError(`Canonical JSON exceeds ${MAX_DEPTH} levels at ${path8}`);
+function assertJsonValue(value, state, path9, depth) {
+  if (depth > MAX_DEPTH) throw new TypeError(`Canonical JSON exceeds ${MAX_DEPTH} levels at ${path9}`);
   state.nodes += 1;
   if (state.nodes > MAX_NODES) throw new TypeError(`Canonical JSON exceeds ${MAX_NODES} values`);
   if (value === null || typeof value === "boolean") return;
   if (typeof value === "string") {
     if (Buffer.byteLength(value, "utf8") > MAX_STRING_BYTES) {
-      throw new TypeError(`Canonical JSON string is too large at ${path8}`);
+      throw new TypeError(`Canonical JSON string is too large at ${path9}`);
     }
     return;
   }
   if (typeof value === "number") {
     if (!Number.isFinite(value) || Object.is(value, -0)) {
-      throw new TypeError(`Canonical JSON number is not finite and unambiguous at ${path8}`);
+      throw new TypeError(`Canonical JSON number is not finite and unambiguous at ${path9}`);
     }
     if (Number.isInteger(value) && !Number.isSafeInteger(value)) {
-      throw new TypeError(`Canonical JSON integer is outside the safe range at ${path8}`);
+      throw new TypeError(`Canonical JSON integer is outside the safe range at ${path9}`);
     }
     return;
   }
   if (typeof value !== "object") {
-    throw new TypeError(`Canonical JSON contains a non-JSON value at ${path8}`);
+    throw new TypeError(`Canonical JSON contains a non-JSON value at ${path9}`);
   }
-  if (state.ancestors.has(value)) throw new TypeError(`Canonical JSON contains a cycle at ${path8}`);
+  if (state.ancestors.has(value)) throw new TypeError(`Canonical JSON contains a cycle at ${path9}`);
   state.ancestors.add(value);
   try {
     const descriptors = Object.getOwnPropertyDescriptors(value);
     if (Object.getOwnPropertySymbols(value).length > 0) {
-      throw new TypeError(`Canonical JSON contains a symbol key at ${path8}`);
+      throw new TypeError(`Canonical JSON contains a symbol key at ${path9}`);
     }
     const descriptorKeys = ownStringKeys(descriptors);
     for (let index = 0; index < descriptorKeys.length; index += 1) {
@@ -52400,29 +52400,29 @@ function assertJsonValue(value, state, path8, depth) {
       const descriptor = descriptors[key];
       if (Array.isArray(value) && key === "length") continue;
       if (!descriptor.enumerable || descriptor.get || descriptor.set) {
-        throw new TypeError(`Canonical JSON contains a hidden or accessor field at ${path8}.${key}`);
+        throw new TypeError(`Canonical JSON contains a hidden or accessor field at ${path9}.${key}`);
       }
     }
     if (Array.isArray(value)) {
       if (ownStringKeys(value).length !== value.length) {
-        throw new TypeError(`Canonical JSON array is sparse or has extra fields at ${path8}`);
+        throw new TypeError(`Canonical JSON array is sparse or has extra fields at ${path9}`);
       }
       for (let index = 0; index < value.length; index += 1) {
         const descriptor = descriptors[String(index)];
         if (!descriptor || !descriptor.enumerable || descriptor.get || descriptor.set) {
-          throw new TypeError(`Canonical JSON array is sparse at ${path8}[${index}]`);
+          throw new TypeError(`Canonical JSON array is sparse at ${path9}[${index}]`);
         }
-        assertJsonValue(descriptor.value, state, `${path8}[${index}]`, depth + 1);
+        assertJsonValue(descriptor.value, state, `${path9}[${index}]`, depth + 1);
       }
       return;
     }
     const prototype = Object.getPrototypeOf(value);
     if (prototype !== Object.prototype && prototype !== null) {
-      throw new TypeError(`Canonical JSON contains a non-plain object at ${path8}`);
+      throw new TypeError(`Canonical JSON contains a non-plain object at ${path9}`);
     }
     for (let index = 0; index < descriptorKeys.length; index += 1) {
       const key = descriptorKeys[index];
-      assertJsonValue(descriptors[key].value, state, `${path8}.${key}`, depth + 1);
+      assertJsonValue(descriptors[key].value, state, `${path9}.${key}`, depth + 1);
     }
   } finally {
     state.ancestors.delete(value);
@@ -54021,35 +54021,35 @@ function normalizedKeys(value) {
 }
 function scanAuthorityFreeJson(value, field) {
   let nodes = 0;
-  function walk(current, path8, depth) {
+  function walk(current, path9, depth) {
     nodes += 1;
     if (nodes > MAX_OPERATION_NODES) throw new TypeError(`${field} is too complex`);
     if (depth > MAX_OPERATION_DEPTH) throw new TypeError(`${field} is too deeply nested`);
     if (typeof current === "string") {
       if (securityPatternsMatch(AUTHORITY_OR_SECRET_VALUE_PATTERNS, current)) {
-        throw new TypeError(`${path8} contains authority or secret-shaped material`);
+        throw new TypeError(`${path9} contains authority or secret-shaped material`);
       }
       return;
     }
     if (current === null || typeof current !== "object") return;
     if (Array.isArray(current)) {
       for (let index = 0; index < current.length; index += 1) {
-        walk(current[index], `${path8}[${index}]`, depth + 1);
+        walk(current[index], `${path9}[${index}]`, depth + 1);
       }
       return;
     }
     for (const [key, child] of Object.entries(current)) {
       const normalized = normalizedKeys(key);
       if (securityPatternsMatch(AUTHORITY_OR_SECRET_VALUE_PATTERNS, key)) {
-        throw new TypeError(`${path8}.<key> contains authority or secret-shaped material`);
+        throw new TypeError(`${path9}.<key> contains authority or secret-shaped material`);
       }
       if (DANGEROUS_KEYS.has(key)) {
-        throw new TypeError(`${path8}.<key> is a forbidden JSON key`);
+        throw new TypeError(`${path9}.<key> is a forbidden JSON key`);
       }
       if (normalized.some((candidate) => AUTHORITY_OR_SECRET_KEY_PATTERN.test(candidate)) || isTokenMeasurementKey(key) && !isBoundedTokenMeasurementValue(child)) {
-        throw new TypeError(`${path8}.<key> is an authority or secret-bearing field`);
+        throw new TypeError(`${path9}.<key> is an authority or secret-bearing field`);
       }
-      walk(child, `${path8}.<value>`, depth + 1);
+      walk(child, `${path9}.<value>`, depth + 1);
     }
   }
   walk(value, field, 0);
@@ -59251,9 +59251,9 @@ function makeAjv(schema) {
   registerNestedSchemaResources(ajv, schema);
   return ajv;
 }
-function walkStrings(value, visitor, limits, state = { nodes: 0 }, path8 = "$", depth = 0, enforceMeasurementValues = true) {
+function walkStrings(value, visitor, limits, state = { nodes: 0 }, path9 = "$", depth = 0, enforceMeasurementValues = true) {
   if (depth > limits.max_depth) {
-    throw new TypeError(`Artifact nesting exceeds ${limits.max_depth} levels at ${path8}`);
+    throw new TypeError(`Artifact nesting exceeds ${limits.max_depth} levels at ${path9}`);
   }
   state.nodes += 1;
   if (state.nodes > limits.max_nodes) {
@@ -59261,9 +59261,9 @@ function walkStrings(value, visitor, limits, state = { nodes: 0 }, path8 = "$", 
   }
   if (typeof value === "string") {
     if (Buffer.byteLength(value, "utf8") > limits.max_string_bytes) {
-      throw new TypeError(`Artifact string exceeds ${limits.max_string_bytes} bytes at ${path8}`);
+      throw new TypeError(`Artifact string exceeds ${limits.max_string_bytes} bytes at ${path9}`);
     }
-    visitor(value, path8);
+    visitor(value, path9);
     return;
   }
   if (Array.isArray(value)) {
@@ -59273,7 +59273,7 @@ function walkStrings(value, visitor, limits, state = { nodes: 0 }, path8 = "$", 
         visitor,
         limits,
         state,
-        `${path8}[${index}]`,
+        `${path9}[${index}]`,
         depth + 1,
         enforceMeasurementValues
       );
@@ -59283,9 +59283,9 @@ function walkStrings(value, visitor, limits, state = { nodes: 0 }, path8 = "$", 
   if (!value || typeof value !== "object") return;
   for (const [key, child] of Object.entries(value)) {
     if (Buffer.byteLength(key, "utf8") > limits.max_string_bytes) {
-      throw new TypeError(`Artifact key exceeds ${limits.max_string_bytes} bytes at ${path8}.<key>`);
+      throw new TypeError(`Artifact key exceeds ${limits.max_string_bytes} bytes at ${path9}.<key>`);
     }
-    visitor(key, `${path8}.<key>`);
+    visitor(key, `${path9}.<key>`);
     const normalizedKeys3 = normalizeChildKeys(key);
     let forbiddenFingerprint = false;
     for (let index = 0; index < normalizedKeys3.length; index += 1) {
@@ -59295,14 +59295,14 @@ function walkStrings(value, visitor, limits, state = { nodes: 0 }, path8 = "$", 
       }
     }
     if (forbiddenFingerprint || isForbiddenAuthorityShapeKey(key) || enforceMeasurementValues && isForbiddenAuthorityShapeEntry(key, child)) {
-      throw new Error(`Child artifact cannot carry trusted authority or memory field at ${path8}.<key>`);
+      throw new Error(`Child artifact cannot carry trusted authority or memory field at ${path9}.<key>`);
     }
     walkStrings(
       child,
       visitor,
       limits,
       state,
-      `${path8}.<value>`,
+      `${path9}.<value>`,
       depth + 1,
       enforceMeasurementValues
     );
@@ -59310,16 +59310,16 @@ function walkStrings(value, visitor, limits, state = { nodes: 0 }, path8 = "$", 
 }
 function scanText(value, policy, { enforceMeasurementValues = true } = {}) {
   const findings = [];
-  walkStrings(value, (text, path8) => {
+  walkStrings(value, (text, path9) => {
     const secretMatches = countSecurityPatternMatches(SECRET_PATTERNS, text);
     for (let index = 0; index < secretMatches; index += 1) {
-      findings.push({ code: "secret_pattern", path: path8 });
+      findings.push({ code: "secret_pattern", path: path9 });
     }
-    if (containsObviousCapabilityLikeText(text)) findings.push({ code: "authority_shape", path: path8 });
+    if (containsObviousCapabilityLikeText(text)) findings.push({ code: "authority_shape", path: path9 });
     if (!policy.allow_prompt_injection_text) {
       const promptMatches = countSecurityPatternMatches(PROMPT_INJECTION_PATTERNS, text);
       for (let index = 0; index < promptMatches; index += 1) {
-        findings.push({ code: "prompt_injection_pattern", path: path8 });
+        findings.push({ code: "prompt_injection_pattern", path: path9 });
       }
     }
   }, policy, { nodes: 0 }, "$", 0, enforceMeasurementValues);
@@ -59327,24 +59327,24 @@ function scanText(value, policy, { enforceMeasurementValues = true } = {}) {
 }
 function assertClosedLocalSchema(schema) {
   const seen = /* @__PURE__ */ new WeakSet();
-  function visit(value, path8 = "$") {
+  function visit(value, path9 = "$") {
     if (!value || typeof value !== "object") return;
-    if (seen.has(value)) throw new TypeError(`Typed result schema contains a cycle at ${path8}`);
+    if (seen.has(value)) throw new TypeError(`Typed result schema contains a cycle at ${path9}`);
     seen.add(value);
     try {
       if (Array.isArray(value)) {
-        value.forEach((item, index) => visit(item, `${path8}[${index}]`));
+        value.forEach((item, index) => visit(item, `${path9}[${index}]`));
         return;
       }
       for (const keyword of ["$ref", "$dynamicRef"]) {
         if (Object.hasOwn(value, keyword) && (typeof value[keyword] !== "string" || !value[keyword].startsWith("#"))) {
-          throw new TypeError(`Typed result schema forbids remote ${keyword} at ${path8}`);
+          throw new TypeError(`Typed result schema forbids remote ${keyword} at ${path9}`);
         }
       }
       if (value.type === "object" && value.additionalProperties !== false) {
-        throw new TypeError(`Typed result object schema must set additionalProperties:false at ${path8}`);
+        throw new TypeError(`Typed result object schema must set additionalProperties:false at ${path9}`);
       }
-      for (const [key, child] of Object.entries(value)) visit(child, `${path8}.${key}`);
+      for (const [key, child] of Object.entries(value)) visit(child, `${path9}.${key}`);
     } finally {
       seen.delete(value);
     }
@@ -60866,12 +60866,12 @@ function createFileParentHeadInternals(directory, clock) {
           });
           throw error;
         }
-        const failure = "parent_effect_unconfirmed";
+        const failure2 = "parent_effect_unconfirmed";
         await atomicWriteJson(files.state, {
           ...current,
           status: "ambiguous",
           updated_at: requireIsoDate(clock(), "clock result"),
-          pending_transaction: { ...intent, failure }
+          pending_transaction: { ...intent, failure: failure2 }
         });
         throw internalCommitAmbiguity(
           "Parent commit effect began or nested authority became ambiguous; automatic retry is forbidden",
@@ -60879,7 +60879,7 @@ function createFileParentHeadInternals(directory, clock) {
             ...INTERNAL_COMMIT_RECOVERY_EVIDENCE.get(error),
             parent_ref: parentRef,
             transaction_ref: intent.transaction_ref,
-            cause: failure
+            cause: failure2
           }
         );
       }
@@ -61316,12 +61316,12 @@ function createFileExecutionAuthorizationInternals(directory, clock, verifyAutho
           }
           throw error;
         }
-        const failure = "authorized_effect_unconfirmed";
+        const failure2 = "authorized_effect_unconfirmed";
         await atomicWriteJson(files.state, {
           ...current,
           status: "ambiguous",
           updated_at: executionNow ?? initialNow,
-          failure
+          failure: failure2
         });
         throw internalCommitAmbiguity(
           "Authorized execution began; automatic retry is forbidden",
@@ -61329,7 +61329,7 @@ function createFileExecutionAuthorizationInternals(directory, clock, verifyAutho
             ...INTERNAL_COMMIT_RECOVERY_EVIDENCE.get(error),
             authorization_id: authorizationId,
             binding_hash: current.binding_hash,
-            cause: failure
+            cause: failure2
           }
         );
       }
@@ -63256,12 +63256,12 @@ function hashSkillSpectorRulesManifest(value) {
       assertPlainObject(entry, field);
       assertAllowedKeys(entry, ["path", "hash"], field);
       requireFields(entry, ["path", "hash"], field);
-      const path8 = requireString(entry.path, `${field}.path`, { maxLength: 500 });
-      if (!/^skillspector\/(?:nodes\/analyzers\/static_[A-Za-z0-9_.-]+\.py|yara_rules\/[A-Za-z0-9_.-]+)$/.test(path8)) {
+      const path9 = requireString(entry.path, `${field}.path`, { maxLength: 500 });
+      if (!/^skillspector\/(?:nodes\/analyzers\/static_[A-Za-z0-9_.-]+\.py|yara_rules\/[A-Za-z0-9_.-]+)$/.test(path9)) {
         throw new TypeError("SkillSpector rules manifest path is outside the reviewed rule surfaces");
       }
       return {
-        path: path8,
+        path: path9,
         hash: requireSha256Ref(entry.hash, `${field}.hash`)
       };
     }).sort((left, right) => left.path < right.path ? -1 : left.path > right.path ? 1 : 0);
@@ -67944,9 +67944,9 @@ function fieldPath(value, label) {
   }
   return Object.freeze([...value]);
 }
-function ownPath(value, path8) {
+function ownPath(value, path9) {
   let current = value;
-  for (const key of path8) {
+  for (const key of path9) {
     const descriptor = current && typeof current === "object" ? Object.getOwnPropertyDescriptor(current, key) : null;
     if (!descriptor || !Object.hasOwn(descriptor, "value")) {
       throw handleError(
@@ -68427,9 +68427,9 @@ function collectMcpParameterHeaderSpecs(inputSchema) {
   visitUnknown(root, true, []);
   return Object.freeze(found);
 }
-function valueAtOwnPath(value, path8) {
+function valueAtOwnPath(value, path9) {
   let current = value;
-  for (const key of path8) {
+  for (const key of path9) {
     if (!current || typeof current !== "object" || !Object.hasOwn(current, key)) {
       return Object.freeze({ present: false, value: void 0 });
     }
@@ -69949,7 +69949,7 @@ function isRiskForkMcpHostAdapter(value) {
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/e2b-qualification.mjs
 import {
   KeyObject,
-  createHash as createHash4,
+  createHash as createHash5,
   createPublicKey,
   verify as verifySignature
 } from "node:crypto";
@@ -69962,9 +69962,925 @@ import {
 } from "node:fs/promises";
 import { constants } from "node:fs";
 import { createRequire } from "node:module";
-import path3 from "node:path";
+import path4 from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { isProxy } from "node:util/types";
+
+// risk-fork-hosted-mcp/.build/upstream/risk-fork/src/e2b-sdk-process.mjs
+import { spawn } from "node:child_process";
+import { createHash as createHash4, randomUUID as randomUUID8 } from "node:crypto";
+import path3 from "node:path";
+var BOUNDARIES = /* @__PURE__ */ new WeakSet();
+var FRAME_BYTES = 2 * 1024 * 1024;
+var CHUNK_BYTES = 64 * 1024;
+var MAX_PROCESSES = 8;
+var EFFECTFUL_OPERATIONS = /* @__PURE__ */ new Set(["create", "kill", "write_commit", "file_remove", "child_kill", "set_timeout", "command_run"]);
+var retainedProcesses = 0;
+function failure(code = "E2B_SDK_PROCESS_OUTCOME_UNKNOWN") {
+  const error = new Error("E2B SDK process boundary failed; provider outcome is not established");
+  error.name = "E2BSdkProcessBoundaryError";
+  error.code = code;
+  error.retryable = false;
+  error.production_qualified = false;
+  error.provider_outcome = "unknown";
+  return error;
+}
+async function checkReadonlyCustody(config, runtimeFiles = []) {
+  const fs = await import("node:fs/promises");
+  const { constants: constants4 } = await import("node:fs");
+  const crypto2 = await import("node:crypto");
+  const posix = (await import("node:path")).posix;
+  if (process.platform !== "linux" || typeof process.getuid !== "function" || process.getuid() === 0 || process.getgid() === 0) throw new Error("unsupported custody");
+  const status = await fs.readFile("/proc/self/status", "utf8");
+  for (const key of ["CapEff", "CapPrm", "CapAmb"]) {
+    if (!new RegExp(`^${key}:\\s+0+$`, "m").test(status)) throw new Error("capability custody");
+  }
+  if (!/^NoNewPrivs:\s+1$/m.test(status) || process.getgroups().includes(0)) {
+    throw new Error("privilege custody");
+  }
+  const mounts = (await fs.readFile("/proc/self/mountinfo", "utf8")).trim().split("\n").map((line) => {
+    const fields = line.split(" ");
+    if (fields.length < 10 || !fields.includes("-")) throw new Error("mount observation");
+    const mount = fields[4].replace(/\\([0-7]{3})/g, (_, value) => String.fromCharCode(parseInt(value, 8)));
+    return { mount, readonly: fields[5].split(",").includes("ro") };
+  });
+  for (const entry of [config.runtimeArtifactPath, config.packageDirectory, config.nodePath, ...runtimeFiles]) {
+    if (!posix.isAbsolute(entry) || await fs.realpath(entry) !== entry) throw new Error("canonical custody");
+    const applicable = mounts.filter(({ mount }) => entry === mount || entry.startsWith(mount === "/" ? "/" : `${mount}/`)).sort((left, right) => right.mount.length - left.mount.length);
+    if (!applicable[0]?.readonly) throw new Error("writable custody");
+  }
+  const hash = async (file, expected) => {
+    const handle = await fs.open(file, constants4.O_RDONLY | constants4.O_NOFOLLOW | constants4.O_NONBLOCK);
+    try {
+      const before = await handle.stat();
+      if (!before.isFile() || before.nlink !== 1 || before.size > 512 * 1024 * 1024) throw new Error("artifact custody");
+      const digest = crypto2.createHash("sha256");
+      const buffer = Buffer.alloc(256 * 1024);
+      let total = 0;
+      while (true) {
+        const { bytesRead } = await handle.read(buffer, 0, buffer.length, null);
+        if (!bytesRead) break;
+        total += bytesRead;
+        if (total > before.size) throw new Error("artifact drift");
+        digest.update(buffer.subarray(0, bytesRead));
+      }
+      const after = await handle.stat();
+      const named = await fs.lstat(file);
+      if (total !== before.size || before.dev !== after.dev || before.ino !== after.ino || before.size !== after.size || before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs || named.isSymbolicLink() || named.dev !== after.dev || named.ino !== after.ino || `sha256:${digest.digest("hex")}` !== expected) throw new Error("artifact pin");
+    } finally {
+      await handle.close();
+    }
+  };
+  await hash(config.runtimeArtifactPath, config.runtimeArtifactHash);
+  await hash(config.nodePath, config.nodeArtifactHash);
+  if (process.execPath !== config.nodePath) throw new Error("runtime identity");
+  return { uid: process.getuid(), gid: process.getgid(), readonly: true };
+}
+async function assertE2BRuntimeSdkReadonlyCustody(profile, runtimeFiles) {
+  return checkReadonlyCustody(profile, runtimeFiles);
+}
+async function sdkProcessMain(checkCustody) {
+  const crypto2 = await import("node:crypto");
+  const { pathToFileURL: pathToFileURL2 } = await import("node:url");
+  const LIMIT = 2 * 1024 * 1024;
+  const CHUNK = 64 * 1024;
+  const WRITE_LIMIT = 32 * 1024 * 1024;
+  const READ_LIMIT = 4 * 1024 * 1024;
+  const frame = Buffer.alloc(LIMIT);
+  let used = 0;
+  let initialized = false;
+  let verifier;
+  let binding;
+  let sdk;
+  let Sandbox;
+  let inflight = 0;
+  let creating = 0;
+  let openingReads = 0;
+  let sequence = 0;
+  let writeBytes = 0;
+  const children = /* @__PURE__ */ new Map();
+  const lists = /* @__PURE__ */ new Map();
+  const writes = /* @__PURE__ */ new Map();
+  const reads = /* @__PURE__ */ new Map();
+  const mutations = /* @__PURE__ */ new WeakSet();
+  const retiring = /* @__PURE__ */ new WeakSet();
+  class ReadRetired extends Error {
+  }
+  const send = (value) => {
+    const bytes = Buffer.from(`${JSON.stringify(value)}
+`);
+    if (bytes.length > LIMIT) throw new Error("output bound");
+    process.stdout.write(bytes);
+  };
+  const closed = (value, keys) => {
+    if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).some((key) => !keys.includes(key))) throw new Error("closed wire");
+  };
+  const string = (value, max = 500) => {
+    if (typeof value !== "string" || !value.length || value.length > max || /[\0\r\n]/.test(value)) throw new Error("string bound");
+    return value;
+  };
+  const integer = (value, max, min = 0) => {
+    if (!Number.isSafeInteger(value) || value < min || value > max) throw new Error("integer bound");
+    return value;
+  };
+  const plain = (value, depth = 0, count = { value: 0 }) => {
+    if (++count.value > 8192 || depth > 20) throw new Error("data bound");
+    if (value instanceof Date) return value.toISOString();
+    if (value === null || typeof value === "boolean" || typeof value === "string") {
+      if (typeof value === "string" && Buffer.byteLength(value) > 128 * 1024) throw new Error("text bound");
+      return value;
+    }
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (Array.isArray(value)) {
+      if (value.length > 1e3) throw new Error("array bound");
+      return value.map((entry) => plain(entry, depth + 1, count));
+    }
+    if (!value || typeof value !== "object" || ![null, Object.prototype].includes(Object.getPrototypeOf(value))) throw new Error("data shape");
+    const output = /* @__PURE__ */ Object.create(null);
+    for (const [key, descriptor] of Object.entries(Object.getOwnPropertyDescriptors(value))) {
+      if (!descriptor.enumerable || !Object.hasOwn(descriptor, "value") || ["__proto__", "constructor", "prototype"].includes(key)) throw new Error("data descriptor");
+      output[key] = plain(descriptor.value, depth + 1, count);
+    }
+    return output;
+  };
+  const info = (value) => {
+    const result = /* @__PURE__ */ Object.create(null);
+    for (const key of [
+      "sandboxId",
+      "sandboxID",
+      "templateId",
+      "templateID",
+      "metadata",
+      "state",
+      "allowInternetAccess",
+      "network",
+      "lifecycle",
+      "volumeMounts",
+      "startedAt",
+      "endAt"
+    ]) {
+      if (Object.hasOwn(value, key)) result[key] = plain(value[key]);
+    }
+    string(result.sandboxId ?? result.sandboxID);
+    string(result.templateId ?? result.templateID);
+    return result;
+  };
+  const child = (handle) => {
+    const value = children.get(string(handle));
+    if (!value) throw new Error("unknown child handle");
+    return value;
+  };
+  const base64 = (value) => {
+    if (typeof value !== "string" || value.length > 4 * Math.ceil(CHUNK / 3)) throw new Error("binary bound");
+    const bytes = Buffer.from(value, "base64");
+    if (bytes.length > CHUNK || bytes.toString("base64") !== value) throw new Error("binary encoding");
+    return bytes;
+  };
+  const mutate = async (value, enter, action) => {
+    if (mutations.has(value) || retiring.has(value)) throw new Error("child mutation already entered or retired");
+    mutations.add(value);
+    try {
+      enter();
+      const result = await action();
+      if (retiring.has(value)) throw new Error("effect completed after retirement began");
+      return result;
+    } finally {
+      mutations.delete(value);
+    }
+  };
+  const retireChild = (value) => {
+    for (const [handle, owned] of children) if (owned === value) children.delete(handle);
+    for (const [handle, entry] of writes) if (entry.child === value) {
+      writes.delete(handle);
+      writeBytes -= entry.bytes.length;
+    }
+    for (const [handle, entry] of reads) if (entry.child === value) {
+      reads.delete(handle);
+      entry.cancelled = true;
+      entry.controller.abort();
+      void entry.reader.cancel().catch(() => {
+      });
+    }
+  };
+  const dispatch = async (operation, args, enter) => {
+    if (operation === "load") {
+      closed(args, ["expected"]);
+      if (sdk) {
+        if (JSON.stringify(args.expected) !== JSON.stringify(binding)) throw new Error("loaded binding");
+      } else {
+        const loaded = await verifier.load(args.expected);
+        sdk = loaded.module;
+        Sandbox = sdk.Sandbox ?? sdk.default?.Sandbox ?? sdk.default;
+        if (typeof Sandbox !== "function" || ["create", "getInfo", "list", "kill"].some((key) => typeof Sandbox[key] !== "function")) throw new Error("SDK contract");
+      }
+      return { binding };
+    }
+    if (!sdk) throw new Error("SDK not loaded");
+    if (operation === "create") {
+      closed(args, ["template", "options"]);
+      string(args.template);
+      closed(args.options, ["timeoutMs", "secure", "allowInternetAccess", "network", "lifecycle", "metadata", "envs", "iam", "volumeMounts"]);
+      if (children.size + creating >= 32) throw new Error("child capacity");
+      plain(args.options);
+      creating += 1;
+      let value;
+      try {
+        enter();
+        value = await Sandbox.create(args.template, args.options);
+      } finally {
+        creating -= 1;
+      }
+      const sandboxId = string(value?.sandboxId);
+      const handle = crypto2.randomUUID();
+      children.set(handle, value);
+      return { handle, sandboxId };
+    }
+    if (operation === "get_info" || operation === "kill") {
+      closed(args, ["sandboxId"]);
+      string(args.sandboxId);
+      enter();
+      if (operation === "get_info") return info(await Sandbox.getInfo(args.sandboxId));
+      for (const value of children.values()) if (value.sandboxId === args.sandboxId) retiring.add(value);
+      const acknowledged = await Sandbox.kill(args.sandboxId) === true;
+      if (acknowledged) for (const value of children.values()) {
+        if (value.sandboxId === args.sandboxId) retireChild(value);
+      }
+      return { acknowledged };
+    }
+    if (operation === "list_open") {
+      closed(args, ["options"]);
+      closed(args.options, ["query"]);
+      closed(args.options.query, ["state", "metadata"]);
+      plain(args.options);
+      if (lists.size >= 32) throw new Error("list capacity");
+      const paginator = Sandbox.list(args.options);
+      if (typeof paginator?.nextItems !== "function" || typeof paginator.hasNext !== "boolean") throw new Error("list contract");
+      const handle = crypto2.randomUUID();
+      if (paginator.hasNext) lists.set(handle, { paginator, pages: 0, busy: false });
+      return { handle, hasNext: paginator.hasNext };
+    }
+    if (operation === "list_close") {
+      closed(args, ["handle"]);
+      string(args.handle);
+      lists.delete(args.handle);
+      return { completed: true };
+    }
+    if (operation === "list_next") {
+      closed(args, ["handle"]);
+      const entry = lists.get(string(args.handle));
+      if (!entry || entry.busy || ++entry.pages > 100) throw new Error("list state");
+      entry.busy = true;
+      try {
+        enter();
+        const items = await entry.paginator.nextItems();
+        if (!Array.isArray(items) || items.length > 1e3 || typeof entry.paginator.hasNext !== "boolean") throw new Error("list bound");
+        const hasNext = entry.paginator.hasNext;
+        const result = { items: items.map(info), hasNext };
+        if (!hasNext) lists.delete(args.handle);
+        return result;
+      } finally {
+        entry.busy = false;
+      }
+    }
+    if (operation === "write_begin") {
+      closed(args, ["handle", "path", "size", "hash"]);
+      child(args.handle);
+      string(args.path, 4096);
+      integer(args.size, WRITE_LIMIT);
+      if (!/^sha256:[a-f0-9]{64}$/.test(args.hash) || writes.size >= 8 || writeBytes + args.size > WRITE_LIMIT) throw new Error("write capacity");
+      const handle = crypto2.randomUUID();
+      writes.set(handle, { child: child(args.handle), path: args.path, bytes: Buffer.alloc(args.size), hash: args.hash, used: 0 });
+      writeBytes += args.size;
+      return { handle };
+    }
+    if (operation === "write_chunk") {
+      closed(args, ["handle", "offset", "bytes"]);
+      const entry = writes.get(string(args.handle));
+      const bytes = base64(args.bytes);
+      if (!entry || args.offset !== entry.used || bytes.length > entry.bytes.length - entry.used) throw new Error("write state");
+      bytes.copy(entry.bytes, entry.used);
+      entry.used += bytes.length;
+      return { accepted: bytes.length };
+    }
+    if (operation === "write_abort") {
+      closed(args, ["handle"]);
+      const entry = writes.get(string(args.handle));
+      if (entry) {
+        writes.delete(args.handle);
+        writeBytes -= entry.bytes.length;
+      }
+      return { completed: true };
+    }
+    if (operation === "write_commit") {
+      closed(args, ["handle"]);
+      const entry = writes.get(string(args.handle));
+      if (!entry || entry.used !== entry.bytes.length || `sha256:${crypto2.createHash("sha256").update(entry.bytes).digest("hex")}` !== entry.hash) throw new Error("write integrity");
+      return mutate(entry.child, enter, async () => {
+        writes.delete(args.handle);
+        try {
+          await entry.child.files.write(entry.path, entry.bytes);
+          return { completed: true };
+        } finally {
+          writeBytes -= entry.bytes.length;
+        }
+      });
+    }
+    if (operation === "file_remove" || operation === "child_kill" || operation === "set_timeout" || operation === "command_run") {
+      const keys = { file_remove: ["handle", "path"], child_kill: ["handle"], set_timeout: ["handle", "timeoutMs"], command_run: ["handle", "command", "timeoutMs"] };
+      closed(args, keys[operation]);
+      const value = child(args.handle);
+      if (operation === "file_remove") {
+        const target = string(args.path, 4096);
+        return mutate(value, enter, async () => {
+          await value.files.remove(target);
+          return { completed: true };
+        });
+      }
+      if (operation === "child_kill") {
+        retiring.add(value);
+        enter();
+        const acknowledged = await value.kill() === true;
+        if (acknowledged) retireChild(value);
+        return { acknowledged };
+      }
+      integer(args.timeoutMs, 10 * 60 * 1e3, 1);
+      if (operation === "set_timeout") return mutate(value, enter, async () => {
+        await value.setTimeout(args.timeoutMs);
+        return { completed: true };
+      });
+      const command = string(args.command, 8192);
+      return mutate(value, enter, async () => {
+        const result = await value.commands.run(command, { timeoutMs: args.timeoutMs });
+        integer(result?.exitCode, 255);
+        if (result.error != null || typeof result.stdout !== "string" || typeof result.stderr !== "string" || Buffer.byteLength(result.stdout) + Buffer.byteLength(result.stderr) > 128 * 1024) throw new Error("command output bound");
+        return { exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr };
+      });
+    }
+    if (operation === "read_open") {
+      closed(args, ["handle", "path", "timeoutMs", "idleTimeoutMs"]);
+      if (reads.size + openingReads >= 8) throw new Error("reader capacity");
+      integer(args.timeoutMs, 10 * 60 * 1e3, 1);
+      integer(args.idleTimeoutMs, 10 * 60 * 1e3, 1);
+      const controller = new AbortController();
+      const value = child(args.handle);
+      const target = string(args.path, 4096);
+      openingReads += 1;
+      let stream;
+      try {
+        enter();
+        stream = await value.files.read(target, {
+          format: "stream",
+          requestTimeoutMs: args.timeoutMs,
+          streamIdleTimeoutMs: args.idleTimeoutMs,
+          signal: controller.signal
+        });
+      } finally {
+        openingReads -= 1;
+      }
+      const reader = stream.getReader();
+      const handle = crypto2.randomUUID();
+      reads.set(handle, { child: value, reader, controller, pending: null, offset: 0, bytes: 0, busy: false, cancelled: false });
+      return { handle };
+    }
+    if (operation === "read_next" || operation === "read_cancel") {
+      closed(args, ["handle"]);
+      const entry = reads.get(string(args.handle));
+      if (!entry) {
+        if (operation === "read_cancel") return { completed: true };
+        throw new Error("reader state");
+      }
+      if (operation === "read_cancel") {
+        reads.delete(args.handle);
+        entry.cancelled = true;
+        entry.controller.abort();
+        await entry.reader.cancel();
+        return { completed: true };
+      }
+      if (entry.busy) throw new Error("reader state");
+      entry.busy = true;
+      try {
+        while (!entry.pending || entry.offset === entry.pending.length) {
+          const next = await entry.reader.read();
+          if (entry.cancelled) throw new ReadRetired();
+          if (next.done === true) {
+            reads.delete(args.handle);
+            return { done: true, bytes: "" };
+          }
+          if (!(next.value instanceof Uint8Array) || next.value.byteLength > READ_LIMIT - entry.bytes) throw new Error("read bound");
+          entry.bytes += next.value.byteLength;
+          entry.pending = Buffer.from(next.value);
+          entry.offset = 0;
+        }
+        const end = Math.min(entry.offset + CHUNK, entry.pending.length);
+        const bytes = entry.pending.subarray(entry.offset, end).toString("base64");
+        entry.offset = end;
+        return { done: false, bytes };
+      } catch (error) {
+        reads.delete(args.handle);
+        entry.controller.abort();
+        void entry.reader.cancel().catch(() => {
+        });
+        throw error;
+      } finally {
+        entry.busy = false;
+      }
+    }
+    throw new Error("unsupported operation");
+  };
+  const accept = async (message) => {
+    if (!initialized) {
+      initialized = true;
+      closed(message, ["config", "nonce"]);
+      const config = message.config;
+      closed(config, ["runtimeArtifactPath", "runtimeArtifactHash", "packageDirectory", "nodePath", "nodeArtifactHash", "lifetimeMs"]);
+      const custody = await checkCustody(config);
+      const runtime = await import(pathToFileURL2(config.runtimeArtifactPath).href);
+      verifier = runtime.createE2BRuntimeSdkIntegrityVerifier({
+        packageDirectory: config.packageDirectory,
+        readOnlyRuntime: {
+          runtimeArtifactPath: config.runtimeArtifactPath,
+          runtimeArtifactHash: config.runtimeArtifactHash,
+          nodeArtifactHash: config.nodeArtifactHash
+        }
+      });
+      binding = await verifier.inspect();
+      setTimeout(() => process.exit(1), integer(config.lifetimeMs, 10 * 60 * 1e3, 1e3));
+      send({ id: 0, result: { binding, pid: process.pid, nonce: message.nonce, custody } });
+      return;
+    }
+    closed(message, ["id", "operation", "args"]);
+    if (!verifier || message.id !== ++sequence || inflight >= 4) throw new Error("request state");
+    string(message.operation, 64);
+    inflight += 1;
+    let entered = false;
+    try {
+      send({ id: message.id, result: await dispatch(message.operation, message.args, () => {
+        entered = true;
+      }) });
+    } catch (error) {
+      let kind = entered ? "unknown" : "not_entered";
+      if (error instanceof ReadRetired) kind = "read_retired";
+      if (message.operation === "get_info" && typeof sdk?.SandboxNotFoundError === "function" && error instanceof sdk.SandboxNotFoundError) kind = "sandbox_not_found";
+      if (["read_open", "file_remove"].includes(message.operation) && typeof sdk?.FileNotFoundError === "function" && error instanceof sdk.FileNotFoundError) kind = "file_not_found";
+      send({ id: message.id, error: kind });
+    } finally {
+      inflight -= 1;
+    }
+  };
+  process.stdin.on("data", (chunk) => {
+    for (const byte of chunk) {
+      if (byte === 10) {
+        const message = JSON.parse(frame.subarray(0, used).toString("utf8"));
+        used = 0;
+        void accept(message).catch(() => process.exit(1));
+      } else {
+        if (used >= LIMIT) process.exit(1);
+        frame[used++] = byte;
+      }
+    }
+  });
+  process.stdin.on("end", () => process.exit(1));
+}
+function isE2BRuntimeSdkProcessBoundary(value) {
+  return BOUNDARIES.has(value);
+}
+function createE2BRuntimeSdkProcessBoundary(options = {}) {
+  assertPlainObject(options, "SDK process options");
+  assertAllowedKeys(options, ["runtimeArtifactPath", "runtimeArtifactHash", "packageDirectory", "nodeArtifactHash", "providerApiKey", "deadlineMs", "lifetimeMs"], "SDK process options");
+  const absolute = (value, field) => {
+    const result = requireString(value, field);
+    if (!path3.isAbsolute(result) || result !== path3.resolve(result)) throw new TypeError(`${field} must be canonical absolute`);
+    return result;
+  };
+  const config = Object.freeze({
+    runtimeArtifactPath: absolute(options.runtimeArtifactPath, "runtimeArtifactPath"),
+    runtimeArtifactHash: requireSha256Ref(options.runtimeArtifactHash, "runtimeArtifactHash"),
+    packageDirectory: absolute(options.packageDirectory, "packageDirectory"),
+    nodePath: process.execPath,
+    nodeArtifactHash: requireSha256Ref(options.nodeArtifactHash, "nodeArtifactHash"),
+    lifetimeMs: boundedInteger(options.lifetimeMs ?? 3e5, "lifetimeMs", { min: 1e3, max: 6e5 })
+  });
+  const deadlineMs = boundedInteger(options.deadlineMs ?? 3e4, "deadlineMs", { min: 100, max: 6e5 });
+  const env = /* @__PURE__ */ Object.create(null);
+  if (options.providerApiKey != null) env.E2B_API_KEY = requireString(options.providerApiKey, "providerApiKey", {
+    maxLength: 8192,
+    pattern: /^[\x21-\x7e]+$/
+  });
+  let child;
+  let startup;
+  let loaded;
+  let pin;
+  let retired = false;
+  let exited = false;
+  let sequence = 0;
+  let exitPromise;
+  const metrics = {
+    requests_started: 0,
+    requests_completed: 0,
+    requests_rejected_before_sdk: 0,
+    effectful_outcomes_unknown: 0,
+    request_deadlines_exceeded: 0,
+    process_starts: 0,
+    process_exits_observed: 0
+  };
+  const pending = /* @__PURE__ */ new Map();
+  const terminate = () => {
+    retired = true;
+    for (const entry of pending.values()) {
+      clearTimeout(entry.timer);
+      if (EFFECTFUL_OPERATIONS.has(entry.operation)) metrics.effectful_outcomes_unknown += 1;
+      entry.reject(failure());
+    }
+    pending.clear();
+    if (child && !exited && child.exitCode === null && child.signalCode === null) {
+      try {
+        process.kill(-child.pid, "SIGKILL");
+      } catch {
+      }
+      try {
+        child.kill("SIGKILL");
+      } catch {
+      }
+    }
+  };
+  const request = (operation, args, timeoutMs = deadlineMs) => {
+    if (retired || !child || exited || pending.size >= 4) return Promise.reject(failure());
+    const id = sequence + 1;
+    const bytes2 = Buffer.from(`${canonicalize({ id, operation, args })}
+`);
+    if (bytes2.length > FRAME_BYTES) return Promise.reject(failure());
+    sequence = id;
+    metrics.requests_started += 1;
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        metrics.request_deadlines_exceeded += 1;
+        terminate();
+        reject(failure());
+      }, timeoutMs);
+      pending.set(id, { resolve, reject, timer, operation });
+      child.stdin.write(bytes2, (error) => {
+        if (error) terminate();
+      });
+    });
+  };
+  const start = async () => {
+    if (retired) throw failure();
+    if (startup) return startup;
+    startup = (async () => {
+      try {
+        await checkReadonlyCustody(config);
+      } catch {
+        throw failure("E2B_SDK_PROCESS_PROFILE_UNVERIFIED");
+      }
+      if (retired || retainedProcesses >= MAX_PROCESSES) throw failure();
+      retainedProcesses += 1;
+      const source = `(${sdkProcessMain.toString()})(${checkReadonlyCustody.toString()}).catch(() => process.exit(1));`;
+      try {
+        child = spawn(config.nodePath, ["--max-old-space-size=256", "--input-type=module", "--eval", source], {
+          cwd: path3.dirname(config.runtimeArtifactPath),
+          env,
+          shell: false,
+          detached: true,
+          windowsHide: true,
+          stdio: ["pipe", "pipe", "pipe"]
+        });
+      } catch {
+        retainedProcesses -= 1;
+        throw failure();
+      }
+      child.once("spawn", () => {
+        metrics.process_starts += 1;
+      });
+      const frame = Buffer.alloc(FRAME_BYTES);
+      let used = 0;
+      let diagnosticBytes = 0;
+      exitPromise = new Promise((resolve) => {
+        child.once("close", () => {
+          exited = true;
+          if (Number.isSafeInteger(child.pid)) metrics.process_exits_observed += 1;
+          retainedProcesses -= 1;
+          terminate();
+          resolve();
+        });
+      });
+      child.once("error", terminate);
+      child.stdin.on("error", terminate);
+      child.stdout.on("data", (chunk) => {
+        try {
+          for (const byte of chunk) {
+            if (byte !== 10) {
+              if (used >= FRAME_BYTES) throw failure();
+              frame[used++] = byte;
+              continue;
+            }
+            const value = JSON.parse(frame.subarray(0, used).toString("utf8"));
+            used = 0;
+            assertPlainObject(value, "SDK response");
+            assertAllowedKeys(value, ["id", "result", "error"], "SDK response");
+            const entry = pending.get(value.id);
+            if (!entry || Object.hasOwn(value, "result") === Object.hasOwn(value, "error")) throw failure();
+            pending.delete(value.id);
+            clearTimeout(entry.timer);
+            if (value.error) {
+              if (value.error === "sandbox_not_found" && entry.operation === "get_info") {
+                const error = failure();
+                error.name = "SandboxNotFoundError";
+                error.code = "SANDBOX_NOT_FOUND";
+                entry.reject(error);
+              } else if (value.error === "file_not_found" && ["read_open", "file_remove"].includes(entry.operation)) {
+                const error = failure();
+                error.name = "FileNotFoundError";
+                error.code = "ENOENT";
+                entry.reject(error);
+              } else if (value.error === "not_entered") {
+                metrics.requests_rejected_before_sdk += 1;
+                entry.reject(failure("E2B_SDK_PROCESS_NOT_ENTERED"));
+              } else if (value.error === "read_retired" && entry.operation === "read_next") entry.reject(failure("E2B_SDK_PROCESS_READ_RETIRED"));
+              else {
+                if (EFFECTFUL_OPERATIONS.has(entry.operation)) metrics.effectful_outcomes_unknown += 1;
+                entry.reject(failure());
+                if (EFFECTFUL_OPERATIONS.has(entry.operation) || entry.operation === "load") terminate();
+              }
+            } else {
+              if (value.id !== 0) metrics.requests_completed += 1;
+              entry.resolve(value.result);
+            }
+          }
+        } catch {
+          terminate();
+        }
+      });
+      child.stderr.on("data", (chunk) => {
+        diagnosticBytes += chunk.length;
+        if (diagnosticBytes > 32 * 1024) terminate();
+      });
+      const ready = new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          terminate();
+          reject(failure());
+        }, deadlineMs);
+        pending.set(0, { resolve, reject, timer, operation: "inspect" });
+      });
+      const nonce = randomUUID8();
+      child.stdin.write(`${canonicalize({ config, nonce })}
+`);
+      const observed = await ready;
+      assertPlainObject(observed, "SDK startup");
+      assertAllowedKeys(observed, ["binding", "pid", "nonce", "custody"], "SDK startup");
+      if (observed.pid !== child.pid || observed.nonce !== nonce || observed.custody?.readonly !== true || observed.custody.uid !== process.getuid() || observed.custody.gid !== process.getgid()) throw failure();
+      assertPlainObject(observed.binding, "SDK binding");
+      assertAllowedKeys(observed.binding, ["package", "version", "integrity_hash"], "SDK binding");
+      if (observed.binding.package !== "e2b" || observed.binding.version !== "2.39.0") throw failure();
+      requireSha256Ref(observed.binding.integrity_hash, "SDK integrity hash");
+      pin = Object.freeze({ ...observed.binding });
+      return pin;
+    })().catch((error) => {
+      terminate();
+      throw error;
+    });
+    return startup;
+  };
+  const expect = (value, keys) => {
+    assertPlainObject(value, "SDK result");
+    assertAllowedKeys(value, keys, "SDK result");
+    return value;
+  };
+  const handle = (value) => requireString(value, "SDK handle", { maxLength: 100, pattern: /^[a-f0-9-]{36}$/ });
+  const bytes = (value) => {
+    if (typeof value !== "string" || value.length > 4 * Math.ceil(CHUNK_BYTES / 3)) throw failure();
+    const result = Buffer.from(value, "base64");
+    if (result.length > CHUNK_BYTES || result.toString("base64") !== value) throw failure();
+    return result;
+  };
+  const sandboxFacade = (record) => {
+    expect(record, ["handle", "sandboxId"]);
+    const owned = handle(record.handle);
+    const sandboxId = requireString(record.sandboxId, "sandboxId", { maxLength: 500 });
+    const files = Object.freeze({
+      async write(target, content) {
+        requireString(target, "file path");
+        if (typeof content !== "string" && !(content instanceof Uint8Array)) throw new TypeError("SDK write requires text or bytes");
+        const data = Buffer.from(content);
+        if (data.length > 32 * 1024 * 1024) throw new TypeError("SDK file write exceeds 32 MiB");
+        const begun = expect(await request("write_begin", { handle: owned, path: target, size: data.length, hash: `sha256:${createHash4("sha256").update(data).digest("hex")}` }), ["handle"]);
+        const write = handle(begun.handle);
+        try {
+          for (let offset = 0; offset < data.length; offset += CHUNK_BYTES) {
+            const chunk = data.subarray(offset, offset + CHUNK_BYTES);
+            const accepted = expect(await request("write_chunk", { handle: write, offset, bytes: chunk.toString("base64") }), ["accepted"]);
+            if (accepted.accepted !== chunk.length) {
+              terminate();
+              throw failure();
+            }
+          }
+          const result = expect(await request("write_commit", { handle: write }), ["completed"]);
+          if (result.completed !== true) {
+            terminate();
+            throw failure();
+          }
+        } finally {
+          if (!retired) await request("write_abort", { handle: write }).catch(() => {
+            terminate();
+          });
+        }
+      },
+      async remove(target) {
+        requireString(target, "file path");
+        await request("file_remove", { handle: owned, path: target });
+      },
+      async read(target, readOptions = {}) {
+        requireString(target, "file path");
+        assertPlainObject(readOptions, "SDK read options");
+        assertAllowedKeys(readOptions, ["format", "requestTimeoutMs", "streamIdleTimeoutMs", "signal"], "SDK read options");
+        if (readOptions.format !== "stream") throw new TypeError("SDK process files.read requires stream format");
+        const total = boundedInteger(readOptions.requestTimeoutMs ?? deadlineMs, "read deadline", { min: 1, max: 6e5 });
+        const idle = boundedInteger(readOptions.streamIdleTimeoutMs ?? total, "read idle deadline", { min: 1, max: total });
+        if (readOptions.signal != null && !(readOptions.signal instanceof AbortSignal)) throw new TypeError("SDK read signal must be an AbortSignal");
+        if (readOptions.signal?.aborted) throw failure();
+        const opened = expect(await request("read_open", { handle: owned, path: target, timeoutMs: total, idleTimeoutMs: idle }, total), ["handle"]);
+        const reader = handle(opened.handle);
+        let ended = false;
+        let received = 0;
+        let controller;
+        const detach = () => readOptions.signal?.removeEventListener("abort", abort);
+        const abort = () => {
+          if (!ended) {
+            ended = true;
+            detach();
+            controller.error(failure());
+            void request("read_cancel", { handle: reader }).catch(() => {
+            });
+          }
+        };
+        return new ReadableStream({
+          start(value) {
+            controller = value;
+            readOptions.signal?.addEventListener("abort", abort, { once: true });
+            if (readOptions.signal?.aborted) abort();
+          },
+          async pull(value) {
+            if (ended) return;
+            try {
+              const next = expect(await request("read_next", { handle: reader }, idle), ["done", "bytes"]);
+              if (ended) return;
+              if (typeof next.done !== "boolean") throw failure();
+              const data = bytes(next.bytes);
+              if (data.length > 4 * 1024 * 1024 - received || next.done && data.length) throw failure();
+              received += data.length;
+              if (next.done) {
+                ended = true;
+                detach();
+                value.close();
+              } else value.enqueue(data);
+            } catch (error) {
+              if (!ended) {
+                ended = true;
+                detach();
+                value.error(error);
+                void request("read_cancel", { handle: reader }).catch(() => {
+                  terminate();
+                });
+              }
+            }
+          },
+          async cancel() {
+            if (!ended) {
+              ended = true;
+              detach();
+              await request("read_cancel", { handle: reader });
+            }
+          }
+        }, { highWaterMark: 0 });
+      }
+    });
+    return Object.freeze({
+      sandboxId,
+      files,
+      commands: Object.freeze({ async run(command, commandOptions = {}) {
+        requireString(command, "SDK command", { maxLength: 8192 });
+        assertPlainObject(commandOptions, "SDK command options");
+        assertAllowedKeys(commandOptions, ["timeoutMs"], "SDK command options");
+        const timeoutMs = boundedInteger(commandOptions.timeoutMs, "command timeout", { min: 1, max: 6e5 });
+        return expect(await request("command_run", { handle: owned, command, timeoutMs }, Math.min(deadlineMs, timeoutMs)), ["exitCode", "stdout", "stderr"]);
+      } }),
+      async setTimeout(timeoutMs) {
+        boundedInteger(timeoutMs, "SDK timeout", { min: 1, max: 6e5 });
+        await request("set_timeout", { handle: owned, timeoutMs });
+      },
+      async kill() {
+        const result = expect(await request("child_kill", { handle: owned }), ["acknowledged"]);
+        return result.acknowledged === true;
+      }
+    });
+  };
+  const boundary = Object.freeze({
+    metrics() {
+      return Object.freeze({
+        ...metrics,
+        sdk_process_retired: retired,
+        sdk_process_exit_observed: exited,
+        production_qualified: false,
+        provider_cleanup_verified: false
+      });
+    },
+    async inspect() {
+      return start();
+    },
+    async load(expected) {
+      const current = await start();
+      if (canonicalize(expected) !== canonicalize(current)) throw failure();
+      if (loaded) return loaded;
+      loaded = (async () => {
+        const observed = expect(await request("load", { expected: current }), ["binding"]);
+        if (canonicalize(observed.binding) !== canonicalize(current)) throw failure();
+        class SandboxFacade {
+          constructor() {
+            throw new TypeError("SDK process sandbox instances are host-owned");
+          }
+          static async create(template, createOptions) {
+            requireString(template, "SDK template", { maxLength: 500 });
+            assertPlainObject(createOptions, "SDK create options");
+            return sandboxFacade(await request("create", { template, options: createOptions }));
+          }
+          static async getInfo(sandboxId) {
+            requireString(sandboxId, "sandboxId", { maxLength: 500 });
+            return request("get_info", { sandboxId });
+          }
+          static async kill(sandboxId) {
+            requireString(sandboxId, "sandboxId", { maxLength: 500 });
+            const result = expect(await request("kill", { sandboxId }), ["acknowledged"]);
+            return result.acknowledged === true;
+          }
+          static list(listOptions) {
+            assertPlainObject(listOptions, "SDK list options");
+            const snapshot = JSON.parse(canonicalize(listOptions));
+            let hasNext = true;
+            let cursor;
+            let active = false;
+            let closed = false;
+            return Object.freeze({ get hasNext() {
+              return hasNext;
+            }, async close() {
+              closed = true;
+              hasNext = false;
+              if (cursor) await request("list_close", { handle: cursor });
+            }, async nextItems() {
+              if (active || !hasNext) throw failure();
+              active = true;
+              try {
+                if (!cursor) {
+                  const opened = expect(await request("list_open", { options: snapshot }), ["handle", "hasNext"]);
+                  cursor = handle(opened.handle);
+                  if (typeof opened.hasNext !== "boolean") throw failure();
+                  hasNext = opened.hasNext;
+                }
+                if (closed) {
+                  hasNext = false;
+                  await request("list_close", { handle: cursor });
+                  return [];
+                }
+                if (hasNext === false) return [];
+                const next = expect(await request("list_next", { handle: cursor }), ["items", "hasNext"]);
+                if (!Array.isArray(next.items) || typeof next.hasNext !== "boolean") throw failure();
+                hasNext = !closed && next.hasNext;
+                return next.items;
+              } finally {
+                active = false;
+              }
+            } });
+          }
+        }
+        Object.freeze(SandboxFacade.prototype);
+        Object.freeze(SandboxFacade);
+        return Object.freeze({ module: Object.freeze({ Sandbox: SandboxFacade }), ...current });
+      })().catch((error) => {
+        terminate();
+        throw error;
+      });
+      return loaded;
+    },
+    async close() {
+      terminate();
+      if (exitPromise && !exited) {
+        let timer;
+        await Promise.race([exitPromise, new Promise((resolve) => {
+          timer = setTimeout(resolve, deadlineMs);
+        })]);
+        clearTimeout(timer);
+      }
+      return Object.freeze({
+        sdk_process_terminated: !child || exited,
+        sdk_process_tree_cleanup_verified: false,
+        provider_cleanup_verified: false,
+        provider_outcome: "unknown"
+      });
+    }
+  });
+  BOUNDARIES.add(boundary);
+  return boundary;
+}
+
+// risk-fork-hosted-mcp/.build/upstream/risk-fork/src/e2b-qualification.mjs
 var E2B_QUALIFICATION_SCHEMA = "agoragentic.risk-fork.e2b-qualification-evidence.v1";
 var E2B_QUALIFICATION_TRUST_SCHEMA = "agoragentic.risk-fork.e2b-qualification-trust.v1";
 var E2B_EXTERNAL_QUALIFICATION_OBSERVATION_SCHEMA = "agoragentic.risk-fork.e2b-external-qualification-observation.v1";
@@ -69973,6 +70889,7 @@ var E2B_ADAPTER_ARTIFACT_EVIDENCE_REF = "evidence:e2b-risk-fork-adapter-artifact
 var QUALIFICATION_TRUST_VERIFIERS = /* @__PURE__ */ new WeakSet();
 var EXTERNAL_QUALIFICATION_OBSERVATION_VERIFIERS = /* @__PURE__ */ new WeakSet();
 var RUNTIME_SDK_INTEGRITY_VERIFIERS = /* @__PURE__ */ new WeakSet();
+var RUNTIME_SDK_PROCESS_VERIFIERS = /* @__PURE__ */ new WeakSet();
 var RUNTIME_SDK_LOADED_ENTRIES = /* @__PURE__ */ new Map();
 var RUNTIME_SDK_CACHE_PROVENANCE = /* @__PURE__ */ new Map();
 var RUNTIME_SDK_COMMONJS_CACHE = createRequire(import.meta.url).cache;
@@ -71057,20 +71974,20 @@ function sameFileIdentity(left, right) {
   return left.isFile() && right.isFile() && left.dev === right.dev && left.ino === right.ino && left.size === right.size && left.mtimeMs === right.mtimeMs && left.ctimeMs === right.ctimeMs && left.nlink === right.nlink;
 }
 function isContainedPath(root, target) {
-  const relative = path3.relative(root, target);
-  return relative === "" || !relative.startsWith(`..${path3.sep}`) && relative !== ".." && !path3.isAbsolute(relative);
+  const relative = path4.relative(root, target);
+  return relative === "" || !relative.startsWith(`..${path4.sep}`) && relative !== ".." && !path4.isAbsolute(relative);
 }
 async function resolveE2BPackageDirectory() {
   const entry = fileURLToPath(import.meta.resolve("e2b"));
-  let directory = path3.dirname(entry);
+  let directory = path4.dirname(entry);
   for (let depth = 0; depth < 8; depth += 1) {
     try {
-      const manifest = JSON.parse(await readFile3(path3.join(directory, "package.json"), "utf8"));
+      const manifest = JSON.parse(await readFile3(path4.join(directory, "package.json"), "utf8"));
       if (manifest.name === "e2b") return directory;
     } catch (error) {
       if (error?.code !== "ENOENT") throw error;
     }
-    const parent = path3.dirname(directory);
+    const parent = path4.dirname(directory);
     if (parent === directory) break;
     directory = parent;
   }
@@ -71099,7 +72016,7 @@ async function readStableRegularFile(file, root, maxBytes, limitMessage) {
     }
     if (opened.size > maxBytes) throw new Error(limitMessage);
     const resolved = await realpath(file);
-    if (path3.relative(path3.resolve(file), resolved) !== "" || !isContainedPath(root, resolved)) {
+    if (path4.relative(path4.resolve(file), resolved) !== "" || !isContainedPath(root, resolved)) {
       throw new Error("E2B runtime SDK package file escapes its canonical package directory");
     }
     const bytes = await readOpenedFileExact(handle, {
@@ -71111,7 +72028,7 @@ async function readStableRegularFile(file, root, maxBytes, limitMessage) {
     const after = await handle.stat();
     const pathAfter = await lstat(file);
     const resolvedAfter = await realpath(file);
-    if (!sameFileIdentity(opened, after) || pathAfter.isSymbolicLink() || !sameFileIdentity(after, pathAfter) || path3.relative(path3.resolve(file), resolvedAfter) !== "" || !isContainedPath(root, resolvedAfter) || bytes.byteLength !== after.size) {
+    if (!sameFileIdentity(opened, after) || pathAfter.isSymbolicLink() || !sameFileIdentity(after, pathAfter) || path4.relative(path4.resolve(file), resolvedAfter) !== "" || !isContainedPath(root, resolvedAfter) || bytes.byteLength !== after.size) {
       throw new Error("E2B runtime SDK package file changed during inspection");
     }
     return bytes;
@@ -71211,21 +72128,21 @@ function runtimeDependencyDeclarations(manifest, field) {
   });
 }
 async function canonicalRealDirectory(directory, field) {
-  const requested = path3.resolve(directory);
+  const requested = path4.resolve(directory);
   const info = await lstat(requested);
   if (info.isSymbolicLink() || !info.isDirectory()) {
     throw new Error(`${field} must be a real directory`);
   }
   const resolved = await realpath(requested);
-  if (path3.relative(requested, resolved) !== "") {
+  if (path4.relative(requested, resolved) !== "") {
     throw new Error(`${field} must be canonical and must not traverse a link`);
   }
   return resolved;
 }
 function canonicalClosureLocation(anchor, target, field) {
   if (!isContainedPath(anchor, target)) throw new Error(`${field} escapes the closure anchor`);
-  const relative = path3.relative(anchor, target).split(path3.sep).join("/");
-  if (relative === "" || relative.startsWith("../") || path3.posix.isAbsolute(relative)) {
+  const relative = path4.relative(anchor, target).split(path4.sep).join("/");
+  if (relative === "" || relative.startsWith("../") || path4.posix.isAbsolute(relative)) {
     throw new Error(`${field} is not a canonical relative package location`);
   }
   return relative;
@@ -71237,8 +72154,8 @@ async function locateDependencyPackage(fromRoot, requestedName, anchor) {
   const segments = dependencyPathSegments(requestedName);
   let cursor = fromRoot;
   while (isContainedPath(anchor, cursor)) {
-    const modulesDirectory = path3.basename(cursor) === "node_modules" ? cursor : path3.join(cursor, "node_modules");
-    const candidate = path3.join(modulesDirectory, ...segments);
+    const modulesDirectory = path4.basename(cursor) === "node_modules" ? cursor : path4.join(cursor, "node_modules");
+    const candidate = path4.join(modulesDirectory, ...segments);
     if (isContainedPath(anchor, candidate)) {
       try {
         return await canonicalRealDirectory(
@@ -71250,7 +72167,7 @@ async function locateDependencyPackage(fromRoot, requestedName, anchor) {
       }
     }
     if (cursor === anchor) break;
-    const parent = path3.dirname(cursor);
+    const parent = path4.dirname(cursor);
     if (parent === cursor || !isContainedPath(anchor, parent)) break;
     cursor = parent;
   }
@@ -71273,7 +72190,7 @@ async function inspectRuntimePackageTree(root, anchor, state) {
     const entries = await readdir(canonicalDirectory, { withFileTypes: true });
     entries.sort((left, right) => left.name === right.name ? 0 : left.name < right.name ? -1 : 1);
     for (const entry of entries) {
-      const target = path3.join(canonicalDirectory, entry.name);
+      const target = path4.join(canonicalDirectory, entry.name);
       const info = await lstat(target);
       if (info.isSymbolicLink()) {
         throw new Error("E2B runtime SDK dependency closure contains a symlink");
@@ -71321,7 +72238,7 @@ async function inspectRuntimePackageTree(root, anchor, state) {
           `E2B runtime dependency closure exceeds ${MAX_RUNTIME_SDK_BYTES} bytes`
         );
       }
-      const relative = path3.relative(root, target).split(path3.sep).join("/");
+      const relative = path4.relative(root, target).split(path4.sep).join("/");
       files.push({
         path: relative,
         size: bytes.byteLength,
@@ -71357,10 +72274,10 @@ async function inspectRuntimePackageTree(root, anchor, state) {
   };
 }
 async function inspectRuntimeSdkPackage(packageDirectory) {
-  const requestedRoot = path3.resolve(packageDirectory ?? await resolveE2BPackageDirectory());
+  const requestedRoot = path4.resolve(packageDirectory ?? await resolveE2BPackageDirectory());
   const root = await canonicalRealDirectory(requestedRoot, "E2B runtime SDK package root");
   const anchor = await canonicalRealDirectory(
-    path3.dirname(root),
+    path4.dirname(root),
     "E2B runtime SDK dependency closure anchor"
   );
   const state = { fileCount: 0, totalBytes: 0 };
@@ -71423,7 +72340,7 @@ async function inspectRuntimeSdkPackage(packageDirectory) {
       const target = await visit(targetRoot, dependency.expected_package_name);
       let resolvedEntry;
       try {
-        resolvedEntry = createRequire(path3.join(canonicalRoot, "package.json")).resolve(
+        resolvedEntry = createRequire(path4.join(canonicalRoot, "package.json")).resolve(
           dependency.requested_name
         );
       } catch {
@@ -71431,13 +72348,13 @@ async function inspectRuntimeSdkPackage(packageDirectory) {
           `E2B runtime dependency ${dependency.requested_name} has no resolvable executable entry`
         );
       }
-      const canonicalEntry = await realpath(path3.resolve(resolvedEntry));
-      if (path3.relative(path3.resolve(resolvedEntry), canonicalEntry) !== "" || !isContainedPath(target.root, canonicalEntry)) {
+      const canonicalEntry = await realpath(path4.resolve(resolvedEntry));
+      if (path4.relative(path4.resolve(resolvedEntry), canonicalEntry) !== "" || !isContainedPath(target.root, canonicalEntry)) {
         throw new Error(
           `E2B runtime dependency ${dependency.requested_name} executable entry escapes its package`
         );
       }
-      const entryPath = path3.relative(target.root, canonicalEntry).split(path3.sep).join("/");
+      const entryPath = path4.relative(target.root, canonicalEntry).split(path4.sep).join("/");
       if (!target.filePaths.has(entryPath)) {
         throw new Error(
           `E2B runtime dependency ${dependency.requested_name} executable entry is not integrity-bound`
@@ -71486,9 +72403,9 @@ async function inspectRuntimeSdkPackage(packageDirectory) {
   });
   return {
     binding,
-    entry: path3.join(root, sdk.manifest.main),
+    entry: path4.join(root, sdk.manifest.main),
     runtimeFiles: [...packagesByRoot.values()].flatMap((entry) => entry.record.files.map((file) => ({
-      path: path3.join(entry.root, ...file.path.split("/")),
+      path: path4.join(entry.root, ...file.path.split("/")),
       hash: file.hash
     })))
   };
@@ -71562,22 +72479,61 @@ async function loadRuntimeSdkWithCacheFence(expected, inspect) {
 }
 function createE2BRuntimeSdkIntegrityVerifier(options = {}) {
   assertPlainObject(options, "E2B runtime SDK integrity verifier options");
-  assertAllowedKeys(options, ["packageDirectory"], "E2B runtime SDK integrity verifier options");
-  const packageDirectory = options.packageDirectory == null ? null : path3.resolve(requireString(
+  assertAllowedKeys(options, ["packageDirectory", "processBoundary", "readOnlyRuntime"], "E2B runtime SDK integrity verifier options");
+  if (options.processBoundary !== void 0) {
+    if (!isE2BRuntimeSdkProcessBoundary(options.processBoundary) || options.packageDirectory !== void 0 || options.readOnlyRuntime !== void 0) {
+      throw new TypeError("E2B SDK process verifier requires only an original host-owned process boundary");
+    }
+    const boundary = options.processBoundary;
+    const verifier2 = Object.freeze({
+      async inspect() {
+        return normalizeRuntimeSdkBinding(await boundary.inspect());
+      },
+      async load(value) {
+        return boundary.load(normalizeRuntimeSdkBinding(value));
+      }
+    });
+    RUNTIME_SDK_INTEGRITY_VERIFIERS.add(verifier2);
+    RUNTIME_SDK_PROCESS_VERIFIERS.add(verifier2);
+    return verifier2;
+  }
+  const packageDirectory = options.packageDirectory == null ? null : path4.resolve(requireString(
     options.packageDirectory,
     "E2B runtime SDK packageDirectory",
     { maxLength: 4e3 }
   ));
+  let readOnlyRuntime = null;
+  if (options.readOnlyRuntime !== void 0) {
+    assertAllowedKeys(options.readOnlyRuntime, ["runtimeArtifactPath", "runtimeArtifactHash", "nodeArtifactHash"], "E2B read-only runtime profile");
+    const runtimeArtifactPath = requireString(options.readOnlyRuntime.runtimeArtifactPath, "runtimeArtifactPath");
+    if (!packageDirectory || !path4.isAbsolute(runtimeArtifactPath) || runtimeArtifactPath !== path4.resolve(runtimeArtifactPath)) {
+      throw new TypeError("E2B read-only runtime requires explicit canonical artifact and package paths");
+    }
+    readOnlyRuntime = Object.freeze({
+      packageDirectory,
+      runtimeArtifactPath,
+      nodePath: process.execPath,
+      runtimeArtifactHash: requireSha256Ref(options.readOnlyRuntime.runtimeArtifactHash, "runtimeArtifactHash"),
+      nodeArtifactHash: requireSha256Ref(options.readOnlyRuntime.nodeArtifactHash, "nodeArtifactHash")
+    });
+  }
+  const inspect = async () => {
+    const inspected = await inspectRuntimeSdkPackage(packageDirectory);
+    if (readOnlyRuntime) {
+      await assertE2BRuntimeSdkReadonlyCustody(readOnlyRuntime, inspected.runtimeFiles.map((file) => file.path));
+    }
+    return inspected;
+  };
   const verifier = {
     async inspect() {
-      const inspected = await inspectRuntimeSdkPackage(packageDirectory);
+      const inspected = await inspect();
       return inspected.binding;
     },
     async load(value) {
       const expected = normalizeRuntimeSdkBinding(value);
       const pending = runtimeSdkLoadTail.then(() => loadRuntimeSdkWithCacheFence(
         expected,
-        () => inspectRuntimeSdkPackage(packageDirectory)
+        inspect
       ));
       runtimeSdkLoadTail = pending.then(() => void 0, () => void 0);
       return pending;
@@ -71588,6 +72544,9 @@ function createE2BRuntimeSdkIntegrityVerifier(options = {}) {
 }
 function isE2BRuntimeSdkIntegrityVerifier(value) {
   return Boolean(value && RUNTIME_SDK_INTEGRITY_VERIFIERS.has(value));
+}
+function isE2BRuntimeSdkProcessIntegrityVerifier(value) {
+  return Boolean(value && RUNTIME_SDK_PROCESS_VERIFIERS.has(value));
 }
 async function loadVerifiedE2BRuntimeSdk(value, verifier) {
   if (!isE2BRuntimeSdkIntegrityVerifier(verifier)) {
@@ -72050,7 +73009,7 @@ function isE2BQualificationEvidenceCanonical(value, expected = {}, externalObser
 }
 function sha256BytesRef(value) {
   const bytes = value instanceof Uint8Array ? value : Buffer.from(value);
-  return `sha256:${createHash4("sha256").update(bytes).digest("hex")}`;
+  return `sha256:${createHash5("sha256").update(bytes).digest("hex")}`;
 }
 async function sha256FileRef(file) {
   const nonBlock = Number.isInteger(constants.O_NONBLOCK) ? constants.O_NONBLOCK : 0;
@@ -72073,9 +73032,9 @@ async function sha256FileRef(file) {
 }
 
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/adapters/e2b.mjs
-import { randomUUID as randomUUID9 } from "node:crypto";
+import { randomUUID as randomUUID10 } from "node:crypto";
 import { readFile as readFile6 } from "node:fs/promises";
-import path6 from "node:path";
+import path7 from "node:path";
 import { performance as performance2 } from "node:perf_hooks";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 import { types as utilTypes4 } from "node:util";
@@ -72583,7 +73542,7 @@ function validateE2BBirthAttestation(value, options = {}) {
 }
 
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/adapters/e2b-cleanup-journal.mjs
-import { randomUUID as randomUUID8 } from "node:crypto";
+import { randomUUID as randomUUID9 } from "node:crypto";
 import {
   mkdir as mkdir2,
   open as open3,
@@ -72592,7 +73551,7 @@ import {
   rename as rename2,
   unlink as unlink2
 } from "node:fs/promises";
-import path4 from "node:path";
+import path5 from "node:path";
 var JOURNAL_SCHEMA = "agoragentic.risk-fork.e2b-cleanup-journal.v1";
 var SANDBOX_STATES = Object.freeze([
   "not_requested",
@@ -72713,7 +73672,7 @@ async function syncDirectory(directory) {
 }
 var E2BCleanupJournal = class {
   constructor(options = {}) {
-    this.directory = path4.resolve(requireString(options.directory, "cleanup journal directory"));
+    this.directory = path5.resolve(requireString(options.directory, "cleanup journal directory"));
     this.clock = options.clock ?? (() => /* @__PURE__ */ new Date());
     if (typeof this.clock !== "function") throw new TypeError("cleanup journal clock must be a function");
     this.initialized = false;
@@ -72727,7 +73686,7 @@ var E2BCleanupJournal = class {
   }
   #path(recordId) {
     const digest = sha256Ref(requireOpaqueRef(recordId, "cleanup journal record id")).slice(7);
-    return path4.join(this.directory, `${digest}.json`);
+    return path5.join(this.directory, `${digest}.json`);
   }
   async #read(recordId) {
     await this.initialize();
@@ -72746,7 +73705,7 @@ var E2BCleanupJournal = class {
     await this.initialize();
     const normalized = normalizeRecord(record);
     const target = this.#path(normalized.record_id);
-    const temp = path4.join(this.directory, `.${path4.basename(target)}.${randomUUID8()}.tmp`);
+    const temp = path5.join(this.directory, `.${path5.basename(target)}.${randomUUID9()}.tmp`);
     let handle;
     try {
       handle = await open3(temp, "wx", 384);
@@ -72913,9 +73872,9 @@ var E2BCleanupJournal = class {
     const names = (await readdir2(this.directory)).filter((name) => /^[a-f0-9]{64}\.json$/.test(name)).sort();
     const records = [];
     for (const name of names) {
-      const parsed = JSON.parse(await readFile4(path4.join(this.directory, name), "utf8"));
+      const parsed = JSON.parse(await readFile4(path5.join(this.directory, name), "utf8"));
       const record = normalizeRecord(parsed);
-      if (path4.basename(this.#path(record.record_id)) !== name) {
+      if (path5.basename(this.#path(record.record_id)) !== name) {
         throw new Error("cleanup journal filename does not match record identity");
       }
       records.push(record);
@@ -72940,7 +73899,7 @@ import {
   realpath as realpath2,
   rm
 } from "node:fs/promises";
-import path5 from "node:path";
+import path6 from "node:path";
 import { TextDecoder as TextDecoder2 } from "node:util";
 var EXPORT_SCHEMA = "agoragentic.risk-fork.immutable-workspace-export.v1";
 var SECRET_PATH_PATTERN = /(?:^|\/)(?:\.env(?:\..*)?|\.aws|\.azure|\.config\/gcloud|\.docker\/config\.json|\.git-credentials|\.netrc|\.npmrc|\.pypirc|\.ssh|credentials?(?:\.[^/]*)?|id_(?:rsa|dsa|ecdsa|ed25519)(?:\.pub)?|private[_-]?key(?:\.[^/]*)?|secrets?(?:\.[^/]*)?|wallet(?:\.[^/]*)?)(?:$|\/)/i;
@@ -73478,9 +74437,9 @@ function requireExportId(value) {
   return exportId;
 }
 function ownedExportPath(exportRoot, exportId) {
-  const root = path5.resolve(requireString(exportRoot, "workspace export root"));
-  const target = path5.resolve(root, requireExportId(exportId));
-  if (target === root || !target.startsWith(`${root}${path5.sep}`)) {
+  const root = path6.resolve(requireString(exportRoot, "workspace export root"));
+  const target = path6.resolve(root, requireExportId(exportId));
+  if (target === root || !target.startsWith(`${root}${path6.sep}`)) {
     throw new Error("workspace export path escapes its configured root");
   }
   return { root, target };
@@ -73523,9 +74482,9 @@ function stableIdentity(info) {
   };
 }
 function assertWithinRealRoot(rootReal, candidateReal, field) {
-  const relative = path5.relative(rootReal, candidateReal);
+  const relative = path6.relative(rootReal, candidateReal);
   if (relative === "") return;
-  if (relative === ".." || relative.startsWith(`..${path5.sep}`) || path5.isAbsolute(relative)) {
+  if (relative === ".." || relative.startsWith(`..${path6.sep}`) || path6.isAbsolute(relative)) {
     throw new Error(`${field} escapes the workspace root`);
   }
 }
@@ -73641,7 +74600,7 @@ async function enumerateWorkspace(root, { maxFiles, maxBytes, includeContent }) 
         );
       }
       seenCaseFolded.set(folded, { raw_relative: rawRelative, normalized_relative: relative });
-      const absolute = path5.join(directory, entry.name);
+      const absolute = path6.join(directory, entry.name);
       const info = await lstat2(absolute, { bigint: true });
       if (info.isSymbolicLink()) throw new Error(`Symlinks are forbidden: ${relative}`);
       if (info.isDirectory()) {
@@ -73701,7 +74660,7 @@ async function writeExclusive(target, content, mode = 256) {
 async function makeTreeReadOnly(directory) {
   const entries = await readdir3(directory, { withFileTypes: true });
   for (const entry of entries) {
-    const target = path5.join(directory, entry.name);
+    const target = path6.join(directory, entry.name);
     if (entry.isDirectory()) {
       await makeTreeReadOnly(target);
       await chmod(target, 320);
@@ -73760,7 +74719,7 @@ async function validateOwnedTreeForCleanup(directory, rootReal, state, depth = 0
     throw new Error("Immutable workspace export cleanup exceeds its entry bound");
   }
   for (const entry of entries) {
-    const target = path5.join(directory, entry.name);
+    const target = path6.join(directory, entry.name);
     let handle;
     try {
       handle = await open4(target, readOnlyNoFollowNonBlockingFlags());
@@ -73834,7 +74793,7 @@ async function makeOwnedTreeWritable(directory, rootReal, state, depth = 0) {
     throw new Error("Immutable workspace export cleanup exceeds its entry bound");
   }
   for (const entry of entries) {
-    const target = path5.join(directory, entry.name);
+    const target = path6.join(directory, entry.name);
     let handle;
     try {
       handle = await open4(target, readOnlyNoFollowNonBlockingFlags());
@@ -73900,7 +74859,7 @@ async function makeOwnedTreeWritable(directory, rootReal, state, depth = 0) {
   }
 }
 async function validateOwnedCleanupManifest(target, exportId, rootReal) {
-  const manifestPath = path5.join(target, "manifest.json");
+  const manifestPath = path6.join(target, "manifest.json");
   let handle;
   try {
     handle = await open4(manifestPath, readOnlyNoFollowNonBlockingFlags());
@@ -74044,7 +75003,7 @@ function validateManifest(manifest, expected = {}) {
   return manifest;
 }
 async function createImmutableWorkspaceExport(input = {}) {
-  const sourceWorkspace = path5.resolve(requireString(input.source_workspace, "source_workspace"));
+  const sourceWorkspace = path6.resolve(requireString(input.source_workspace, "source_workspace"));
   const sourceInfo = await lstat2(sourceWorkspace);
   if (sourceInfo.isSymbolicLink() || !sourceInfo.isDirectory()) {
     throw new TypeError("source_workspace must be a real directory, not a symlink");
@@ -74054,7 +75013,7 @@ async function createImmutableWorkspaceExport(input = {}) {
   const { root, target } = ownedExportPath(input.export_root, exportId);
   await mkdir3(root, { recursive: true, mode: 448 });
   const rootReal = await realpath2(root);
-  if (rootReal === sourceReal || rootReal.startsWith(`${sourceReal}${path5.sep}`) || sourceReal.startsWith(`${rootReal}${path5.sep}`)) {
+  if (rootReal === sourceReal || rootReal.startsWith(`${sourceReal}${path6.sep}`) || sourceReal.startsWith(`${rootReal}${path6.sep}`)) {
     throw new Error("workspace source and export root must be disjoint");
   }
   if (await pathExists(target)) throw new Error(`Workspace export already exists: ${exportId}`);
@@ -74078,7 +75037,7 @@ async function createImmutableWorkspaceExport(input = {}) {
   if (!safeEqual(source.workspace_digest, expectedWorkspaceDigest)) {
     throw new Error("Source workspace digest does not match the Savepoint Capsule");
   }
-  const payloadDirectory = path5.join(target, "payload");
+  const payloadDirectory = path6.join(target, "payload");
   let targetCreated = false;
   try {
     await mkdir3(target, { mode: 448 });
@@ -74087,8 +75046,8 @@ async function createImmutableWorkspaceExport(input = {}) {
     assertWithinRealRoot(rootReal, targetReal, "Workspace export target");
     await mkdir3(payloadDirectory, { mode: 448 });
     for (const record of source.records) {
-      const destination = path5.join(payloadDirectory, ...record.path.split("/"));
-      await mkdir3(path5.dirname(destination), { recursive: true, mode: 448 });
+      const destination = path6.join(payloadDirectory, ...record.path.split("/"));
+      await mkdir3(path6.dirname(destination), { recursive: true, mode: 448 });
       await writeExclusive(destination, record.content);
     }
     const copied = await enumerateWorkspace(payloadDirectory, {
@@ -74105,7 +75064,7 @@ async function createImmutableWorkspaceExport(input = {}) {
     if (manifestBytes.byteLength > MAX_CLEANUP_MANIFEST_BYTES) {
       throw new Error("Workspace export manifest exceeds its bounded cleanup allowance");
     }
-    await writeExclusive(path5.join(target, "manifest.json"), manifestBytes);
+    await writeExclusive(path6.join(target, "manifest.json"), manifestBytes);
     await makeTreeReadOnly(target);
     return deepFreeze({
       export_id: exportId,
@@ -74135,14 +75094,14 @@ async function readImmutableWorkspaceExport(input = {}) {
   const exportId = requireExportId(input.export_id);
   const { target } = ownedExportPath(input.export_root, exportId);
   const manifest = validateManifest(
-    JSON.parse(await readFile5(path5.join(target, "manifest.json"), "utf8")),
+    JSON.parse(await readFile5(path6.join(target, "manifest.json"), "utf8")),
     {
       exportId,
       manifestHash: input.manifest_hash,
       workspaceDigest: input.workspace_digest
     }
   );
-  const payloadDirectory = path5.join(target, "payload");
+  const payloadDirectory = path6.join(target, "payload");
   const current = await enumerateWorkspace(payloadDirectory, {
     maxFiles: Math.max(1, manifest.file_count),
     maxBytes: Math.max(1, manifest.total_bytes),
@@ -74418,16 +75377,16 @@ async function defaultSdkLoader() {
 }
 async function defaultSdkVersionLoader() {
   const entry = fileURLToPath2(import.meta.resolve("e2b"));
-  let directory = path6.dirname(entry);
+  let directory = path7.dirname(entry);
   for (let depth = 0; depth < 8; depth += 1) {
-    const manifestPath = path6.join(directory, "package.json");
+    const manifestPath = path7.join(directory, "package.json");
     try {
       const manifest = JSON.parse(await readFile6(manifestPath, "utf8"));
       if (manifest.name === "e2b") return manifest.version;
     } catch (error) {
       if (error?.code !== "ENOENT") throw error;
     }
-    const parent = path6.dirname(directory);
+    const parent = path7.dirname(directory);
     if (parent === directory) break;
     directory = parent;
   }
@@ -74520,7 +75479,7 @@ async function readBoundedResultBytes(files, target, options) {
   const retained = Buffer.alloc(maxBytes);
   let retainedBytes = 0;
   let reader;
-  let failure;
+  let failure2;
   const remainingTotalMs = () => Math.floor(
     totalTimeoutMs - (performance2.now() - startedAt)
   );
@@ -74601,13 +75560,13 @@ async function readBoundedResultBytes(files, target, options) {
     }
     return retained.subarray(0, retainedBytes);
   } catch (error) {
-    failure = error;
+    failure2 = error;
     throw error;
   } finally {
-    if (failure) {
-      controller.abort(failure);
+    if (failure2) {
+      controller.abort(failure2);
       if (reader && typeof reader.cancel === "function") {
-        const cancellation = Promise.resolve().then(() => reader.cancel(failure)).catch(() => {
+        const cancellation = Promise.resolve().then(() => reader.cancel(failure2)).catch(() => {
         });
         let cancellationTimer;
         await Promise.race([
@@ -74908,7 +75867,7 @@ async function performE2BSandboxBirthHandshake(options = {}) {
     expires_at: new Date(
       allocationStartedAt.getTime() + E2B_BIRTH_MAX_VALIDITY_MS
     ).toISOString(),
-    birth_nonce: randomUUID9()
+    birth_nonce: randomUUID10()
   });
   const paths = e2bBirthRequestPaths(request.request_hash);
   for (const target of [
@@ -75305,6 +76264,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
   #sdkVersionVerified;
   #sdkIntegrityVerifier;
   #sdkIntegrityVerified;
+  #sdkProcessBoundary;
   #qualificationState;
   #qualificationExpiryObserved;
   #cleanupPolicy;
@@ -75424,6 +76384,9 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
     if (!qualificationEligible && !cleanupProvenance && options.sdkIntegrityVerifier !== void 0) {
       throw new TypeError("sdkIntegrityVerifier is only valid with signed qualified evidence");
     }
+    if (options.sdkProcessOptions !== void 0 && (!(qualificationEligible || cleanupProvenance) || options.sdkIntegrityVerifier !== void 0)) {
+      throw new TypeError("sdkProcessOptions requires signed qualification provenance and cannot be combined with an injected verifier");
+    }
     if (qualificationEligible && [
       options.SandboxClass,
       options.sdkLoader,
@@ -75468,8 +76431,12 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
     this.#sdkVersion = options.sdkVersion ?? null;
     this.#sdkVersionLoader = options.sdkVersionLoader ?? defaultSdkVersionLoader;
     this.#sdkVersionVerified = false;
-    this.#sdkIntegrityVerifier = qualificationEligible ? options.sdkIntegrityVerifier ?? createE2BRuntimeSdkIntegrityVerifier() : null;
+    this.#sdkIntegrityVerifier = qualificationEligible || cleanupProvenance ? options.sdkIntegrityVerifier ?? null : null;
     this.#sdkIntegrityVerified = false;
+    this.#sdkProcessBoundary = options.sdkProcessOptions === void 0 ? null : createE2BRuntimeSdkProcessBoundary(options.sdkProcessOptions);
+    if (this.#sdkProcessBoundary) {
+      this.#sdkIntegrityVerifier = createE2BRuntimeSdkIntegrityVerifier({ processBoundary: this.#sdkProcessBoundary });
+    }
     this.clock = options.clock ?? (() => /* @__PURE__ */ new Date());
     if (typeof this.clock !== "function") throw new TypeError("clock must be a function");
     this.bootstrapCommand = requireFixedCommand(
@@ -75498,7 +76465,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
       "birthAttestationTimeoutMs",
       { min: 50, max: E2B_BIRTH_MAX_VALIDITY_MS }
     );
-    this.workspaceExportDirectory = configured ? path6.resolve(requireString(options.workspaceExportDirectory, "workspaceExportDirectory")) : null;
+    this.workspaceExportDirectory = configured ? path7.resolve(requireString(options.workspaceExportDirectory, "workspaceExportDirectory")) : null;
     this.maxFiles = boundedInteger(options.maxFiles ?? 2e3, "maxFiles", {
       min: 1,
       max: 1e5
@@ -75523,6 +76490,18 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
     this.reconciliationEligibleRecordIds = /* @__PURE__ */ new Set();
     this.initialization = null;
     this.initialized = false;
+  }
+  async closeSdkProcess() {
+    if (this.#sdkProcessBoundary) return this.#sdkProcessBoundary.close();
+    return Object.freeze({
+      sdk_process_terminated: true,
+      sdk_process_tree_cleanup_verified: false,
+      provider_cleanup_verified: false,
+      provider_outcome: "unknown"
+    });
+  }
+  sdkProcessMetrics() {
+    return this.#sdkProcessBoundary?.metrics() ?? null;
   }
   #requireConfigured(operation) {
     if (!this.configured) throw secureSnapshotProfileUnavailable(operation);
@@ -75603,9 +76582,12 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
   }
   async #sandboxClass(operation = "providerIo") {
     this.#requireForkRuntimeEnabled(operation);
-    if (this.qualificationEligible && !this.#sdkIntegrityVerified) {
+    if (this.#qualificationState.evidence && !this.#sdkIntegrityVerified) {
+      if (!isE2BRuntimeSdkProcessIntegrityVerifier(this.#sdkIntegrityVerifier)) {
+        throw new Error("Qualified and historical-cleanup E2B SDK effects require a host-owned fresh process verifier");
+      }
       const verified = await loadVerifiedE2BRuntimeSdk(
-        this.qualificationEvidence.sdk,
+        this.#qualificationState.evidence.sdk,
         this.#sdkIntegrityVerifier
       );
       this.#SandboxClass = normalizeSandboxClass(verified.module);
@@ -75735,26 +76717,30 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
     }
     const matches = [];
     let pages = 0;
-    while (paginator.hasNext === true) {
-      pages += 1;
-      if (pages > MAX_LIST_PAGES) throw new Error("E2B sandbox listing exceeded the page bound");
-      const items = await paginator.nextItems();
-      if (!Array.isArray(items)) throw new TypeError("E2B sandbox list page must be an array");
-      for (const item of items) {
-        const metadata = item?.metadata;
-        const templateId = item?.templateId ?? item?.templateID;
-        if (metadata?.["agoragentic.risk_fork.profile"] !== PROFILE_METADATA_SCHEMA || metadata?.["agoragentic.risk_fork.cleanup_ref"] !== record.cleanup_ref || !safeEqual(sha256Ref(metadata), record.metadata_hash) || templateId !== this.#cleanupPolicy.templateId) {
-          throw new Error("E2B cleanup listing returned an item outside the exact metadata binding");
+    try {
+      while (paginator.hasNext === true) {
+        pages += 1;
+        if (pages > MAX_LIST_PAGES) throw new Error("E2B sandbox listing exceeded the page bound");
+        const items = await paginator.nextItems();
+        if (!Array.isArray(items)) throw new TypeError("E2B sandbox list page must be an array");
+        for (const item of items) {
+          const metadata = item?.metadata;
+          const templateId = item?.templateId ?? item?.templateID;
+          if (metadata?.["agoragentic.risk_fork.profile"] !== PROFILE_METADATA_SCHEMA || metadata?.["agoragentic.risk_fork.cleanup_ref"] !== record.cleanup_ref || !safeEqual(sha256Ref(metadata), record.metadata_hash) || templateId !== this.#cleanupPolicy.templateId) {
+            throw new Error("E2B cleanup listing returned an item outside the exact metadata binding");
+          }
+          matches.push(requireString(
+            item.sandboxId ?? item.sandboxID,
+            "reconciled E2B sandbox id",
+            { maxLength: 500 }
+          ));
         }
-        matches.push(requireString(
-          item.sandboxId ?? item.sandboxID,
-          "reconciled E2B sandbox id",
-          { maxLength: 500 }
-        ));
+        if (typeof paginator.hasNext !== "boolean") {
+          throw new TypeError("E2B sandbox paginator stopped reporting hasNext");
+        }
       }
-      if (typeof paginator.hasNext !== "boolean") {
-        throw new TypeError("E2B sandbox paginator stopped reporting hasNext");
-      }
+    } finally {
+      if (typeof paginator.close === "function") await paginator.close();
     }
     const sandboxIds = [...new Set(matches)].sort();
     const observation = {
@@ -76051,9 +77037,9 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
     assertAllowedKeys(input, ["capsule", "source_workspace"], "E2B createSavepoint input");
     verifySavepointCapsule(input.capsule, { now: this.clock() });
     await this.#initialize();
-    const recordId = `e2b_cleanup_${randomUUID9()}`;
-    const cleanupRef = `e2b_cleanup_ref_${randomUUID9()}`;
-    const exportId = `e2b_export_${randomUUID9()}`;
+    const recordId = `e2b_cleanup_${randomUUID10()}`;
+    const cleanupRef = `e2b_cleanup_ref_${randomUUID10()}`;
+    const exportId = `e2b_export_${randomUUID10()}`;
     const metadataCoreHash = sha256Ref({
       profile: PROFILE_METADATA_SCHEMA,
       cleanup_ref: cleanupRef,
@@ -76309,7 +77295,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
           ...commonBootstrap,
           phase,
           expected_workspace_digest: workspaceDigest,
-          bootstrap_nonce: randomUUID9(),
+          bootstrap_nonce: randomUUID10(),
           request_hash: null
         };
         payload.request_hash = sha256Ref({ ...payload, request_hash: null });
@@ -76563,7 +77549,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
     });
     const remainingMs = Date.parse(record.expires_at) - this.clock().getTime();
     if (timeoutMs > remainingMs) throw new Error("Execution timeout exceeds the child hard deadline");
-    const jobId = `rfj_${randomUUID9().replaceAll("-", "")}`;
+    const jobId = `rfj_${randomUUID10().replaceAll("-", "")}`;
     const jobPath = `${JOB_PATH}.${jobId}.json`;
     const resultPath = `${RESULT_PATH}.${jobId}.json`;
     const job = {
@@ -76901,7 +77887,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
       resource_kind: "fork",
       resource_ref: record.ref,
       requested_at: this.clock(),
-      request_nonce: randomUUID9()
+      request_nonce: randomUUID10()
     });
     this.#poisonAllocationUntilReconciled(record.record_id);
     const Sandbox = await this.#sandboxClass();
@@ -77004,7 +77990,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
       resource_kind: "savepoint",
       resource_ref: record.ref,
       requested_at: this.clock(),
-      request_nonce: randomUUID9()
+      request_nonce: randomUUID10()
     });
     this.#poisonAllocationUntilReconciled(record.record_id);
     let absent;
@@ -77088,7 +78074,7 @@ import {
   open as open5,
   realpath as realpath3
 } from "node:fs/promises";
-import path7 from "node:path";
+import path8 from "node:path";
 import { TextDecoder as TextDecoder3 } from "node:util";
 var REQUEST_SCHEMA = "agoragentic.risk-fork.authority-free-source-request.v1";
 var ATTESTATION_SCHEMA = "agoragentic.risk-fork.authority-free-source-attestation.v1";
@@ -77758,7 +78744,7 @@ async function persistEvidence(directory, record) {
   await mkdir4(directory, { recursive: true, mode: 448 });
   await assertRealDirectory(directory, "E2B source evidence directory");
   const name = `e2b-source-${record.request_hash.slice(7, 31)}.json`;
-  const target = path7.join(directory, name);
+  const target = path8.join(directory, name);
   const handle = await open5(
     target,
     constants3.O_WRONLY | constants3.O_CREAT | constants3.O_EXCL,
@@ -77777,7 +78763,7 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
     options.verifierArtifactHash,
     "E2B source verifierArtifactHash"
   );
-  const evidenceDirectory = path7.resolve(requireString(
+  const evidenceDirectory = path8.resolve(requireString(
     options.evidenceDirectory,
     "E2B source evidenceDirectory"
   ));
@@ -77819,13 +78805,13 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
     const request = validateRequest(requestValue);
     assertPlainObject(context, "E2B source verifier context");
     assertAllowedKeys(context, ["export_directory"], "E2B source verifier context");
-    const exportDirectory = path7.resolve(requireString(
+    const exportDirectory = path8.resolve(requireString(
       context.export_directory,
       "E2B source verifier export_directory"
     ));
     await assertRealDirectory(exportDirectory, "E2B source verifier export_directory");
-    const exportId = path7.basename(exportDirectory);
-    const exportRoot = path7.dirname(exportDirectory);
+    const exportId = path8.basename(exportDirectory);
+    const exportRoot = path8.dirname(exportDirectory);
     const staged = await readImmutableWorkspaceExport({
       export_root: exportRoot,
       export_id: exportId,
@@ -77929,7 +78915,7 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
 }
 
 // risk-fork-hosted-mcp/src/index.mjs
-var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:dfa48a3d94abdd22eb4ba57dafd0a4f270e6b78e5787d3d50b1c4ce5d8dc9c7f" : null;
+var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:04788d305d273088b3e4e05244d66c3f7c9543926eef6ae7507f3ca30803c2ab" : null;
 var HOSTED_MCP_BUNDLE_METADATA = Object.freeze({
   package_name: "@agoragentic/risk-fork-hosted-mcp",
   package_version: "0.1.0-alpha.0",
@@ -78051,6 +79037,7 @@ export {
   importRiskForkProviderResult,
   isE2BQualificationEvidenceCanonical,
   isE2BRuntimeSdkIntegrityVerifier,
+  isE2BRuntimeSdkProcessIntegrityVerifier,
   isMcpPortableHandlePreEffectBoundary,
   isMcpPortableHandleRegistry,
   isPostgresDistributedCommitAuthority,
