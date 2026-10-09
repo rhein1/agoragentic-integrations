@@ -49,6 +49,15 @@ export const E2B_ADAPTER_ARTIFACT_EVIDENCE_REF =
 const QUALIFICATION_TRUST_VERIFIERS = new WeakSet();
 const EXTERNAL_QUALIFICATION_OBSERVATION_VERIFIERS = new WeakSet();
 const RUNTIME_SDK_INTEGRITY_VERIFIERS = new WeakSet();
+// A disk digest must not relabel modules already evaluated in this process.
+// These fences cover verifier-mediated imports and visible CommonJS cache
+// entries; they are NOT an immutable-install or fresh-process attestation.
+const RUNTIME_SDK_LOADED_ENTRIES = new Map();
+const RUNTIME_SDK_CACHE_PROVENANCE = new Map();
+const RUNTIME_SDK_COMMONJS_CACHE = createRequire(import.meta.url).cache;
+const MAX_RUNTIME_SDK_LOADED_ENTRIES = 32;
+const MAX_RUNTIME_SDK_CACHE_PROVENANCE = 32_768;
+let runtimeSdkLoadTail = Promise.resolve();
 // Cleanup verification is available only through these constructor-owned
 // closures. It cannot change the current verifier's clock or freshness policy.
 const CLEANUP_OBSERVATION_VERIFIERS = new WeakMap();
@@ -1683,6 +1692,9 @@ async function inspectRuntimeSdkPackage(packageDirectory) {
   if (sdk.manifest.main !== 'dist/index.js' || !sdk.filePaths.has(sdk.manifest.main)) {
     throw new Error('E2B runtime SDK package entrypoint is not the reviewed dist/index.js');
   }
+  if (sdk.manifest.type != null && sdk.manifest.type !== 'commonjs') {
+    throw new Error('E2B runtime SDK entry requires the reviewed CommonJS package profile');
+  }
   const packages = [...packagesByRoot.values()]
     .map((entry) => entry.record)
     .sort((left, right) => (
@@ -1708,6 +1720,12 @@ async function inspectRuntimeSdkPackage(packageDirectory) {
   return {
     binding,
     entry: path.join(root, sdk.manifest.main),
+    runtimeFiles: [...packagesByRoot.values()].flatMap((entry) => (
+      entry.record.files.map((file) => ({
+        path: path.join(entry.root, ...file.path.split('/')),
+        hash: file.hash,
+      }))
+    )),
   };
 }
 
@@ -1716,6 +1734,75 @@ function assertRuntimeSdkBindingMatches(observed, expected) {
     || observed.version !== expected.version
     || !safeEqual(observed.integrity_hash, expected.integrity_hash)) {
     throw new Error('E2B runtime SDK integrity binding mismatch');
+  }
+}
+
+function runtimeSdkCachedModule(file) {
+  const descriptor = Object.getOwnPropertyDescriptor(RUNTIME_SDK_COMMONJS_CACHE, file);
+  if (descriptor && !Object.hasOwn(descriptor, 'value')) {
+    throw new Error('E2B runtime SDK cached module has unverified provenance; restart required');
+  }
+  return descriptor?.value;
+}
+
+function assertRuntimeSdkCacheProvenance(files) {
+  for (const file of files) {
+    const cached = runtimeSdkCachedModule(file.path);
+    const known = RUNTIME_SDK_CACHE_PROVENANCE.get(file.path);
+    if (cached && (!known || known.module !== cached || !safeEqual(known.hash, file.hash))) {
+      throw new Error('E2B runtime SDK cached module has unverified or changed provenance; restart required');
+    }
+    if (known && (!cached || known.module !== cached || !safeEqual(known.hash, file.hash))) {
+      throw new Error('E2B runtime SDK loaded module binding changed; restart required');
+    }
+  }
+}
+
+async function loadRuntimeSdkWithCacheFence(expected, inspect) {
+  const before = await inspect();
+  assertRuntimeSdkBindingMatches(before.binding, expected);
+  let loaded = RUNTIME_SDK_LOADED_ENTRIES.get(before.entry);
+  if (loaded && (loaded.state !== 'verified'
+    || !safeEqual(loaded.hash, before.binding.integrity_hash))) {
+    throw new Error('E2B runtime SDK loaded binding changed or failed; restart required');
+  }
+  assertRuntimeSdkCacheProvenance(before.runtimeFiles);
+  if (!loaded) {
+    if (RUNTIME_SDK_LOADED_ENTRIES.size >= MAX_RUNTIME_SDK_LOADED_ENTRIES
+      || RUNTIME_SDK_CACHE_PROVENANCE.size + before.runtimeFiles.length > MAX_RUNTIME_SDK_CACHE_PROVENANCE) {
+      throw new Error('E2B runtime SDK cache provenance capacity reached; restart required');
+    }
+    loaded = { hash: before.binding.integrity_hash, state: 'loading', module: null };
+    RUNTIME_SDK_LOADED_ENTRIES.set(before.entry, loaded);
+  }
+  try {
+    const module = await import(pathToFileURL(before.entry).href);
+    const after = await inspect();
+    assertRuntimeSdkBindingMatches(after.binding, expected);
+    if (!safeEqual(before.binding.integrity_hash, after.binding.integrity_hash)) {
+      throw new Error('E2B runtime SDK package changed while it was loaded');
+    }
+    if (loaded.module && loaded.module !== module) {
+      throw new Error('E2B runtime SDK cached namespace changed; restart required');
+    }
+    const additions = [];
+    for (const file of after.runtimeFiles) {
+      const cached = runtimeSdkCachedModule(file.path);
+      const known = RUNTIME_SDK_CACHE_PROVENANCE.get(file.path);
+      if (known && (!cached || known.module !== cached || !safeEqual(known.hash, file.hash))) {
+        throw new Error('E2B runtime SDK cached provenance changed during load; restart required');
+      }
+      if (cached && !known) additions.push([file.path, { hash: file.hash, module: cached }]);
+    }
+    for (const [file, provenance] of additions) RUNTIME_SDK_CACHE_PROVENANCE.set(file, provenance);
+    loaded.module = module;
+    loaded.state = 'verified';
+    return Object.freeze({ module, ...after.binding });
+  } catch (error) {
+    // Failed evaluation/inspection can leave an unknown partial module graph.
+    // Never evict caches or retry that entry as if evaluation had not occurred.
+    loaded.state = 'failed';
+    throw error;
   }
 }
 
@@ -1736,15 +1823,11 @@ export function createE2BRuntimeSdkIntegrityVerifier(options = {}) {
     },
     async load(value) {
       const expected = normalizeRuntimeSdkBinding(value);
-      const before = await inspectRuntimeSdkPackage(packageDirectory);
-      assertRuntimeSdkBindingMatches(before.binding, expected);
-      const module = await import(pathToFileURL(before.entry).href);
-      const after = await inspectRuntimeSdkPackage(packageDirectory);
-      assertRuntimeSdkBindingMatches(after.binding, expected);
-      if (!safeEqual(before.binding.integrity_hash, after.binding.integrity_hash)) {
-        throw new Error('E2B runtime SDK package changed while it was loaded');
-      }
-      return Object.freeze({ module, ...after.binding });
+      const pending = runtimeSdkLoadTail.then(() => loadRuntimeSdkWithCacheFence(
+        expected, () => inspectRuntimeSdkPackage(packageDirectory),
+      ));
+      runtimeSdkLoadTail = pending.then(() => undefined, () => undefined);
+      return pending;
     },
   };
   RUNTIME_SDK_INTEGRITY_VERIFIERS.add(verifier);
