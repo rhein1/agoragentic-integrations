@@ -451,7 +451,7 @@ export function createE2BRuntimeSdkProcessBoundary(options = {}) {
   });
   const deadlineMs = boundedInteger(options.deadlineMs ?? 30_000, 'deadlineMs', { min: 100, max: 600_000 });
   const env = Object.create(null);
-  if (options.providerApiKey != null) env.E2B_API_KEY = requireString(options.providerApiKey, 'providerApiKey', {
+  if (options.providerApiKey != null) env['E2B_API_KEY'] = requireString(options.providerApiKey, 'providerApiKey', {
     maxLength: 8_192, pattern: /^[\x21-\x7e]+$/,
   });
   let child;

@@ -70462,7 +70462,7 @@ function createE2BRuntimeSdkProcessBoundary(options = {}) {
   });
   const deadlineMs = boundedInteger(options.deadlineMs ?? 3e4, "deadlineMs", { min: 100, max: 6e5 });
   const env = /* @__PURE__ */ Object.create(null);
-  if (options.providerApiKey != null) env.E2B_API_KEY = requireString(options.providerApiKey, "providerApiKey", {
+  if (options.providerApiKey != null) env["E2B_API_KEY"] = requireString(options.providerApiKey, "providerApiKey", {
     maxLength: 8192,
     pattern: /^[\x21-\x7e]+$/
   });
@@ -78920,7 +78920,7 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
 }
 
 // risk-fork-hosted-mcp/src/index.mjs
-var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:6ede0a0ed5d742e7eb6f3a1d8360bcd10825413357bcea692fa14fb05dddc5f9" : null;
+var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:8214388569b189a75f95e8a76d97d4486dad3eedbd52e06eda82bfd27a4d1cf2" : null;
 var HOSTED_MCP_BUNDLE_METADATA = Object.freeze({
   package_name: "@agoragentic/risk-fork-hosted-mcp",
   package_version: "0.1.0-alpha.0",
