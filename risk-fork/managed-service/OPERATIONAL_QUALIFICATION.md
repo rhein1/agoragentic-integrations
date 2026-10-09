@@ -190,6 +190,68 @@ journal across SDK-process exit, then requires new-process exact discovery,
 kill and separate absence checks. This is local source proof only; no real E2B
 allocation, final provider cost or independent production observer is exercised.
 
+The same command also runs the fixed `verify-e2b-sdk-tree-observer.mjs` local
+laboratory on the **Linux Docker host**, outside the fixture container. It
+requires the local Unix Docker socket, host `/proc`, genuine cgroup v2 and the
+systemd Docker cgroup layout; other layouts fail closed. The Docker controller
+is a trusted host principal, never a socket mounted into the SDK fixture, an
+MCP tool, a package runtime export or a production provider API. No privileged
+or host-PID observer container is launched. The fixed image is already present;
+there is no pull, network access, provider credential or arbitrary workload.
+
+Before permitting synthetic SDK import, the observer binds the exact created
+container ID, nonce label, image, limits, read-only source/fixture mounts, host
+init PID start time and cgroup device/inode. It independently matches the
+worker and new-session descendant against host process membership, observes
+direct SDK-root exit **while the detached descendant remains**, and kills only
+its identity-checked exact container. A second scenario cancels before the SDK
+handoff. Missing permissions, daemon failure, stale identities, malformed
+observations or unobserved creation outcomes are unknown, not cleanup success.
+The lost-create-response cleanup path may recover only the exact unique lab
+name after nonce/image/profile verification, then operate on its immutable ID;
+it never prunes or accepts a label search as authority. Creation uncertainty
+stays unknown even if this bounded emergency cleanup succeeds.
+
+`scope_empty_before_remove` records either `empty_observed` (stable cgroup
+two consecutive `populated=0`/empty-PID observations with stable scope identity
+and all captured process incarnations gone), or
+`kernel_scope_removed`. Docker's runtime can remove its cgroup as part of stop,
+before `docker rm`; the latter requires the previously bound leaf to be absent
+under its unchanged parent on the genuine cgroup-v2 mount, plus every captured
+process incarnation gone. A missing file in a still-present scope is not this
+proof. Kernel cgroup removal requires an empty tree; see the
+[kernel cgroup-v2 lifecycle contract](https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html).
+The fixture explicitly attempts cgroup migration/delegation writes and requires
+denial. The outside observer separately checks the worker's read-only cgroup-v2
+mount, non-root/capability/seccomp profile, root-owned non-worker-writable host
+control files and absence of delegated child cgroups. The disappearance fallback
+requires these no-migration custody checks, not fixture assertions alone.
+Docker's stopped JSON or container absence alone cannot establish either state.
+Only after kernel proof, exact removal and independent exact-ID absence may
+`cleanup_status` become `verified`; this teardown lab also requires an observed
+kill request and repeats kernel proof immediately before removal. PID reuse is
+checked by start-time identity,
+not by signaling a recycled host PID. Graceful interruption enters bounded
+exact-ID cleanup; SIGKILL/power loss or unresolved allocation is still unknown.
+
+These redacted lifecycle status/counter/duration snapshots use hashed container
+references, not raw PIDs, scope paths, keys or SDK diagnostics. They are local
+CLI evidence, **not durable hosted metrics or delivered alerts**.
+`workload_completed` records only completion of the synthetic scenario;
+`workload_passed` also requires `cleanup_status:verified` and no uncertainty.
+A completed workload with unknown cleanup never reports a passed custody run.
+They always
+retain `credential_released:false`, `provider_calls:0`,
+`provider_cleanup_verified:false`, `provider_billing_observed:false`, and
+`production_qualified:false`. This lab does not wire the production SDK adapter
+to a host supervisor: its `sdk_process_tree_cleanup_verified` remains false.
+Actual credentialed launch custody, a production supervisor/observer, E2B
+absence/final billing and the separately approved production gates remain open.
+The external observer separately requires the exact duplicate-free image
+environment-name set and explicit provider-key absence before handoff. The
+outer launcher reports `lab_resources_cleanup_verified` only for temporary
+local files/containers; that is not the observer's kernel `cleanup_status`.
+
 ### Cleanup recovery is not current qualification
 
 The E2B adapter can recover already-journaled local export obligations after an
