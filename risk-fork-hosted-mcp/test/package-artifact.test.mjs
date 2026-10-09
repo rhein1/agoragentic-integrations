@@ -1290,7 +1290,7 @@ test('build and source verification reject reviewed-source root and ancestor lin
   }
 });
 
-test('bundle exposes the reviewed relay and Risk Fork controller boundaries', async () => {
+test('bundle exposes the reviewed relay and Risk Fork controller boundaries', async (t) => {
   const api = await import(`${pathToFileURL(path.join(packageRoot, 'dist', 'runtime', 'index.mjs')).href}?api`);
   for (const name of [
     'MCP_ENFORCEMENT_SCHEMAS',
@@ -1464,12 +1464,14 @@ test('bundle exposes the reviewed relay and Risk Fork controller boundaries', as
   assert.equal(api.HOSTED_MCP_BUNDLE_METADATA.e2b_live_qualified, false);
 
   let injectedLoaderCalls = 0;
+  const cleanupTemporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-bundle-cleanup-'));
+  t.after(() => cleanupTemporary(cleanupTemporaryRoot));
   const disabledAdapter = new api.E2BRiskForkAdapter({
     cleanTemplateId: 'template-risk-fork-clean-immutable-v1',
     cleanTemplateHash: sha256(Buffer.from('clean-template')),
     cleanTemplateProvenanceHash: sha256(Buffer.from('clean-template-provenance')),
-    workspaceExportDirectory: path.join(packageRoot, '.test-unused-exports'),
-    cleanupJournalDirectory: path.join(packageRoot, '.test-unused-journal'),
+    workspaceExportDirectory: path.join(cleanupTemporaryRoot, 'exports'),
+    cleanupJournalDirectory: path.join(cleanupTemporaryRoot, 'journal'),
     verifyAuthorityFreeSource: async () => {
       throw new Error('source verifier must not run while live E2B is source-disabled');
     },
@@ -1481,10 +1483,11 @@ test('bundle exposes the reviewed relay and Risk Fork controller boundaries', as
     injectedLoaderCalls += 1;
     throw new Error('provider loader must not run');
   };
+  assert.deepEqual(await disabledAdapter.reconcilePendingCleanup(), { reconciled: [], unresolved: [] });
   await assert.rejects(
-    disabledAdapter.reconcilePendingCleanup(),
+    disabledAdapter.createFork({}),
     (error) => error?.code === 'E2B_LIVE_FORK_DISABLED_UNTRUSTED_WATCHER'
-      && error?.operation === 'reconcilePendingCleanup',
+      && error?.operation === 'createFork',
   );
   assert.equal(injectedLoaderCalls, 0);
 
@@ -1613,7 +1616,8 @@ test('npm-packed artifact installs and runs with no repository or registry depen
       "const adapter = new E2BRiskForkAdapter({ cleanTemplateId: 'template-risk-fork-clean-immutable-v1', cleanTemplateHash: hash, cleanTemplateProvenanceHash: hash, workspaceExportDirectory: process.cwd() + '/unused-exports', cleanupJournalDirectory: process.cwd() + '/unused-journal', verifyAuthorityFreeSource: async () => { throw new Error('not called'); }, trustedBootstrapArtifactHash: hash, trustedRunnerArtifactHash: hash });",
       "adapter.offlineConformance = true;",
       "adapter.sdkLoader = async () => { providerLoads += 1; throw new Error('not called'); };",
-      "await assert.rejects(adapter.reconcilePendingCleanup(), (error) => error?.code === 'E2B_LIVE_FORK_DISABLED_UNTRUSTED_WATCHER');",
+      "assert.deepEqual(await adapter.reconcilePendingCleanup(), { reconciled: [], unresolved: [] });",
+      "await assert.rejects(adapter.createFork({}), (error) => error?.code === 'E2B_LIVE_FORK_DISABLED_UNTRUSTED_WATCHER' && error?.operation === 'createFork');",
       "assert.equal(providerLoads, 0);",
       "process.stdout.write('PACKED_CONSUMER_OK\\n');",
       '',

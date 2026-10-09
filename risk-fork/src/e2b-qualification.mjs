@@ -45,6 +45,10 @@ export const E2B_RUNTIME_SDK_INTEGRITY_SCHEMA =
 const QUALIFICATION_TRUST_VERIFIERS = new WeakSet();
 const EXTERNAL_QUALIFICATION_OBSERVATION_VERIFIERS = new WeakSet();
 const RUNTIME_SDK_INTEGRITY_VERIFIERS = new WeakSet();
+// Cleanup verification is available only through these constructor-owned
+// closures. It cannot change the current verifier's clock or freshness policy.
+const CLEANUP_OBSERVATION_VERIFIERS = new WeakMap();
+const CLEANUP_TRUST_VERIFIERS = new WeakMap();
 const MAX_RUNTIME_SDK_PACKAGES = 128;
 const MAX_RUNTIME_SDK_FILES_PER_PACKAGE = 2_048;
 const MAX_RUNTIME_SDK_FILES = 8_192;
@@ -844,7 +848,7 @@ function normalizeObservationTimes(value, field) {
   return { observed_at: observedAt, issued_at: issuedAt, expires_at: expiresAt };
 }
 
-function assertExternalObservationCurrent(times, policy) {
+function assertExternalObservationHistorical(times, policy) {
   const observedMs = Date.parse(times.observed_at);
   const issuedMs = Date.parse(times.issued_at);
   const expiresMs = Date.parse(times.expires_at);
@@ -855,8 +859,16 @@ function assertExternalObservationCurrent(times, policy) {
   if (issuedMs > nowMs) {
     throw new Error('E2B external qualification observation is future-issued');
   }
+  return nowMs;
+}
+
+function assertExternalObservationCurrent(times, policy) {
+  const nowMs = assertExternalObservationHistorical(times, policy);
+  const expiresMs = Date.parse(times.expires_at);
   if (nowMs >= expiresMs) {
-    throw new Error('E2B external qualification observation is expired');
+    const error = new Error('E2B external qualification observation is expired');
+    error.code = 'E2B_QUALIFICATION_OBSERVATION_EXPIRED';
+    throw error;
   }
 }
 
@@ -1049,7 +1061,9 @@ function normalizeExternalNetwork(value) {
   };
 }
 
-function externalObservationPayload(evidence, input, observer, policy) {
+function externalObservationPayload(
+  evidence, input, observer, policy, assertTime = assertExternalObservationCurrent,
+) {
   assertExternalObservationProvisional(evidence);
   assertPlainObject(input, 'E2B external qualification observation input');
   assertAllowedKeys(input, [
@@ -1073,7 +1087,7 @@ function externalObservationPayload(evidence, input, observer, policy) {
   }
   const audience = externalObservationAudience(evidence);
   assertExternalObservationAudience(audience, policy.audience);
-  assertExternalObservationCurrent(times, policy);
+  assertTime(times, policy);
   const normalizedObserver = normalizeObserverIdentity(observer);
   const observerBoundary = normalizeExternalObserverBoundary(input.observer_boundary);
   const payload = {
@@ -1815,16 +1829,7 @@ export function createE2BExternalQualificationObservationVerifier(options = {}) 
     audience: deepFreeze(normalizeExternalObservationAudience(options.audience)),
   });
 
-  const verifier = {
-    key_hash: keyHash,
-    observer,
-    audience: policy.audience,
-    max_receipt_age_ms: policy.maxReceiptAgeMs,
-    createPayload(value, input = {}) {
-      const evidence = validateE2BQualificationEvidence(value);
-      return externalObservationPayload(evidence, input, observer, policy);
-    },
-    verify(value, observation) {
+  function verifyObservation(value, observation, assertTime) {
       const evidence = validateE2BQualificationEvidence(value);
       const normalizedObservation = normalizeExternalObservationReceipt(observation);
       if (!safeEqual(normalizedObservation.observer.public_key_hash, keyHash)
@@ -1851,7 +1856,7 @@ export function createE2BExternalQualificationObservationVerifier(options = {}) 
           aggregate_console_delta: normalizedObservation.cost.aggregate_console_delta,
           actual_sandbox: normalizedObservation.cost.actual_sandbox,
         },
-      }, observer, policy);
+      }, observer, policy, assertTime);
       const { signature: signatureValue, ...actualPayload } = normalizedObservation;
       if (canonicalize(actualPayload) !== canonicalize(payload)) {
         throw new Error('E2B external qualification observation binding mismatch');
@@ -1869,9 +1874,24 @@ export function createE2BExternalQualificationObservationVerifier(options = {}) 
         throw new Error('E2B external qualification observation signature is invalid');
       }
       return normalizedObservation;
+  }
+  const verifier = {
+    key_hash: keyHash,
+    observer,
+    audience: policy.audience,
+    max_receipt_age_ms: policy.maxReceiptAgeMs,
+    createPayload(value, input = {}) {
+      const evidence = validateE2BQualificationEvidence(value);
+      return externalObservationPayload(evidence, input, observer, policy);
+    },
+    verify(value, observation) {
+      return verifyObservation(value, observation, assertExternalObservationCurrent);
     },
   };
   EXTERNAL_QUALIFICATION_OBSERVATION_VERIFIERS.add(verifier);
+  CLEANUP_OBSERVATION_VERIFIERS.set(verifier, (value, observation) => (
+    verifyObservation(value, observation, assertExternalObservationHistorical)
+  ));
   return Object.freeze(verifier);
 }
 
@@ -1909,23 +1929,7 @@ export function createE2BQualificationTrustVerifier(options = {}) {
     throw new Error('E2B qualification trust verifier public key hash mismatch');
   }
 
-  const verifier = {
-    key_hash: keyHash,
-    createPayload(value, expected = {}, externalObservationVerifier = null) {
-      const evidence = validateE2BQualificationEvidence(
-        value,
-        expected,
-        externalObservationVerifier,
-      );
-      assertDistinctQualificationTrustKey(evidence, keyHash);
-      return qualificationTrustPayload(evidence, keyHash);
-    },
-    verify(value, trust, expected = {}, externalObservationVerifier = null) {
-      const evidence = validateE2BQualificationEvidence(
-        value,
-        expected,
-        externalObservationVerifier,
-      );
+  function verifyBoundTrust(evidence, trust) {
       assertDistinctQualificationTrustKey(evidence, keyHash);
       assertPlainObject(trust, 'E2B qualification trust');
       assertAllowedKeys(
@@ -1949,9 +1953,24 @@ export function createE2BQualificationTrustVerifier(options = {}) {
         throw new Error('E2B qualification trust signature is invalid');
       }
       return deepFreeze({ ...payload, signature: trust.signature });
+  }
+  const verifier = {
+    key_hash: keyHash,
+    createPayload(value, expected = {}, externalObservationVerifier = null) {
+      const evidence = validateE2BQualificationEvidence(
+        value, expected, externalObservationVerifier,
+      );
+      assertDistinctQualificationTrustKey(evidence, keyHash);
+      return qualificationTrustPayload(evidence, keyHash);
+    },
+    verify(value, trust, expected = {}, externalObservationVerifier = null) {
+      return verifyBoundTrust(validateE2BQualificationEvidence(
+        value, expected, externalObservationVerifier,
+      ), trust);
     },
   };
   QUALIFICATION_TRUST_VERIFIERS.add(verifier);
+  CLEANUP_TRUST_VERIFIERS.set(verifier, verifyBoundTrust);
   return Object.freeze(verifier);
 }
 
@@ -2141,7 +2160,9 @@ function finalizeE2BQualificationEvidence(evidence, verified) {
   });
 }
 
-function assertFinalizedEvidenceMatchesReceipt(evidence, externalObservationVerifier) {
+function assertFinalizedEvidenceMatchesReceipt(
+  evidence, externalObservationVerifier, cleanupOnly = false,
+) {
   if (!externalObservationVerifier
     || !EXTERNAL_QUALIFICATION_OBSERVATION_VERIFIERS.has(externalObservationVerifier)) {
     throw new TypeError(
@@ -2149,7 +2170,10 @@ function assertFinalizedEvidenceMatchesReceipt(evidence, externalObservationVeri
     );
   }
   const provisional = provisionalEvidenceFromFinalized(evidence);
-  const verified = externalObservationVerifier.verify(
+  const verifyObservation = cleanupOnly
+    ? CLEANUP_OBSERVATION_VERIFIERS.get(externalObservationVerifier)
+    : (value, observation) => externalObservationVerifier.verify(value, observation);
+  const verified = verifyObservation(
     provisional,
     evidence.external_observation_receipt,
   );
@@ -2169,10 +2193,11 @@ export function createE2BQualificationEvidence(input = {}) {
   return evidence;
 }
 
-export function validateE2BQualificationEvidence(
+function validateQualificationEvidence(
   value,
   expected = {},
   externalObservationVerifier = null,
+  cleanupOnly = false,
 ) {
   const expectedBindings = normalizeExpectedBindings(expected);
   const normalized = normalizeEvidence(value, { includeComputedFields: true });
@@ -2185,9 +2210,37 @@ export function validateE2BQualificationEvidence(
   }
   assertExpectedBindings(normalized, expectedBindings);
   if (normalized.external_observation_receipt !== null) {
-    assertFinalizedEvidenceMatchesReceipt(normalized, externalObservationVerifier);
+    assertFinalizedEvidenceMatchesReceipt(normalized, externalObservationVerifier, cleanupOnly);
   }
   return deepFreeze(normalized);
+}
+
+export function validateE2BQualificationEvidence(
+  value, expected = {}, externalObservationVerifier = null,
+) {
+  return validateQualificationEvidence(value, expected, externalObservationVerifier);
+}
+
+// Cleanup-only provenance helper, NOT current qualification or permission
+// for new effects. No public allowExpired option, replacement clock, refreshed
+// receipt, or new authority token is minted. The full historical chain remains
+// pinned and verified; only the not-expired-now condition is inapplicable.
+export function verifyE2BCleanupQualificationProvenance(
+  value, trust, verifier, expected = {}, externalObservationVerifier = null,
+) {
+  const evidence = validateQualificationEvidence(value, expected, externalObservationVerifier, true);
+  const verifyTrust = CLEANUP_TRUST_VERIFIERS.get(verifier);
+  if (!verifyTrust) {
+    throw new TypeError('E2B cleanup provenance requires a trusted qualification trust verifier');
+  }
+  if (evidence.status !== 'verified'
+    || evidence.external_observation_receipt === null) {
+    throw new Error('E2B cleanup provenance requires finalized signed qualified historical evidence');
+  }
+  return Object.freeze({
+    evidence, trust: verifyTrust(evidence, trust), cleanup_only: true,
+    grants_new_effects: false, production_activation_granted: false,
+  });
 }
 
 export function isE2BQualificationEvidenceCanonical(
