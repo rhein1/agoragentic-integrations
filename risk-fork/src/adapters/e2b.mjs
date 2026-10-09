@@ -20,11 +20,17 @@ import {
 import {
   createE2BRuntimeSdkIntegrityVerifier,
   isE2BRuntimeSdkIntegrityVerifier,
+  isE2BRuntimeSdkProcessIntegrityVerifier,
   loadVerifiedE2BRuntimeSdk,
   validateE2BQualificationEvidence,
   verifyE2BCleanupQualificationProvenance,
   verifyE2BQualificationTrust,
 } from '../e2b-qualification.mjs';
+import {
+  createE2BRuntimeSdkProcessBoundary,
+  isE2BRuntimeSdkProcessPreEntryFailure,
+  isE2BRuntimeSdkProcessSandboxClass,
+} from '../e2b-sdk-process.mjs';
 import {
   assertFreshForkIdentity,
   networkPolicy,
@@ -78,6 +84,10 @@ const MAX_RESULT_BYTES = 4 * 1024 * 1024;
 const MAX_ATTESTATION_BYTES = 128 * 1024;
 const DEFAULT_BIRTH_ATTESTATION_TIMEOUT_MS = 10_000;
 const MAX_RESULT_STREAM_IDLE_TIMEOUT_MS = 5_000;
+// The host-owned SDK process has the same per-file write ceiling as the E2B
+// adapter's default workspace budget. The aggregate budget remains separately
+// configurable for collections of smaller files.
+const SDK_PROCESS_WRITE_LIMIT_BYTES = 32 * 1024 * 1024;
 const MIN_RESULT_STREAM_IDLE_TIMEOUT_MS = 50;
 const MAX_JSON_NODES = 20_000;
 const MAX_JSON_DEPTH = 50;
@@ -1308,6 +1318,8 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
 
   #sdkIntegrityVerified;
 
+  #sdkProcessBoundary;
+
   #qualificationState;
 
   #qualificationExpiryObserved;
@@ -1439,6 +1451,10 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
     if (!qualificationEligible && !cleanupProvenance && options.sdkIntegrityVerifier !== undefined) {
       throw new TypeError('sdkIntegrityVerifier is only valid with signed qualified evidence');
     }
+    if (options.sdkProcessOptions !== undefined
+      && (!(qualificationEligible || cleanupProvenance) || options.sdkIntegrityVerifier !== undefined)) {
+      throw new TypeError('sdkProcessOptions requires signed qualification provenance and cannot be combined with an injected verifier');
+    }
     if (qualificationEligible && [
       options.SandboxClass,
       options.sdkLoader,
@@ -1485,10 +1501,15 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
     this.#sdkVersion = options.sdkVersion ?? null;
     this.#sdkVersionLoader = options.sdkVersionLoader ?? defaultSdkVersionLoader;
     this.#sdkVersionVerified = false;
-    this.#sdkIntegrityVerifier = qualificationEligible
-      ? options.sdkIntegrityVerifier ?? createE2BRuntimeSdkIntegrityVerifier()
+    this.#sdkIntegrityVerifier = qualificationEligible || cleanupProvenance
+      ? options.sdkIntegrityVerifier ?? null
       : null;
     this.#sdkIntegrityVerified = false;
+    this.#sdkProcessBoundary = options.sdkProcessOptions === undefined
+      ? null : createE2BRuntimeSdkProcessBoundary(options.sdkProcessOptions);
+    if (this.#sdkProcessBoundary) {
+      this.#sdkIntegrityVerifier = createE2BRuntimeSdkIntegrityVerifier({ processBoundary: this.#sdkProcessBoundary });
+    }
     this.clock = options.clock ?? (() => new Date());
     if (typeof this.clock !== 'function') throw new TypeError('clock must be a function');
     this.bootstrapCommand = requireFixedCommand(
@@ -1530,7 +1551,7 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
       min: 1,
       max: 100_000,
     });
-    this.maxBytes = boundedInteger(options.maxBytes ?? 32 * 1024 * 1024, 'maxBytes', {
+    this.maxBytes = boundedInteger(options.maxBytes ?? SDK_PROCESS_WRITE_LIMIT_BYTES, 'maxBytes', {
       min: 1,
       max: 1024 * 1024 * 1024,
     });
@@ -1551,6 +1572,16 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
     this.reconciliationEligibleRecordIds = new Set();
     this.initialization = null;
     this.initialized = false;
+  }
+
+  async closeSdkProcess() {
+    if (this.#sdkProcessBoundary) return this.#sdkProcessBoundary.close();
+    return Object.freeze({ sdk_process_terminated: true, sdk_process_tree_cleanup_verified: false,
+      provider_cleanup_verified: false, provider_outcome: 'unknown' });
+  }
+
+  sdkProcessMetrics() {
+    return this.#sdkProcessBoundary?.metrics() ?? null;
   }
 
   #requireConfigured(operation) {
@@ -1634,14 +1665,26 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
     }
   }
 
+  #isTrustedPreEntryNonallocationOutcome(error, Sandbox) {
+    // Only the host-owned process module can mint this branded outcome. The
+    // public error code remains intentionally insufficient: an injected
+    // offline fixture or provider error carrying the same string is still
+    // ambiguous and follows the poison path below.
+    return isE2BRuntimeSdkProcessSandboxClass(Sandbox)
+      && isE2BRuntimeSdkProcessPreEntryFailure(error, Sandbox);
+  }
+
   async #sandboxClass(operation = 'providerIo') {
     // This is the last-line fence for every SDK/provider path, including
     // restart reconciliation reached indirectly from createSavepoint(). An
     // injected class is reachable only through the explicit mock-only seam.
     this.#requireForkRuntimeEnabled(operation);
-    if (this.qualificationEligible && !this.#sdkIntegrityVerified) {
+    if (this.#qualificationState.evidence && !this.#sdkIntegrityVerified) {
+      if (!isE2BRuntimeSdkProcessIntegrityVerifier(this.#sdkIntegrityVerifier)) {
+        throw new Error('Qualified and historical-cleanup E2B SDK effects require a host-owned fresh process verifier');
+      }
       const verified = await loadVerifiedE2BRuntimeSdk(
-        this.qualificationEvidence.sdk,
+        this.#qualificationState.evidence.sdk,
         this.#sdkIntegrityVerifier,
       );
       this.#SandboxClass = normalizeSandboxClass(verified.module);
@@ -1780,6 +1823,7 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
     }
     const matches = [];
     let pages = 0;
+    try {
     while (paginator.hasNext === true) {
       pages += 1;
       if (pages > MAX_LIST_PAGES) throw new Error('E2B sandbox listing exceeded the page bound');
@@ -1803,6 +1847,11 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
       if (typeof paginator.hasNext !== 'boolean') {
         throw new TypeError('E2B sandbox paginator stopped reporting hasNext');
       }
+    }
+    } finally {
+      // A process-backed paginator owns a bounded private cursor. Its release
+      // is independent of the remote sandbox-absence observation below.
+      if (typeof paginator.close === 'function') await paginator.close();
     }
     const sandboxIds = [...new Set(matches)].sort();
     const observation = {
@@ -2278,11 +2327,31 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
       timeoutMs: createTimeoutMs,
       metadata,
     });
+    const Sandbox = await this.#sandboxClass();
+    // Resolving a host-owned process class is asynchronous. Re-check the
+    // one-use admission bit after that await so concurrent callers cannot both
+    // pass the earlier guard and allocate the same Savepoint.
+    if (savepoint.allocation_attempted) {
+      const error = new Error(
+        'E2B allocation was already attempted; the one-use Savepoint is poisoned and cannot be retried',
+      );
+      error.code = 'E2B_ONE_USE_SAVEPOINT_ALLOCATION_ALREADY_ATTEMPTED';
+      throw error;
+    }
+    if (isE2BRuntimeSdkProcessSandboxClass(Sandbox)) {
+      const oversizedFile = savepoint.export_record.files.find(
+        (file) => file.bytes > SDK_PROCESS_WRITE_LIMIT_BYTES,
+      );
+      if (oversizedFile) {
+        throw new TypeError(
+          `sdkProcessOptions cannot upload ${oversizedFile.path}: each file must be at most ${SDK_PROCESS_WRITE_LIMIT_BYTES} bytes`,
+        );
+      }
+    }
     // This synchronous flip is the in-process one-use CAS. It precedes the
     // first await that could let a concurrent caller pass the admission check.
     // Any later failure is conservatively terminal for this Savepoint.
     savepoint.allocation_attempted = true;
-    const Sandbox = await this.#sandboxClass();
     const createStartedAt = this.clock();
     await this.cleanupJournal.markAllocationRequested(savepoint.record_id, sha256Ref(metadata));
     if (this.reconciliationEligibleRecordIds.size > 0) {
@@ -2522,6 +2591,18 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
             'E2B child creation failed and cleanup absence was not verified',
           );
         }
+      } else if (this.#isTrustedPreEntryNonallocationOutcome(error, Sandbox)) {
+        // The authentic host-owned process rejected the create request before
+        // entering the SDK because its bounded child capacity was full. That
+        // response proves no provider allocation was attempted. Keep the
+        // export reusable; an arbitrary caller error carrying the same code
+        // remains an ambiguous outcome and follows the poison path below.
+        await this.cleanupJournal.markSandboxVerifiedAbsent(savepoint.record_id);
+        await this.#clearAllocationPoisonIfFullyAbsent(savepoint.record_id);
+        // Keep the in-memory one-use fence held until durable absence and the
+        // journal clear both succeed. A concurrent retry must not race these
+        // writes and allocate while recovery bookkeeping is incomplete.
+        savepoint.allocation_attempted = false;
       } else {
         this.#poisonAllocationUntilReconciled(savepoint.record_id);
         await this.cleanupJournal.markSandboxUnknown(

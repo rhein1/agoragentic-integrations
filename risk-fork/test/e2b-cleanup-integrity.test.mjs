@@ -275,7 +275,7 @@ test('cleanup-first expiry observation cannot restore effect authority after clo
 
 test('source-disabled provider obligations stay unresolved while local-only recovery needs no SDK', async (t) => {
   const dirs = await directories(t);
-  const { journal, record } = await intent(dirs);
+  const { record } = await intent(dirs);
   const adapter = new E2BRiskForkAdapter(adapterOptions(dirs));
   assert.deepEqual(await adapter.reconcilePendingCleanup(), { reconciled: [record.record_id], unresolved: [] });
   const dirs2 = await directories(t);

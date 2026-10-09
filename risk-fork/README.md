@@ -396,6 +396,34 @@ The configured capability flags without trusted qualification describe contract 
 
 For a non-empty local source, `verifyAuthorityFreeSource(request, { snapshot_directory })` runs on the clean source before copy. It must return the closed `agoragentic.risk-fork.local-authority-free-attestation.v1` shape, echo the exact request/capsule/workspace hashes, provide opaque evidence ref/hash values, and set the four absence claims (`authority_free`, `credentials_absent`, `wallet_material_absent`, and `execution_authority_absent`) to `true`. This callback is a trusted boundary; a careless self-assertion defeats the reference adapter's pre-copy safeguard.
 
+### Qualified SDK process and cleanup migration
+
+Qualified and historical-cleanup adapter construction uses the host-owned
+`sdkProcessOptions` profile. The adapter privately creates the branded process
+capability; the raw process factory is internal and is not a public export.
+Supply canonical absolute paths and exact SHA-256 pins for
+`runtimeArtifactPath`, `runtimeArtifactHash`, `packageDirectory`, and
+`nodeArtifactHash`, together with the bounded `deadlineMs`/`lifetimeMs` values
+and an explicit `providerApiKey` only when a separately authorized provider
+run permits it. The host must supply a Linux non-root controller, read-only
+mount custody for the Node binary, runtime artifact, package closure, and all
+resolved transitive files, plus zero effective/permitted/ambient capabilities,
+no-new-privileges, and no root supplementary group. The process boundary does
+not establish those host controls, a network policy, a billing cap, or
+provider qualification.
+
+The old in-process `sdkIntegrityVerifier`/loader path is not accepted for
+qualified SDK effects or historical cleanup. Expired evidence is cleanup-only:
+new savepoints, allocation, execution, and lease renewal remain denied. A
+cleanup operation also remains denied unless the exact signed historical
+provenance and the original host-owned process verifier are present. Use the
+actual constructor and cleanup fixture path in
+`test/e2b-cleanup-integrity.test.mjs` when validating this migration; the
+fixture constructs an `E2BRiskForkAdapter` with the signed evidence and then
+checks that `createSavepoint()` is rejected after expiry. The provider-free
+`closeSdkProcess()` result reports direct process termination only and never
+claims provider cleanup or production qualification.
+
 ## Commit artifacts are not authority
 
 A validated artifact is still derived from a tainted child. It records what passed deterministic checks; it does not authorize execution. Likewise:

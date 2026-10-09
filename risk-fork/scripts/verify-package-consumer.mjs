@@ -206,6 +206,7 @@ try {
   run('installed package exports', process.execPath, ['--input-type=module', '--eval', `
     import assert from 'node:assert/strict';
     import * as core from '@agoragentic/risk-fork';
+    import * as qualification from '@agoragentic/risk-fork/e2b-qualification';
     import * as host from '@agoragentic/risk-fork/host-boundary';
     import * as skillspector from '@agoragentic/risk-fork/skillspector-admission';
     import * as mcp from '@agoragentic/risk-fork/mcp-host-adapter';
@@ -218,6 +219,15 @@ try {
     import * as langgraph from '@agoragentic/risk-fork/frameworks/langgraph';
     import * as clients from '@agoragentic/risk-fork/client-adoption';
     assert.equal(typeof core.RiskForkController, 'function');
+    for (const surface of [core, qualification]) {
+      assert.equal(Object.hasOwn(surface, 'createE2BRuntimeSdkProcessBoundary'), false);
+      assert.equal(Object.hasOwn(surface, 'isE2BRuntimeSdkProcessBoundary'), false);
+    }
+    for (const subpath of ['e2b-sdk-process', 'src/e2b-sdk-process.mjs']) {
+      await assert.rejects(import('@agoragentic/risk-fork/' + subpath), {
+        code: 'ERR_PACKAGE_PATH_NOT_EXPORTED',
+      });
+    }
     assert.equal(typeof core.LocalReferenceRiskForkAdapter, 'function');
     assert.equal(typeof core.verifyPostgresAuthorityAuditPage, 'function');
     assert.equal(typeof host.createRiskForkHostBoundary, 'function');

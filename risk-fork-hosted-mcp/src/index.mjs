@@ -114,6 +114,7 @@ export {
   createE2BRuntimeSdkIntegrityVerifier,
   isE2BQualificationEvidenceCanonical,
   isE2BRuntimeSdkIntegrityVerifier,
+  isE2BRuntimeSdkProcessIntegrityVerifier,
   loadVerifiedE2BRuntimeSdk,
   sha256BytesRef,
   sha256FileRef,
