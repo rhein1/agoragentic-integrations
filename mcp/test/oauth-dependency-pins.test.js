@@ -7,13 +7,20 @@ const test = require('node:test');
 
 const repositoryRoot = path.resolve(__dirname, '..', '..');
 const sdkPin = '1.31.0';
-const clientPin = '2.2.0';
+const clientPin = '2.3.0';
+const modernPins = Object.freeze({
+    '@modelcontextprotocol/client': clientPin,
+    '@modelcontextprotocol/node': '2.1.1',
+    '@modelcontextprotocol/server': '2.3.0',
+    '@modelcontextprotocol/core': '2.3.0',
+});
 const load = (directory, name) => JSON.parse(readFileSync(
     path.join(repositoryRoot, directory, name), 'utf8',
 ));
 
 // These are source-checkout tooling contracts, not a live OAuth qualification.
-// GHSA-6qxp-vccf-f47h is fixed in SDK 1.31.0 / client 2.2.0. Scan every
+// GHSA-6qxp-vccf-f47h was fixed at SDK 1.31.0 / client 2.2.0; retain that baseline.
+// Scan every
 // nested lock entry so a second vulnerable copy cannot hide behind a fixed root.
 for (const directory of ['mcp', 'risk-fork-hosted-mcp', 'claude-agent-sdk']) {
     test(`${directory} locks only the reviewed patched MCP OAuth dependencies`, () => {
@@ -46,5 +53,29 @@ for (const directory of ['mcp', 'risk-fork-hosted-mcp', 'claude-agent-sdk']) {
         }
         assert.ok(sdkCount > 0, 'the audited SDK must actually be present');
         if (directory !== 'claude-agent-sdk') assert.ok(clientCount > 0);
+    });
+}
+
+for (const directory of ['mcp', 'risk-fork-hosted-mcp']) {
+    test(`${directory} keeps the exact coordinated modern MCP dependency closure`, () => {
+        const manifest = load(directory, 'package.json');
+        const lock = load(directory, 'package-lock.json');
+        for (const [name, pin] of Object.entries(modernPins)) {
+            if (name !== '@modelcontextprotocol/core') {
+                assert.equal(manifest.devDependencies[name], pin, `${directory}/${name}`);
+                assert.equal(lock.packages[''].devDependencies[name], pin, `${directory}/${name}`);
+            }
+            const copies = Object.entries(lock.packages).filter(([entryPath]) => (
+                entryPath.endsWith(`node_modules/${name}`)
+            ));
+            assert.ok(copies.length > 0, `${directory} must contain ${name}`);
+            for (const [entryPath, entry] of copies) {
+                assert.equal(entry.version, pin, `${directory}/${entryPath}`);
+                assert.equal(entry.dev, true, 'qualification tooling adds no runtime dependency');
+                if (name === '@modelcontextprotocol/client' || name === '@modelcontextprotocol/server') {
+                    assert.equal(entry.dependencies['@modelcontextprotocol/core'], modernPins['@modelcontextprotocol/core']);
+                }
+            }
+        }
     });
 }
