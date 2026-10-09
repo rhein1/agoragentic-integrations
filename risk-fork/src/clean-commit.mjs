@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, open, readFile, rename, unlink } from 'node:fs/promises';
 import path from 'node:path';
+import { types as utilTypes } from 'node:util';
 
 import { assertCanonicalJson, sha256Ref } from './canonical.mjs';
 import {
@@ -8,7 +9,7 @@ import {
   verifyExecutionBinding,
   verifySavepointCapsule,
 } from './contracts.mjs';
-import { DistributedAuthorityAmbiguousError } from './distributed-authority.mjs';
+import { getDistributedAuthorityAmbiguityEvidence } from './distributed-authority.mjs';
 import { verifyLifecycle } from './lifecycle.mjs';
 import {
   isPostgresDistributedCommitAuthority,
@@ -33,17 +34,76 @@ import {
   safeEqual,
 } from './util.mjs';
 
+const COMMIT_AMBIGUOUS_ERRORS = new WeakSet();
+const INTERNAL_COMMIT_RECOVERY_EVIDENCE = new WeakMap();
+
+export function isCommitAmbiguousError(value) {
+  return COMMIT_AMBIGUOUS_ERRORS.has(value);
+}
+
 export class CommitAmbiguousError extends Error {
   constructor(message, evidence) {
     super(message);
     this.name = 'CommitAmbiguousError';
     this.code = 'RISK_FORK_COMMIT_AMBIGUOUS';
     this.evidence = evidence;
+    COMMIT_AMBIGUOUS_ERRORS.add(this);
   }
+}
+
+// Public construction proves ambiguity identity, never recovery provenance.
+// Internal errors preserve only bounded references, hashes and unresolved state
+// categories. Public-constructor evidence never enters this private map.
+function internalCommitAmbiguity(message, evidence) {
+  const error = new CommitAmbiguousError(message, evidence);
+  const recovery = {};
+  for (const field of ['parent_ref', 'transaction_ref', 'authorization_id', 'operation_ref', 'effect_key']) {
+    if (typeof evidence[field] !== 'string') continue;
+    try { recovery[field] = requireOpaqueRef(evidence[field], `internal recovery ${field}`); } catch {}
+  }
+  for (const field of ['binding_hash', 'artifact_hash']) {
+    if (typeof evidence[field] !== 'string') continue;
+    try { recovery[field] = requireSha256Ref(evidence[field], `internal recovery ${field}`); } catch {}
+  }
+  for (const [field, allowed] of [
+    ['status', ['active', 'consuming', 'prepared', 'effect_started', 'ambiguous']],
+    ['parent_state_status', ['active', 'committing', 'ambiguous']],
+    ['lock_owner_status', ['unknown', 'missing', 'live', 'dead']],
+    ['cause_code', ['EFFECT_CALLBACK_FAILED', 'DURABLE_FINALIZATION_FAILED']],
+  ]) {
+    if (allowed.includes(evidence[field])) recovery[field] = evidence[field];
+  }
+  if (Number.isSafeInteger(evidence.lock_owner_pid) && evidence.lock_owner_pid > 0) {
+    recovery.lock_owner_pid = evidence.lock_owner_pid;
+  } else if (evidence.lock_owner_pid === null) {
+    recovery.lock_owner_pid = null;
+  }
+  const pending = evidence.pending_transaction;
+  if (pending === null) {
+    recovery.pending_transaction = null;
+  } else if (pending !== undefined && typeof pending.transaction_ref === 'string') {
+    try {
+      recovery.pending_transaction = {
+        transaction_ref: requireOpaqueRef(pending.transaction_ref, 'internal recovery pending transaction_ref'),
+      };
+    } catch {}
+  }
+  INTERNAL_COMMIT_RECOVERY_EVIDENCE.set(error, deepFreeze(recovery));
+  return error;
 }
 
 const FILE_PARENT_HEAD_TRANSACTIONS = new WeakMap();
 const FILE_EXECUTION_AUTHORIZATION_TRANSACTIONS = new WeakMap();
+
+// Native filesystem/process errors require a few exact local control codes.
+// Own data descriptors avoid accessors, prototype walks and string coercion;
+// proxies (including revoked proxies) are rejected before any reflection.
+function systemErrorIs(error, expected) {
+  if (utilTypes.isProxy(error) || !utilTypes.isNativeError(error)) return false;
+  const descriptor = Object.getOwnPropertyDescriptor(error, 'code');
+  return descriptor !== undefined && Object.hasOwn(descriptor, 'value')
+    && descriptor.value === expected;
+}
 
 async function atomicWriteJson(file, value) {
   const temporary = `${file}.${randomUUID()}.tmp`;
@@ -61,7 +121,7 @@ async function readJsonOrNull(file) {
   try {
     return JSON.parse(await readFile(file, 'utf8'));
   } catch (error) {
-    if (error?.code === 'ENOENT') return null;
+    if (systemErrorIs(error, 'ENOENT')) return null;
     throw error;
   }
 }
@@ -78,7 +138,7 @@ async function tryAcquireFileLock(file) {
       await handle.close().catch(() => {});
       await unlink(file).catch(() => {});
     }
-    if (error?.code === 'EEXIST') return null;
+    if (systemErrorIs(error, 'EEXIST')) return null;
     throw error;
   }
 }
@@ -88,7 +148,7 @@ async function inspectFileLock(file) {
   try {
     value = (await readFile(file, 'utf8')).trim();
   } catch (error) {
-    if (error?.code === 'ENOENT') {
+    if (systemErrorIs(error, 'ENOENT')) {
       return { owner_status: 'missing', owner_pid: null };
     }
     return { owner_status: 'unknown', owner_pid: null };
@@ -104,8 +164,8 @@ async function inspectFileLock(file) {
     process.kill(ownerPid, 0);
     return { owner_status: 'live', owner_pid: ownerPid };
   } catch (error) {
-    if (error?.code === 'ESRCH') return { owner_status: 'dead', owner_pid: ownerPid };
-    if (error?.code === 'EPERM') return { owner_status: 'live', owner_pid: ownerPid };
+    if (systemErrorIs(error, 'ESRCH')) return { owner_status: 'dead', owner_pid: ownerPid };
+    if (systemErrorIs(error, 'EPERM')) return { owner_status: 'live', owner_pid: ownerPid };
     return { owner_status: 'unknown', owner_pid: ownerPid };
   }
 }
@@ -139,7 +199,7 @@ function fileLockConflict({ kind, stateEvidence, lock }) {
       evidence,
     );
   }
-  return new CommitAmbiguousError(
+  return internalCommitAmbiguity(
     `The ${kind} lock exists but its owner cannot be established; automatic retry is forbidden`,
     evidence,
   );
@@ -158,7 +218,7 @@ async function acquireInterpretedFileLock({ file, kind, inspectPersistedState })
     if (lock.owner_status === 'missing' && attempt === 0) continue;
     throw fileLockConflict({ kind, stateEvidence, lock });
   }
-  throw new CommitAmbiguousError(
+  throw internalCommitAmbiguity(
     `The ${kind} lock changed while its durable state was inspected; automatic retry is forbidden`,
     { lock_owner_status: 'unknown', lock_owner_pid: null },
   );
@@ -169,7 +229,7 @@ async function releaseFileLock(handle, file) {
     await handle.close();
   } finally {
     await unlink(file).catch((error) => {
-      if (error?.code !== 'ENOENT') throw error;
+      if (!systemErrorIs(error, 'ENOENT')) throw error;
     });
   }
 }
@@ -183,7 +243,7 @@ function assertParentHeadAvailable(current, { parentRef, expectedHead }) {
     );
   }
   if (current.status !== 'active') {
-    throw new CommitAmbiguousError('Authoritative parent head has an unresolved transaction', {
+    throw internalCommitAmbiguity('Authoritative parent head has an unresolved transaction', {
       parent_ref: parentRef,
       parent_state_status: current.status,
       pending_transaction: current.pending_transaction ?? null,
@@ -228,7 +288,7 @@ function assertAuthorizationActive(current, authorizationId) {
     );
   }
   if (current.status !== 'active') {
-    throw new CommitAmbiguousError('Execution authorization has unresolved consumption state', {
+    throw internalCommitAmbiguity('Execution authorization has unresolved consumption state', {
       authorization_id: authorizationId,
       status: current.status,
     });
@@ -262,7 +322,7 @@ function assertParentActiveWithoutExpectedHead(current, parentRef) {
     });
   }
   if (current.status !== 'active') {
-    throw new CommitAmbiguousError('Authoritative parent head has an unresolved transaction', {
+    throw internalCommitAmbiguity('Authoritative parent head has an unresolved transaction', {
       parent_ref: parentRef,
       parent_state_status: current.status,
       pending_transaction: current.pending_transaction ?? null,
@@ -500,12 +560,12 @@ async function restoreParentReservation(files, current, authority, evidence) {
   try {
     await atomicWriteJson(files.authority, authority);
     await atomicWriteJson(files.state, current);
-  } catch (restoreError) {
-    throw new CommitAmbiguousError(
+  } catch {
+    throw internalCommitAmbiguity(
       'A pre-effect parent reservation failure could not be durably restored',
       {
         ...evidence,
-        cause: String(restoreError?.message ?? restoreError).slice(0, 1000),
+        cause: 'parent_reservation_restore_unconfirmed',
       },
     );
   }
@@ -536,7 +596,7 @@ function createFileParentHeadInternals(directory, clock) {
         await handle.close();
       }
     } catch (error) {
-      if (error?.code !== 'EEXIST') throw error;
+      if (!systemErrorIs(error, 'EEXIST')) throw error;
       const existing = await readJsonOrNull(files.state);
       if (existing?.status !== 'active' || !safeEqual(existing.head_hash, normalizedHead)) {
         throw new Error('Parent head was already initialized with different or ambiguous state');
@@ -884,24 +944,28 @@ function createFileParentHeadInternals(directory, clock) {
         result = cloneJson(outcome.result ?? null);
         proof = deepFreeze({ ...cloneJson(proof), observed_at: observedAt });
       } catch (error) {
-        if (!externalEffectStarted && !(error instanceof CommitAmbiguousError)) {
+        if (!externalEffectStarted && !isCommitAmbiguousError(error)) {
           await restoreParentReservation(files, current, authorityBefore, {
             parent_ref: parentRef,
             transaction_ref: intent.transaction_ref,
           });
           throw error;
         }
-        const failure = optionalString(error?.message, 'mutation error', { maxLength: 1000 });
+        const failure = 'parent_effect_unconfirmed';
         await atomicWriteJson(files.state, {
           ...current,
           status: 'ambiguous',
           updated_at: requireIsoDate(clock(), 'clock result'),
           pending_transaction: { ...intent, failure },
         });
-        if (error instanceof CommitAmbiguousError) throw error;
-        throw new CommitAmbiguousError(
+        throw internalCommitAmbiguity(
           'Parent commit effect began or nested authority became ambiguous; automatic retry is forbidden',
-          { parent_ref: parentRef, transaction_ref: intent.transaction_ref, cause: failure },
+          {
+            ...INTERNAL_COMMIT_RECOVERY_EVIDENCE.get(error),
+            parent_ref: parentRef,
+            transaction_ref: intent.transaction_ref,
+            cause: failure,
+          },
         );
       }
 
@@ -951,13 +1015,13 @@ function createFileParentHeadInternals(directory, clock) {
             transaction_hash: transactionHash,
           },
         });
-      } catch (error) {
-        throw new CommitAmbiguousError(
+      } catch {
+        throw internalCommitAmbiguity(
           'Parent commit effect completed but durable authority finalization failed',
           {
             parent_ref: parentRef,
             transaction_ref: intent.transaction_ref,
-            cause: String(error?.message ?? error).slice(0, 1000),
+            cause: 'parent_finalization_unconfirmed',
           },
         );
       }
@@ -1357,32 +1421,36 @@ function createFileExecutionAuthorizationInternals(directory, clock, verifyAutho
           throw new Error('Internal authorization transaction returned without exactly one execution');
         }
       } catch (error) {
-        if (!executionStarted && !(error instanceof CommitAmbiguousError)) {
+        if (!executionStarted && !isCommitAmbiguousError(error)) {
           try {
             await atomicWriteJson(files.state, current);
-          } catch (restoreError) {
-            throw new CommitAmbiguousError(
+          } catch {
+            throw internalCommitAmbiguity(
               'Authorization failed before execution but active state could not be restored',
               {
                 authorization_id: authorizationId,
                 binding_hash: current.binding_hash,
-                cause: String(restoreError?.message ?? restoreError).slice(0, 1000),
+                cause: 'authorization_reservation_restore_unconfirmed',
               },
             );
           }
           throw error;
         }
-        const failure = optionalString(error?.message, 'executor error', { maxLength: 1000 });
+        const failure = 'authorized_effect_unconfirmed';
         await atomicWriteJson(files.state, {
           ...current,
           status: 'ambiguous',
           updated_at: executionNow ?? initialNow,
           failure,
         });
-        if (error instanceof CommitAmbiguousError) throw error;
-        throw new CommitAmbiguousError(
+        throw internalCommitAmbiguity(
           'Authorized execution began; automatic retry is forbidden',
-          { authorization_id: authorizationId, binding_hash: current.binding_hash, cause: failure },
+          {
+            ...INTERNAL_COMMIT_RECOVERY_EVIDENCE.get(error),
+            authorization_id: authorizationId,
+            binding_hash: current.binding_hash,
+            cause: failure,
+          },
         );
       }
       const resultHash = sha256Ref(result ?? null);
@@ -2002,13 +2070,13 @@ async function consumeAuthorizationAndExecute(input, context) {
       authorization: normalized,
       observed_at: normalized.observed_at,
     };
-  } catch (error) {
-    throw new CommitAmbiguousError(
+  } catch {
+    throw internalCommitAmbiguity(
       'Authorized execution completed but its atomic consumption receipt was invalid; automatic retry is forbidden',
       {
         authorization_id: binding.one_use_authorization_id,
         binding_hash: binding.binding_hash,
-        cause: String(error?.message ?? error).slice(0, 1000),
+        cause: 'authorization_consumption_receipt_invalid',
       },
     );
   }
@@ -2510,10 +2578,11 @@ export async function commitPreparedArtifact(input = {}, options = {}) {
         },
       });
     } catch (error) {
-      if (error instanceof DistributedAuthorityAmbiguousError) {
-        throw new CommitAmbiguousError(
+      const ambiguityEvidence = getDistributedAuthorityAmbiguityEvidence(error);
+      if (ambiguityEvidence !== null) {
+        throw internalCommitAmbiguity(
           'Distributed commit effect is unresolved; automatic retry is forbidden',
-          cloneJson(error.evidence ?? {}),
+          cloneJson(ambiguityEvidence),
         );
       }
       throw error;
@@ -2532,19 +2601,19 @@ export async function commitPreparedArtifact(input = {}, options = {}) {
       });
       finalizeAuthority(proof, parent.prepared_at, { revalidate: false });
       mutationNow = parent.completed_at;
-    } catch (error) {
-      throw new CommitAmbiguousError(
+    } catch {
+      throw internalCommitAmbiguity(
         'Distributed mutation committed but its authoritative receipt was invalid; automatic retry is forbidden',
         {
           artifact_hash: artifact.artifact_hash,
-          cause: String(error?.message ?? error).slice(0, 1000),
+          cause: 'distributed_commit_receipt_invalid',
         },
       );
     }
     if (binding) {
       if (parent.authorization_id !== binding.one_use_authorization_id
         || !safeEqual(parent.authorization_binding_hash, binding.binding_hash)) {
-        throw new CommitAmbiguousError(
+        throw internalCommitAmbiguity(
           'Distributed authorization consumption receipt did not bind the exact action',
           { artifact_hash: artifact.artifact_hash },
         );
@@ -2677,10 +2746,10 @@ export async function commitPreparedArtifact(input = {}, options = {}) {
   let parent;
   try {
     parent = normalizeParentTransaction(parentResult, expectedParentStateHash, mutationResult);
-  } catch (error) {
-    throw new CommitAmbiguousError(
+  } catch {
+    throw internalCommitAmbiguity(
       'Parent mutation completed but its authoritative transaction receipt was invalid; automatic retry is forbidden',
-      { artifact_hash: artifact.artifact_hash, cause: String(error?.message ?? error).slice(0, 1000) },
+      { artifact_hash: artifact.artifact_hash, cause: 'parent_commit_receipt_invalid' },
     );
   }
   return {

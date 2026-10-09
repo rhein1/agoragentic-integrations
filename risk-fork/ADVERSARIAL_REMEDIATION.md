@@ -73,3 +73,33 @@ Until the follow-ups above are complete and independently reviewed, do not claim
 - supplies a deployed or managed-service-qualified production transaction authority;
 - guarantees generic exactly-once external side effects;
 - is production-ready, deployable, publishable, enableable, or ready to route production traffic. A reviewed source-only/default-off merge does not establish any of those claims.
+
+## Controller and clean-commit exception custody (source only)
+
+Thrown provider/callback values are not trusted diagnostic records. Controller
+cleanup catches now use fixed local labels and continue both resource-specific
+verification attempts without reading exception properties, prototypes or
+coercion hooks. Only the exact cleanup failure created by the current prepare
+invocation may bypass its outer cleanup path; throwing an exported preparation
+error from a provider does not establish completed cleanup. Preparation
+`cause_code` reports a closed controller-owned phase rather than an upstream
+error code, name or message. This intentionally replaces the earlier arbitrary
+provider-code diagnostic behavior; phase labels do not establish root cause.
+
+Clean commit uses private identity brands for ambiguous errors. Nested ambiguity
+retains only bounded references, hashes and closed unresolved-state categories
+from a private internal-origin snapshot, never arbitrary evidence supplied to
+the public error constructor. Pending parent recovery keeps only its transaction
+reference, not arbitrary stored diagnostic text. The concrete distributed bridge
+preserves its bounded operation/effect references, not later-mutated public
+exception fields. These diagnostics locate persisted authority state; they are
+never authority, termination proof or permission to retry an effect.
+File-authority recovery writes fixed redacted failure categories; after an effect
+may have started, ambiguity and the no-retry reservation survive hostile throws.
+The public ambiguity constructor remains a conservative unresolved-outcome
+signal, never effect success or authority. Safe pre-effect restoration remains
+separate from post-effect uncertainty. AbortError, a rejected destroy request,
+and silence never prove absence: ordinary exact-bound cleanup evidence is still
+required. Frozen migrations, provider activation gates and production
+qualification are unchanged. These local regressions are source evidence,
+not managed recovery, independent provider isolation or an operator drill.

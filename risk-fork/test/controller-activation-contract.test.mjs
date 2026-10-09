@@ -193,7 +193,7 @@ test('controller rejects raw provider output at the mandatory import boundary an
       typed_result_schema_hash: capsule.authorized_result_schema_hash,
     })),
     (error) => error?.code === 'RISK_FORK_PREPARATION_FAILED'
-      && error.evidence?.cause_code === 'RISK_FORK_IMPORT_ENVELOPE_DLP_REJECTED',
+      && error.evidence?.cause_code === 'RISK_FORK_EXECUTION_STAGE_FAILED',
   );
   assert.equal(provider.calls.some(({ method }) => method === 'destroyFork'), true);
   assert.equal(provider.calls.some(({ method }) => method === 'verifyDestroyed'), true);

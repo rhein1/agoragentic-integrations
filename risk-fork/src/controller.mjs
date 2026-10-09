@@ -9,7 +9,7 @@ import {
   verifySavepointCapsule,
 } from './contracts.mjs';
 import {
-  CommitAmbiguousError,
+  isCommitAmbiguousError,
   commitPreparedArtifact,
 } from './clean-commit.mjs';
 import {
@@ -190,6 +190,23 @@ function markPreparationStageFailed(lifecycle, at) {
   return lifecycle;
 }
 
+// These labels describe controller-owned phases, not provider root causes.
+// Never inspect an arbitrary thrown value while resource custody is pending.
+function preparationFailureCode(state) {
+  switch (state) {
+    case 'SAVEPOINTING': return 'RISK_FORK_SAVEPOINT_STAGE_FAILED';
+    case 'SAVEPOINT_READY':
+    case 'FORK_STARTING': return 'RISK_FORK_FORK_STAGE_FAILED';
+    case 'FORK_READY':
+    case 'EXECUTING': return 'RISK_FORK_EXECUTION_STAGE_FAILED';
+    case 'TAINTED':
+    case 'VALIDATING': return 'RISK_FORK_VALIDATION_STAGE_FAILED';
+    case 'COMMIT_READY':
+    case 'PRECOMMIT_DESTROYING': return 'RISK_FORK_CLEANUP_STAGE_FAILED';
+    default: return 'RISK_FORK_PREPARATION_STAGE_FAILED';
+  }
+}
+
 export class RiskForkPreparationError extends Error {
   constructor(message, evidence = {}) {
     super(message);
@@ -203,11 +220,12 @@ export class RiskForkCommitError extends Error {
   constructor(message, { lifecycle, cause }) {
     super(message);
     this.name = 'RiskForkCommitError';
-    this.code = cause instanceof CommitAmbiguousError
+    this.code = isCommitAmbiguousError(cause)
       ? 'RISK_FORK_COMMIT_AMBIGUOUS'
       : 'RISK_FORK_COMMIT_FAILED';
     this.lifecycle = lifecycle;
-    this.cause_code = String(cause?.code ?? cause?.name ?? 'error').slice(0, 200);
+    this.cause_code = isCommitAmbiguousError(cause)
+      ? 'RISK_FORK_COMMIT_AMBIGUOUS' : 'RISK_FORK_CLEAN_COMMIT_FAILED';
   }
 }
 
@@ -333,19 +351,19 @@ export class RiskForkController {
           reason: 'risk_fork_clean_boundary',
           cleanup_request: result.fork_cleanup_request,
         });
-      } catch (error) {
-        result.fork_request = { status: 'failed', code: String(error?.code ?? 'destroy_failed') };
+      } catch {
+        result.fork_request = { status: 'failed', code: 'destroy_failed' };
       }
       try {
         result.fork_verification = await this.provider.verifyDestroyed({
           fork_ref: forkRef,
           cleanup_request: result.fork_cleanup_request,
         });
-      } catch (error) {
+      } catch {
         result.fork_verification = {
           status: 'unknown',
           outcome: 'unknown',
-          code: String(error?.code ?? 'verify_destroyed_failed'),
+          code: 'verify_destroyed_failed',
         };
       }
     }
@@ -362,19 +380,19 @@ export class RiskForkController {
           savepoint_ref: savepointRef,
           cleanup_request: result.savepoint_cleanup_request,
         });
-      } catch (error) {
-        result.savepoint_request = { status: 'failed', code: String(error?.code ?? 'delete_failed') };
+      } catch {
+        result.savepoint_request = { status: 'failed', code: 'delete_failed' };
       }
       try {
         result.savepoint_verification = await this.provider.verifySavepointDestroyed({
           savepoint_ref: savepointRef,
           cleanup_request: result.savepoint_cleanup_request,
         });
-      } catch (error) {
+      } catch {
         result.savepoint_verification = {
           status: 'unknown',
           outcome: 'unknown',
-          code: String(error?.code ?? 'verify_delete_failed'),
+          code: 'verify_delete_failed',
         };
       }
     }
@@ -505,6 +523,7 @@ export class RiskForkController {
     let savepointCreationAttempted = false;
     let forkCreationAttempted = false;
     let cleanupResult = null;
+    let cleanupFailure = null;
     const measurements = {};
 
     try {
@@ -671,13 +690,14 @@ export class RiskForkController {
             },
           ),
         });
-        throw new RiskForkPreparationError('Risk Fork cleanup was not verified; commit is blocked', {
+        cleanupFailure = new RiskForkPreparationError('Risk Fork cleanup was not verified; commit is blocked', {
           lifecycle,
           cleanup: {
             fork: forkClaim,
             savepoint: savepointClaim,
           },
         });
+        throw cleanupFailure;
       }
       const combinedCleanupHash = sha256Ref({
         fork_evidence_hash: requireSha256Ref(forkClaim.evidence_hash, 'fork destruction evidence_hash'),
@@ -727,7 +747,10 @@ export class RiskForkController {
       });
       return prepared;
     } catch (error) {
-      if (error instanceof RiskForkPreparationError) throw error;
+      // Only this invocation's own completed-cleanup error may bypass cleanup.
+      // A provider can throw an exported class instance or a prototype lookalike.
+      if (cleanupFailure !== null && error === cleanupFailure) throw error;
+      const failureCode = preparationFailureCode(lifecycle.state);
       const failedAt = requireIsoDate(this.clock(), 'clock result');
       lifecycle = markPreparationStageFailed(lifecycle, failedAt);
       const cleanup = cleanupResult ?? await this.#destroyResources({ forkRef, savepointRef });
@@ -830,7 +853,7 @@ export class RiskForkController {
           fork: forkClaim,
           savepoint: savepointClaim,
         },
-        cause_code: String(error?.code ?? error?.name ?? 'error').slice(0, 200),
+        cause_code: failureCode,
       });
     }
   }
@@ -892,14 +915,15 @@ export class RiskForkController {
       });
       return deepFreeze({ ...result, lifecycle });
     } catch (error) {
+      const ambiguous = isCommitAmbiguousError(error);
       lifecycle = advance(
         lifecycle,
-        error instanceof CommitAmbiguousError ? 'COMMIT_AMBIGUOUS' : 'COMMIT_FAILED',
+        ambiguous ? 'COMMIT_AMBIGUOUS' : 'COMMIT_FAILED',
         {
           at: requireIsoDate(this.clock(), 'clock result'),
           evidence: lifecycleEvidence(
-            error instanceof CommitAmbiguousError ? 'commit_ambiguous' : 'commit_failed',
-            error instanceof CommitAmbiguousError ? 'unknown' : 'failed',
+            ambiguous ? 'commit_ambiguous' : 'commit_failed',
+            ambiguous ? 'unknown' : 'failed',
           ),
         },
       );

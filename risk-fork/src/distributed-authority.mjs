@@ -41,10 +41,19 @@ export class DistributedAuthorityError extends Error {
   }
 }
 
+const DISTRIBUTED_AMBIGUITY_EVIDENCE = new WeakMap();
+
+// Classify by identity and return the construction-time detached snapshot.
+// Do not reflect on a thrown value or on later-mutated public error fields.
+export function getDistributedAuthorityAmbiguityEvidence(value) {
+  return DISTRIBUTED_AMBIGUITY_EVIDENCE.get(value) ?? null;
+}
+
 export class DistributedAuthorityAmbiguousError extends DistributedAuthorityError {
   constructor(message, evidence = {}) {
     super(message, 'RISK_FORK_DISTRIBUTED_COMMIT_AMBIGUOUS', evidence);
     this.name = 'DistributedAuthorityAmbiguousError';
+    DISTRIBUTED_AMBIGUITY_EVIDENCE.set(this, deepFreeze(cloneJson(this.evidence)));
   }
 }
 
