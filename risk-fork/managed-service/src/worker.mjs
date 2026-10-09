@@ -221,17 +221,19 @@ export function createManagedRiskForkWorker(options = {}) {
     assertAttemptOpen(attempt);
     const boundInput = deepFreeze(cloneJson(input, 'bound provider operation'));
     const inputHash = sha256Ref(boundInput);
-    let used = false; let authorized = false; let finished = false;
+    let used = false; let authorized = false;
+    // Shared retirement state remains observable by escaped async callbacks.
+    const retirement = new AbortController();
     const invalidFence = () => {
       const error = managedError('Broker effect fence is no longer usable', 'WORKER_BROKER_FENCE_INVALID', 409);
       brokerFenceErrors.add(error);
       return error;
     };
     const effectFence = async () => {
-      if (used || finished) throw invalidFence();
+      if (used || retirement.signal.aborted) throw invalidFence();
       used = true;
       const fresh = await effectPreflight(attempt, method);
-      if (finished) throw invalidFence();
+      if (retirement.signal.aborted) throw invalidFence();
       assertAttemptOpen(attempt);
       authorized = true;
       return fresh.context;
@@ -244,7 +246,7 @@ export function createManagedRiskForkWorker(options = {}) {
       id: provider.id, capabilities: provider.capabilities,
       [method]: (suppliedInput) => {
         const call = (async () => {
-          if (!authorized || dispatched || finished || sha256Ref(cloneJson(suppliedInput, 'broker operation')) !== inputHash) {
+          if (!authorized || dispatched || retirement.signal.aborted || sha256Ref(cloneJson(suppliedInput, 'broker operation')) !== inputHash) {
             throw invalidFence();
           }
           dispatched = true;
@@ -253,10 +255,10 @@ export function createManagedRiskForkWorker(options = {}) {
           catch (error) {
             // Retirement can also abort a suspended renewal. Classify the
             // retired capability using private state, not the provider's code.
-            if (finished) throw invalidFence();
+            if (retirement.signal.aborted) throw invalidFence();
             throw error;
           }
-          if (finished) throw invalidFence();
+          if (retirement.signal.aborted) throw invalidFence();
           assertAttemptOpen(attempt);
           const returned = await fresh.provider[method](boundInput, fresh.context);
           actualResult = returned === undefined ? undefined : deepFreeze(cloneJson(returned, 'provider result'));
@@ -291,7 +293,7 @@ export function createManagedRiskForkWorker(options = {}) {
       // duplicate-capability denial invalidate the first successful fence.
       if (!authorized || brokerFenceErrors.has(error) || (dispatched && !settled)) attempt.uncertain = true;
       throw error;
-    } finally { finished = true; }
+    } finally { retirement.abort(); }
     // A delayed response does not preserve the lease or authority it started
     // with. The broker must still fence the effect itself at the provider edge.
     await fence(attempt);

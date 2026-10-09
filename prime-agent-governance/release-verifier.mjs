@@ -1,13 +1,16 @@
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import {
+  closeSync,
+  constants,
   existsSync,
+  fstatSync,
   lstatSync,
   mkdtempSync,
+  openSync,
   readFileSync,
   realpathSync,
   rmSync,
-  statSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
@@ -42,8 +45,19 @@ const EXACT_R2_DEPENDENCIES = Object.freeze({
   '@earendil-works/pi-tui': 'https://pub-728493de92a943e2a9b2d17b4719f318.r2.dev/releases/v0.7.2/prime-agent-tui-0.7.2.tgz',
 });
 
-function sha256File(path) {
-  return createHash('sha256').update(readFileSync(path)).digest('hex');
+function readRegularFile(path) {
+  // Validate and consume the opened object, never reopen a checked pathname.
+  const fd = openSync(path, constants.O_RDONLY | (constants.O_NOFOLLOW || 0) | (constants.O_NONBLOCK || 0));
+  try {
+    if (!fstatSync(fd).isFile()) {
+      const error = new Error('Release input must be a regular file');
+      error.code = 'RELEASE_NOT_REGULAR_FILE';
+      throw error;
+    }
+    return readFileSync(fd);
+  } finally {
+    closeSync(fd);
+  }
 }
 
 function inside(root, candidate) {
@@ -73,12 +87,19 @@ export function validatePrimeAgentPackageMetadata(packageJson) {
   return Object.freeze({ valid: blockers.length === 0, blockers: Object.freeze(blockers) });
 }
 
-function extractVerifiedArchive(artifactPath) {
+function extractVerifiedArchive(artifactBytes) {
   const extractionRoot = mkdtempSync(join(tmpdir(), 'agoragentic-prime-agent-v072-'));
-  execFileSync('tar', ['-xzf', artifactPath, '-C', extractionRoot], {
-    windowsHide: true,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+  try {
+    // The bytes supplied to tar are exactly the snapshot whose digest passed.
+    execFileSync('tar', ['-xzf', '-', '-C', extractionRoot], {
+      input: artifactBytes,
+      windowsHide: true,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+  } catch (error) {
+    rmSync(extractionRoot, { recursive: true, force: true });
+    throw error;
+  }
   return extractionRoot;
 }
 
@@ -94,14 +115,15 @@ export function verifyPrimeAgentReleaseArtifact(artifactPath) {
   let firstPartyFileCount = 0;
   let firstPartyTreeDigest = null;
   let extractionRoot = null;
+  let artifactBytes = null;
 
   try {
-    const info = statSync(resolvedArtifact);
-    if (!info.isFile()) blockers.push('release_artifact_not_regular_file');
-    observedSize = info.size;
-    observedSha256 = sha256File(resolvedArtifact);
-  } catch {
-    blockers.push('release_artifact_unreadable');
+    artifactBytes = readRegularFile(resolvedArtifact);
+    observedSize = artifactBytes.length;
+    observedSha256 = createHash('sha256').update(artifactBytes).digest('hex');
+  } catch (error) {
+    blockers.push(error.code === 'RELEASE_NOT_REGULAR_FILE'
+      ? 'release_artifact_not_regular_file' : 'release_artifact_unreadable');
   }
 
   if (basename(resolvedArtifact) !== PRIME_AGENT_RELEASE.asset_name) blockers.push('release_artifact_name_mismatch');
@@ -110,13 +132,20 @@ export function verifyPrimeAgentReleaseArtifact(artifactPath) {
 
   if (blockers.length === 0) {
     try {
-      extractionRoot = extractVerifiedArchive(resolvedArtifact);
+      extractionRoot = extractVerifiedArchive(artifactBytes);
       const packageRoot = join(extractionRoot, 'package');
       const packagePath = join(packageRoot, 'package.json');
-      if (!existsSync(packagePath) || !inside(extractionRoot, packagePath) || !lstatSync(packagePath).isFile()) {
-        blockers.push('release_package_path_invalid');
-      } else {
-        packageMetadata = JSON.parse(readFileSync(packagePath, 'utf8'));
+      let packageBytes = null;
+      try {
+        // The pinned archive is extracted into a fresh private directory.
+        // No-follow protects the final file where the platform supports it;
+        // this directory is not an isolation boundary against the same OS user.
+        if (!inside(extractionRoot, packageRoot) || !lstatSync(packageRoot).isDirectory()
+          || !inside(packageRoot, packagePath)) throw new Error('Invalid release package path');
+        packageBytes = readRegularFile(packagePath);
+      } catch { blockers.push('release_package_path_invalid'); }
+      if (packageBytes !== null) {
+        packageMetadata = JSON.parse(packageBytes.toString('utf8'));
         blockers.push(...validatePrimeAgentPackageMetadata(packageMetadata).blockers);
         hooksExportTargetPresent = existsSync(join(packageRoot, 'dist', 'core', 'hooks', 'index.js'));
         if (!hooksExportTargetPresent) {

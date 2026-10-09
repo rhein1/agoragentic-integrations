@@ -414,54 +414,77 @@ test('birth watcher rejects hard-linked request state before collecting evidence
   await assert.rejects(readFile(path.join(runtimeDirectory, 'birth-ready')), { code: 'ENOENT' });
 });
 
-test('birth watcher rejects replacement of its one-use runtime directory', async (t) => {
+test('birth watcher rejects replacement of its one-use runtime directory', { timeout: 10_000 }, async (t) => {
   const root = await canonicalFixtureRoot('risk-fork-e2b-replaced-runtime-');
   const runtimeDirectory = path.join(root, 'fresh-birth');
   const movedDirectory = path.join(root, 'moved-birth');
-  t.after(() => rm(root, { recursive: true, force: true }));
   let resumePoll;
+  let markPollEntered;
+  const pollReleased = new Promise((resolve) => { resumePoll = resolve; });
+  const pollEntered = new Promise((resolve) => { markPollEntered = resolve; });
   const watcher = runBirthWatcher({
     runtimeDirectory,
     requestWaitTimeoutMs: 1_000,
-    delay: () => new Promise((resolve) => {
-      resumePoll = resolve;
-    }),
+    delay: () => {
+      markPollEntered();
+      return pollReleased;
+    },
   });
-  const watcherRejection = assert.rejects(watcher, /runtime directory identity changed/i);
-  await waitForPath(path.join(runtimeDirectory, 'template-build-ready'));
-  for (let attempt = 0; attempt < 100 && !resumePoll; attempt += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 5));
-  }
-  assert.equal(typeof resumePoll, 'function');
+  const outcome = watcher.then((value) => ({ value }), (error) => ({ error }));
+  t.after(async () => {
+    resumePoll();
+    await outcome;
+    await rm(root, { recursive: true, force: true });
+  });
+  // The ready file can appear before its write/fsync and directory checks finish.
+  // Mutate the fixture only after the watcher is suspended at its first poll.
+  await Promise.race([
+    pollEntered,
+    outcome.then(() => assert.fail('watcher ended before entering its first poll')),
+  ]);
   await rename(runtimeDirectory, movedDirectory);
   await mkdir(runtimeDirectory, { mode: 0o700 });
   resumePoll();
-  await watcherRejection;
+  const observed = await outcome;
+  assert.ok(observed.error, 'the replaced runtime directory must be rejected');
+  assert.match(observed.error.message, /runtime directory identity changed/i);
+  await assert.rejects(readFile(path.join(runtimeDirectory, 'birth-ready')), { code: 'ENOENT' });
 });
 
 test('birth watcher rejects runtime directory mode drift', {
+  timeout: 10_000,
   skip: process.platform === 'win32' ? 'POSIX mode bits are unavailable on Windows' : false,
 }, async (t) => {
   const root = await canonicalFixtureRoot('risk-fork-e2b-runtime-mode-');
   const runtimeDirectory = path.join(root, 'fresh-birth');
-  t.after(() => rm(root, { recursive: true, force: true }));
   let resumePoll;
+  let markPollEntered;
+  const pollReleased = new Promise((resolve) => { resumePoll = resolve; });
+  const pollEntered = new Promise((resolve) => { markPollEntered = resolve; });
   const watcher = runBirthWatcher({
     runtimeDirectory,
     requestWaitTimeoutMs: 1_000,
-    delay: () => new Promise((resolve) => {
-      resumePoll = resolve;
-    }),
+    delay: () => {
+      markPollEntered();
+      return pollReleased;
+    },
   });
-  const watcherRejection = assert.rejects(watcher, /runtime directory mode is invalid/i);
-  await waitForPath(path.join(runtimeDirectory, 'template-build-ready'));
-  for (let attempt = 0; attempt < 100 && !resumePoll; attempt += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 5));
-  }
-  assert.equal(typeof resumePoll, 'function');
+  const outcome = watcher.then((value) => ({ value }), (error) => ({ error }));
+  t.after(async () => {
+    resumePoll();
+    await outcome;
+    await rm(root, { recursive: true, force: true });
+  });
+  await Promise.race([
+    pollEntered,
+    outcome.then(() => assert.fail('watcher ended before entering its first poll')),
+  ]);
   await chmod(runtimeDirectory, 0o755);
   resumePoll();
-  await watcherRejection;
+  const observed = await outcome;
+  assert.ok(observed.error, 'the changed runtime directory mode must be rejected');
+  assert.match(observed.error.message, /runtime directory mode is invalid/i);
+  await assert.rejects(readFile(path.join(runtimeDirectory, 'birth-ready')), { code: 'ENOENT' });
 });
 
 test('boot guard treats timeout as unknown and hashes provider credential keys without values', () => {

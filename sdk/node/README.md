@@ -411,6 +411,8 @@ npx agora x402 invoke cap_xxx --input input.json
 
 Use the CLI for operator and integration checks. Use the SDK in production agent code.
 
+CLI JSON arguments such as `--file` and `--input` intentionally send the contents of the selected file to the selected API endpoint. Review that file and the configured base URL before sending it. CLI requests with a body, credentials, or a signed proof reject HTTP redirects, so a server cannot forward the payload to a different destination; use the endpoint's canonical URL. Unauthenticated discovery reads without a body retain their existing redirect behavior.
+
 ## Free Tools (No Wallet Needed)
 
 These work without registration or funding:

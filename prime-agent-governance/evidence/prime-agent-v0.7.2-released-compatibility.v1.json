@@ -2,7 +2,7 @@
   "schema": "agoragentic.prime-agent.released-compatibility-receipt.v1",
   "receipt_version": 1,
   "integration_id": "prime-agent-governance",
-  "observed_at": "2026-08-30T16:41:55.129Z",
+  "observed_at": "2026-10-09T18:42:57.890Z",
   "platform": "win32",
   "architecture": "x64",
   "node_version": "v24.13.0",
@@ -16,7 +16,7 @@
     "identity_hash": "sha256:9656959973471e5c42f3c7e7c98420d2212ef1634864c6a715b7307e503d979e"
   },
   "host_contract_hash": "sha256:0ee5e5be3283506f5680700ed40d2a1c29b099d4fb8cfe19699d1ba2197010d7",
-  "integrity_profile_hash": "sha256:bdcd560aad47f5322c1fd1a60ce55eec6f836125691d646eb44b436f61f01ca8",
+  "integrity_profile_hash": "sha256:6561e7a3637ce0c3c407b5f17ea0848e7ac01aca49102d708de9f28fb88d4f2c",
   "artifact": {
     "asset_name": "prime-agent-0.7.2.tgz",
     "asset_size_bytes": 9387295,
@@ -33,7 +33,7 @@
     "package_name": "@agoragentic/prime-agent",
     "package_version": "0.2.0-alpha.0",
     "distribution_status": "source_only",
-    "manifest_digest": "sha256:f005e3d9ebe829355783711109e6c54213454f202c321a7034ebca7b7fc7e5e5"
+    "manifest_digest": "sha256:80a5fd6d097f23e0679967ba439b8233d3834fd2f7d8606cb0cd015c752b9d9f"
   },
   "compatibility": {
     "process_executed": true,
@@ -107,7 +107,7 @@
     "carriage_return_count": 0,
     "process_exit_code": 0,
     "process_signal": null,
-    "stdout_digest": "sha256:4b2c45477ea1b8e974d478408e30f460f8d9a62a5b5bfb8535011b7dd01536be",
+    "stdout_digest": "sha256:bb56a296372d7ed51b8cff42cbebe1a2197d3f0618a22ce7e7903f5ea90abf82",
     "stderr_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "stderr_present": false
   },
@@ -135,5 +135,5 @@
     "trust_mutated": false,
     "ranking_mutated": false
   },
-  "receipt_hash": "sha256:82f69e2e552c5761d39fd8a0d22c8314a16c79acec79155b82ca69573060e7a1"
+  "receipt_hash": "sha256:3e863ce8ca8f3dbf26471b8f4bcd008cb0cd10197160502c61e76260163df5dc"
 }
