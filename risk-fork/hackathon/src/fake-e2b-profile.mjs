@@ -119,6 +119,7 @@ export class HackathonFakeE2BAdapter extends E2BRiskForkAdapter {
     super({
       SandboxClass: sdk.Sandbox,
       offlineConformance: true,
+      providerId: FAKE_E2B_DEMO_PROFILE.id,
       sdkVersion: FAKE_E2B_SDK_CONTRACT_VERSION,
       cleanTemplateId: FAKE_E2B_TEMPLATE_ID,
       cleanTemplateHash: FAKE_E2B_TEMPLATE_HASH,
@@ -135,7 +136,6 @@ export class HackathonFakeE2BAdapter extends E2BRiskForkAdapter {
       maxBytes,
       clock,
     });
-    this.id = FAKE_E2B_DEMO_PROFILE.id;
     this.capabilities = Object.freeze({
       ...this.capabilities,
       supports_verified_destruction: true,

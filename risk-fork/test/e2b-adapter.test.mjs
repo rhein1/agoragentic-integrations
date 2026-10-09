@@ -45,6 +45,7 @@ function createFixture(options = {}) {
   const adapter = new E2BRiskForkAdapter({
     SandboxClass: Sandbox,
     offlineConformance: true,
+    ...(options.providerId ? { providerId: options.providerId } : {}),
     ...(options.useSdkLoader ? {
       sdkLoader: async () => {
         counters.sdkLoader += 1;
@@ -97,6 +98,23 @@ test('E2B capabilities honestly declare the secure snapshot profile unavailable'
     credentialed_provider_validation: 'not_run',
     containment_claim: 'not_verified',
   });
+});
+
+test('offline fixture provider identity is captured at construction', () => {
+  const options = { providerId: 'e2b-fake-hackathon-v1' };
+  const { adapter } = createFixture(options);
+  options.providerId = 'tampered-after-construction';
+  assert.equal(adapter.id, 'e2b-fake-hackathon-v1');
+});
+
+test('provider identity overrides fail closed outside the offline fixture seam', () => {
+  assert.throws(
+    () => new E2BRiskForkAdapter({
+      providerId: 'e2b-fake-hackathon-v1',
+      verifyAuthorityFreeSource: async () => ({}),
+    }),
+    /providerId overrides are restricted to offlineConformance fixtures/i,
+  );
 });
 
 test('every E2B create or execute entrypoint fails closed before verifier, SDK, or provider I/O', async (t) => {

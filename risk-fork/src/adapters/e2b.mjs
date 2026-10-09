@@ -1395,10 +1395,16 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
       && templateProvenanceCandidate !== qualificationEvidence.template.provenance_hash) {
       throw new TypeError('cleanTemplateProvenanceHash does not match qualification evidence');
     }
+    const offlineConformance = options.offlineConformance === true;
+    const defaultProviderId = configured ? 'e2b-clean-template-v1' : 'e2b-snapshot-v1';
+    const providerId = options.providerId ?? defaultProviderId;
     super({
-      id: configured ? 'e2b-clean-template-v1' : 'e2b-snapshot-v1',
+      id: providerId,
       capabilities: makeCapabilities(configured, qualificationEligible),
     });
+    if (!offlineConformance && options.providerId !== undefined) {
+      throw new TypeError('providerId overrides are restricted to offlineConformance fixtures');
+    }
     if (typeof options.verifyAuthorityFreeSource !== 'function') {
       throw new TypeError('verifyAuthorityFreeSource must be an external clean-controller verifier');
     }
@@ -1409,7 +1415,6 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
       && typeof options.offlineConformance !== 'boolean') {
       throw new TypeError('offlineConformance must be boolean');
     }
-    const offlineConformance = options.offlineConformance === true;
     if (offlineConformance && typeof options.SandboxClass !== 'function') {
       throw new TypeError('offlineConformance requires an injected SandboxClass');
     }

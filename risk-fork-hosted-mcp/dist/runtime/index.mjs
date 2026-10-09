@@ -75387,10 +75387,16 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
     if (qualificationEvidence && templateProvenanceCandidate !== qualificationEvidence.template.provenance_hash) {
       throw new TypeError("cleanTemplateProvenanceHash does not match qualification evidence");
     }
+    const offlineConformance = options.offlineConformance === true;
+    const defaultProviderId = configured ? "e2b-clean-template-v1" : "e2b-snapshot-v1";
+    const providerId = options.providerId ?? defaultProviderId;
     super({
-      id: configured ? "e2b-clean-template-v1" : "e2b-snapshot-v1",
+      id: providerId,
       capabilities: makeCapabilities(configured, qualificationEligible)
     });
+    if (!offlineConformance && options.providerId !== void 0) {
+      throw new TypeError("providerId overrides are restricted to offlineConformance fixtures");
+    }
     if (typeof options.verifyAuthorityFreeSource !== "function") {
       throw new TypeError("verifyAuthorityFreeSource must be an external clean-controller verifier");
     }
@@ -75400,7 +75406,6 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
     if (options.offlineConformance !== void 0 && typeof options.offlineConformance !== "boolean") {
       throw new TypeError("offlineConformance must be boolean");
     }
-    const offlineConformance = options.offlineConformance === true;
     if (offlineConformance && typeof options.SandboxClass !== "function") {
       throw new TypeError("offlineConformance requires an injected SandboxClass");
     }
@@ -77929,7 +77934,7 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
 }
 
 // risk-fork-hosted-mcp/src/index.mjs
-var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:dfa48a3d94abdd22eb4ba57dafd0a4f270e6b78e5787d3d50b1c4ce5d8dc9c7f" : null;
+var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:4c5928f171883c6175d73226956de3aeae0b50451d24bd00c639c03dde051fcb" : null;
 var HOSTED_MCP_BUNDLE_METADATA = Object.freeze({
   package_name: "@agoragentic/risk-fork-hosted-mcp",
   package_version: "0.1.0-alpha.0",
