@@ -136,7 +136,8 @@ test('flagship fake-E2B run is visual, typed, parent-stable, cleaned, and provid
   assert.equal(result.provider_evidence.cleanup_tracking.sandbox_id_observed, true);
   assert.equal(result.provider_evidence.cleanup_tracking.kill_requested, true);
   assert.equal(result.provider_evidence.cleanup_tracking.kill_acknowledged, true);
-  assert.equal(result.provider_evidence.cleanup_tracking.running_state_query_count, 3);
+  // #491 performs a bound identity lookup before issuing the kill request.
+  assert.equal(result.provider_evidence.cleanup_tracking.running_state_query_count, 4);
   assert.equal(result.provider_evidence.cleanup_tracking.exact_metadata_list_query_count, 1);
   assert.equal(result.provider_evidence.cleanup_tracking.exact_metadata_list_observation_count, 1);
   assert.equal(result.provider_evidence.cleanup_tracking.absence_observation_count, 2);
@@ -326,7 +327,8 @@ test('command timeout and cleanup failure stay blocked without retry or deletion
     await assert.rejects(value.controller.prepare(value.input), /cleanup|failed closed/i);
     const evidence = value.adapter.providerEvidence();
     assert.equal(evidence.retry_count, 0);
-    assert.equal(evidence.cleanup_tracking.kill_acknowledged, true);
+    // An uncertain pre-kill lookup must not authorize a destructive call.
+    assert.equal(evidence.cleanup_tracking.kill_acknowledged, false);
     assert.equal(evidence.cleanup_tracking.absence_observation_count, 0);
     assert.equal(evidence.cleanup_tracking.cleanup_unknown, true);
     assert.equal(evidence.cleanup_tracking.orphan_reconciliation_required, true);
