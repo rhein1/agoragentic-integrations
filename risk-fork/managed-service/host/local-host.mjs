@@ -22,6 +22,7 @@ const WORKER_OPTIONS = [
   'leaseMs', 'maxAttempts', 'clock', 'loadPrepareInput', 'invokeProvider',
   'lookupResources', 'measureCostMicros',
   'cancellationPollMs',
+  'workerDiagnosticSettings', 'workerDiagnosticStore', 'workerDiagnosticClock', 'workerDiagnosticTimeoutMs',
 ];
 const REAPER_OPTIONS = ['batchSize', 'intervalMs'];
 
@@ -191,13 +192,15 @@ export function createManagedRiskForkLocalHost(options = {}) {
       // Revoke effect capabilities before waiting on observational callbacks.
       // Store lifetime remains owned by the caller. Settled:false is preserved,
       // never reported as callback termination or durable delivery proof.
-      let recording, observer, lifecycle, lifecycleDelivery, alertDelivery;
+      let recording, observer, lifecycle, lifecycleDelivery, alertDelivery, workerDiagnostics;
+      try { workerDiagnostics = await worker.flushDiagnostics({ timeoutMs: 1000 }); } catch (error) { errors.push(error); }
       try { lifecycle = await lifecycleObserver?.close({ timeoutMs: 1000 }); } catch (error) { errors.push(error); }
       try { recording = await requestPolicy?.flushTelemetry({ timeoutMs: 1000 }); } catch (error) { errors.push(error); }
       try { observer = await telemetryDrainer?.close({ timeoutMs: 1000 }); } catch (error) { errors.push(error); }
       try { lifecycleDelivery = await lifecycleDrainer?.close({ timeoutMs: 1000 }); } catch (error) { errors.push(error); }
       try { alertDelivery = await alertDrainer?.close({ timeoutMs: 1000 }); } catch (error) { errors.push(error); }
-      telemetryClose = Object.freeze({ recording,observer,lifecycle,lifecycle_delivery: lifecycleDelivery,alert_delivery: alertDelivery });
+      telemetryClose = Object.freeze({ recording,observer,lifecycle,lifecycle_delivery: lifecycleDelivery,alert_delivery: alertDelivery,
+        worker_diagnostics: workerDiagnostics });
       if (errors.length) throw errors[0];
     })();
     return closePromise;

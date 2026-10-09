@@ -25,7 +25,6 @@ import {
   assertPlainObject,
   cloneJson,
   deepFreeze,
-  optionalString,
   requireEnum,
   requireIsoDate,
   requireOpaqueRef,
