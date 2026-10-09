@@ -15,6 +15,7 @@ import { constants } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { isProxy } from 'node:util/types';
 
 import { canonicalize, sha256Ref } from './canonical.mjs';
 import {
@@ -588,6 +589,37 @@ function normalizeEvidence(value, { includeComputedFields }) {
       ? requireSha256Ref(value.evidence_hash, 'E2B qualification evidence.evidence_hash')
       : null,
   };
+}
+
+function normalizeExpectedBindings(value) {
+  const field = 'expected E2B bindings';
+  // Policy is supplied by the clean host. Typos must not silently remove a
+  // pin, and reading it must not execute accessors or Proxy traps. Retain the
+  // adapter's existing null/undefined-as-unset contract, using own data only.
+  if (!value || typeof value !== 'object' || isProxy(value) || Array.isArray(value)) {
+    throw new TypeError(`${field} must be a non-Proxy plain object`);
+  }
+  const prototype = Object.getPrototypeOf(value);
+  if ((prototype !== Object.prototype && prototype !== null)
+    || Object.getOwnPropertySymbols(value).length !== 0) {
+    throw new TypeError(`${field} must contain only own string-keyed data`);
+  }
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  const keys = ['templateId', 'templateHash', 'bootstrapArtifactHash', 'runnerArtifactHash'];
+  const normalized = Object.create(null);
+  for (const [key, descriptor] of Object.entries(descriptors)) {
+    if (!keys.includes(key) || !descriptor.enumerable || !Object.hasOwn(descriptor, 'value')) {
+      throw new TypeError(`${field} contains unsupported or non-data fields`);
+    }
+    const entry = descriptor.value;
+    if (entry == null) continue;
+    const validated = key === 'templateId'
+      ? requireOpaqueRef(entry, `${field}.templateId`, { maxLength: 500 })
+      : requireSha256Ref(entry, `${field}.${key}`);
+    if (validated !== entry) throw new TypeError(`${field} must use canonical pin values`);
+    normalized[key] = validated;
+  }
+  return Object.freeze(normalized);
 }
 
 function assertExpectedBindings(evidence, expected) {
@@ -2142,6 +2174,7 @@ export function validateE2BQualificationEvidence(
   expected = {},
   externalObservationVerifier = null,
 ) {
+  const expectedBindings = normalizeExpectedBindings(expected);
   const normalized = normalizeEvidence(value, { includeComputedFields: true });
   const expectedHash = sha256Ref({ ...normalized, evidence_hash: null });
   if (!safeEqual(normalized.evidence_hash, expectedHash)) {
@@ -2150,7 +2183,7 @@ export function validateE2BQualificationEvidence(
   if (canonicalize(normalized) !== canonicalize(value)) {
     throw new Error('E2B qualification evidence is not canonical and closed');
   }
-  assertExpectedBindings(normalized, expected);
+  assertExpectedBindings(normalized, expectedBindings);
   if (normalized.external_observation_receipt !== null) {
     assertFinalizedEvidenceMatchesReceipt(normalized, externalObservationVerifier);
   }
