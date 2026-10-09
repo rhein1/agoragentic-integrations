@@ -4,6 +4,8 @@ This experimental, public-OSS, source-only workflow turns an explicitly supplied
 
 The reviewed upstream is pinned to commit `9ec9e3a711531b3d45c30a1e2c3006df97dbe5cb` and npm package `hyperframes@0.7.102`. No upstream implementation code is copied here.
 
+The local lock overrides `sharp` to `0.35.5`, `source-map-js` to `1.2.2`, and `onnxruntime-node` to `1.30.0`. The ONNX update removes the older `global-agent` / `roarr` / `sprintf-js` dependency chain and resolves `adm-zip` to `0.6.1`. The receipt-render fixture covers the local video path; optional background-removal inference is not qualified by that render test. Dependency installation uses disabled lifecycle scripts, so it does not run ONNX's platform-download installer.
+
 ## Status and boundary
 
 This is an **internal/growth workflow**, not a production listing or a hosted rendering service. Its marketplace listing and x402 route remain disabled until separate evidence proves repeatable rendering, artifact delivery, operational support, and owner-approved readiness.
@@ -35,7 +37,7 @@ Requirements: Node.js 22 or newer, FFmpeg/ffprobe, and an installed Chrome, Chro
 
 ```bash
 cd hyperframes
-npm install
+npm ci --ignore-scripts
 node cli.mjs prepare \
   --source fixtures/receipt-reconciliation.json \
   --template receipt-reconciliation-demo \
@@ -72,6 +74,7 @@ For identical source bytes and template, the sanitized timeline JSON and scene H
 ```bash
 npm run check
 npm test
+npm audit --audit-level=moderate
 ```
 
 The suite compiles all four templates, checks deterministic timeline/HTML hashes, verifies redaction and trap handling, proves failure and success do not mutate source receipts, performs one real local HyperFrames MP4 render, recomputes the output hash, and inspects ffprobe metadata for excluded synthetic secret/private markers.

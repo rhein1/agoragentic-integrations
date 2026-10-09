@@ -1,4 +1,3 @@
-import { getCustomToolDefinition } from '@codebuff/sdk';
 import { z } from 'zod/v4';
 
 const DEFAULT_BASE_URL = 'https://agoragentic.com';
@@ -11,6 +10,36 @@ class AgoragenticCodebuffError extends Error {
 }
 
 const jsonResult = (value: unknown) => [{ type: 'json' as const, value }];
+
+type ReadOnlyToolName = 'agoragentic_match' | 'agoragentic_quote' | 'agoragentic_status' | 'agoragentic_receipt';
+
+type ReadOnlyToolDefinition<TName extends ReadOnlyToolName, TArgs> = {
+  toolName: TName;
+  inputSchema: z.ZodType<TArgs, TArgs>;
+  description: string;
+  endsAgentStep: boolean;
+  exampleInputs: TArgs[];
+  execute: (args: TArgs) => Promise<ReturnType<typeof jsonResult>>;
+};
+
+// Codebuff's published custom-tool contract is structural. This source adapter
+// constructs only these four read-only definitions; it does not load its agent SDK.
+function defineReadOnlyTool<TName extends ReadOnlyToolName, TArgs>({
+  toolName, description, inputSchema, execute,
+}: {
+  toolName: TName;
+  description: string;
+  inputSchema: z.ZodType<TArgs, TArgs>;
+  execute: (args: TArgs) => ReturnType<typeof jsonResult> | Promise<ReturnType<typeof jsonResult>>;
+}): ReadOnlyToolDefinition<TName, TArgs> {
+  return {
+    toolName, inputSchema, description,
+    endsAgentStep: true,
+    exampleInputs: [],
+    execute: async (args: TArgs) => await execute(args),
+  };
+}
+
 const matchConstraints = z.object({
   category: z.string().trim().min(1).optional(),
   max_cost: z.number().finite().positive().optional(),
@@ -84,22 +113,22 @@ export function createAgoragenticCodebuffTools({
     return payload;
   }
 
-  const match = getCustomToolDefinition<'agoragentic_match', MatchToolArgs, MatchToolArgs>({
+  const match = defineReadOnlyTool<'agoragentic_match', MatchToolArgs>({
     toolName: 'agoragentic_match', description: 'Preview eligible providers without executing provider work.',
     inputSchema: matchInputSchema,
     execute: async ({ task, constraints }) => jsonResult(await request(matchPath(task, constraints ?? {}))),
   });
-  const quote = getCustomToolDefinition<'agoragentic_quote', MatchToolArgs, MatchToolArgs>({
+  const quote = defineReadOnlyTool<'agoragentic_quote', MatchToolArgs>({
     toolName: 'agoragentic_quote', description: 'Preview a bounded no-spend routed task quote before separately approved execution.',
     inputSchema: matchInputSchema,
     execute: async ({ task, constraints }) => jsonResult(await request(matchPath(task, constraints ?? {}))),
   });
-  const status = getCustomToolDefinition<'agoragentic_status', InvocationToolArgs, InvocationToolArgs>({
+  const status = defineReadOnlyTool<'agoragentic_status', InvocationToolArgs>({
     toolName: 'agoragentic_status', description: 'Read status for an existing invocation.',
     inputSchema: invocationInputSchema,
     execute: async ({ invocationId }) => jsonResult(await request(`/api/execute/status/${encodeURIComponent(invocationId)}`)),
   });
-  const receipt = getCustomToolDefinition<'agoragentic_receipt', InvocationToolArgs, InvocationToolArgs>({
+  const receipt = defineReadOnlyTool<'agoragentic_receipt', InvocationToolArgs>({
     toolName: 'agoragentic_receipt', description: 'Read the normalized receipt for an existing invocation.',
     inputSchema: invocationInputSchema,
     execute: async ({ invocationId }) => jsonResult(await request(`/api/commerce/receipts/${encodeURIComponent(invocationId)}`)),

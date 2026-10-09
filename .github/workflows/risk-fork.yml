@@ -93,7 +93,8 @@ jobs:
     timeout-minutes: 15
     services:
       postgres:
-        image: postgres:16
+        # PostgreSQL 16: mirror of the digest exercised by main run 37984236975.
+        image: public.ecr.aws/docker/library/postgres@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d
         env:
           POSTGRES_USER: risk_fork
           POSTGRES_PASSWORD: risk_fork_ci
@@ -197,7 +198,8 @@ jobs:
         node-version: [20, 22, 24]
     services:
       postgres:
-        image: postgres:16
+        # PostgreSQL 16: mirror of the digest exercised by main run 37984236975.
+        image: public.ecr.aws/docker/library/postgres@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d
         env:
           POSTGRES_USER: risk_fork_managed
           POSTGRES_PASSWORD: risk_fork_managed_ci

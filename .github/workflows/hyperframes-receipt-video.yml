@@ -49,4 +49,5 @@ jobs:
       - run: ffmpeg -version
       - run: google-chrome --version
       - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm audit --audit-level=moderate
       - run: npm test

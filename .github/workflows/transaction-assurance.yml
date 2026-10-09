@@ -40,6 +40,9 @@ jobs:
       - name: Install locked test dependencies
         working-directory: transaction-assurance
         run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Audit locked dependency closure
+        working-directory: transaction-assurance
+        run: npm audit --audit-level=moderate
       - name: Parse package JSON and schemas
         working-directory: transaction-assurance
         run: |
