@@ -5,6 +5,8 @@ import { REQUIRED_PROVIDER_METHODS } from '../../src/provider.mjs';
 import { verifyManagedCleanupPlan } from './control-plane.mjs';
 import { assertManagedWorkerDeliveryJournal } from './worker-delivery.mjs';
 import { assertManagedRequestPolicy } from './request-policy.mjs';
+import { lifecycleTenantHash } from './lifecycle-event.mjs';
+import { createWorkerDiagnostic } from './worker-diagnostic.mjs';
 import {
   assertAllowedKeys, assertManagedWorkerPrincipals, cloneJson, deepFreeze, managedError, requireInteger,
   requireInvocationRef, requireOpaqueRef,
@@ -21,6 +23,7 @@ export function createManagedRiskForkWorker(options = {}) {
     'recoveryPrincipal', 'workerId', 'leaseMs', 'maxAttempts', 'clock',
     'loadPrepareInput', 'invokeProvider', 'lookupResources', 'measureCostMicros',
     'deliveryJournal', 'requestPolicy', 'requestPolicyTimeoutMs', 'cancellationPollMs',
+    'workerDiagnosticSettings', 'workerDiagnosticStore', 'workerDiagnosticClock', 'workerDiagnosticTimeoutMs',
   ], 'worker options');
   const control = options.controlPlane;
   if (control?.config?.environment !== 'local_test' || control.config.enabled !== true) {
@@ -57,6 +60,8 @@ export function createManagedRiskForkWorker(options = {}) {
   const preEffectDenials = new WeakSet();
   const brokerFenceErrors = new WeakSet();
   const shutdown = new AbortController();
+  const diagnostics = createWorkerDiagnostic(options,lifecycleTenantHash(principals.execution.tenant_id),
+    sha256Ref({ domain: 'risk-fork-worker-diagnostic-identity-v1',worker_id: workerId }),shutdown.signal);
   const activeAttempts = new Set();
   const pendingAttempts = new Set();
   const pendingProviderCalls = new Set();
@@ -69,6 +74,13 @@ export function createManagedRiskForkWorker(options = {}) {
     }
   };
   const token = () => randomBytes(32).toString('base64url');
+  const unconfirmed = (boundary,attempt) => {
+    if (!closed && !attempt.abort.signal.aborted) diagnostics.record(boundary);
+  };
+  async function observe(boundary,attempt,operation) {
+    try { return await operation(); }
+    catch (error) { unconfirmed(boundary,attempt); throw error; }
+  }
 
   function once(kind, refValue, operation) {
     assertOpen(kind);
@@ -96,7 +108,7 @@ export function createManagedRiskForkWorker(options = {}) {
     // No automatic delivery retry. A lost acknowledgement is terminal for this
     // local attempt and is resolved by lease expiry/reaping and recovery.
     if (response.lease_token !== leaseToken || response.claim_replayed !== false
-      || response.invocation.invocation_ref !== ref) {
+      || response.invocation.invocation_ref !== ref || response.invocation.tenant_id !== principals[kind].tenant_id) {
       throw managedError('Unexpected claim replay or binding', 'WORKER_CLAIM_AMBIGUOUS', 409);
     }
     const abort = new AbortController();
@@ -149,6 +161,7 @@ export function createManagedRiskForkWorker(options = {}) {
         if (current.cancel_requested) attempt.abort.abort();
       } catch {
         if (attempt.done || !attempt.watchingCancellation) return;
+        unconfirmed('cancellation_read',attempt);
         // Dependency/authentication loss is not a cancellation acknowledgement.
         // Signal the callback to stop, retain the promise and durable recovery.
         attempt.uncertain = true;
@@ -179,6 +192,7 @@ export function createManagedRiskForkWorker(options = {}) {
       });
       assertAttemptOpen(attempt); // Cancellation/shutdown while renewal waited cannot authorize dispatch.
       if (invocation.invocation_ref !== attempt.invocation.invocation_ref
+        || invocation.tenant_id !== principals[attempt.kind].tenant_id
         || invocation.lease_generation !== attempt.claimGeneration
         || invocation.provider_binding_hash !== attempt.invocation.provider_binding_hash
         || invocation.provider_recovery_key !== attempt.invocation.provider_recovery_key) {
@@ -195,6 +209,7 @@ export function createManagedRiskForkWorker(options = {}) {
         lease_expires_at: invocation.lease_expires_at,
       }) };
     } catch {
+      unconfirmed('lease_fence',attempt);
       attempt.uncertain = true;
       throw managedError('Current worker lease or provider binding is unavailable', 'WORKER_FENCE_FAILED', 409);
     }
@@ -221,7 +236,11 @@ export function createManagedRiskForkWorker(options = {}) {
     assertAttemptOpen(attempt);
     const boundInput = deepFreeze(cloneJson(input, 'bound provider operation'));
     const inputHash = sha256Ref(boundInput);
-    let used = false; let authorized = false;
+    let used = false; let authorized = false; let finished = false;
+    // At most one failure per one-use fence/capability. Retain only private
+    // rejection identity, not properties or serialized diagnostic details.
+    const preflightFailures = new Set();
+    const hasObjectIdentity = (value) => value !== null && (typeof value === 'object' || typeof value === 'function');
     // Shared retirement state remains observable by escaped async callbacks.
     const retirement = new AbortController();
     const invalidFence = () => {
@@ -232,7 +251,10 @@ export function createManagedRiskForkWorker(options = {}) {
     const effectFence = async () => {
       if (used || retirement.signal.aborted) throw invalidFence();
       used = true;
-      const fresh = await effectPreflight(attempt, method);
+      let fresh;
+      try { fresh = await effectPreflight(attempt, method); }
+      catch (error) { preflightFailures.add(error); throw error; }
+      if (finished) throw invalidFence();
       if (retirement.signal.aborted) throw invalidFence();
       assertAttemptOpen(attempt);
       authorized = true;
@@ -241,7 +263,8 @@ export function createManagedRiskForkWorker(options = {}) {
     // Never hand the callback a usable raw provider. The single allowed method
     // re-fences after any callback wait, binds the exact closed input, and is
     // permanently retired after one dispatch or callback completion.
-    let dispatched = false; let settled = false; let actualResult; let actualHash;
+    let dispatched = false; let providerEntered = false; let providerUnconfirmed = false; let providerFailure;
+    let settled = false; let actualResult; let actualHash;
     const boundProvider = Object.freeze(Object.assign(Object.create(null), {
       id: provider.id, capabilities: provider.capabilities,
       [method]: (suppliedInput) => {
@@ -255,13 +278,22 @@ export function createManagedRiskForkWorker(options = {}) {
           catch (error) {
             // Retirement can also abort a suspended renewal. Classify the
             // retired capability using private state, not the provider's code.
+            if (finished) throw invalidFence();
+            preflightFailures.add(error);
             if (retirement.signal.aborted) throw invalidFence();
             throw error;
           }
           if (retirement.signal.aborted) throw invalidFence();
           assertAttemptOpen(attempt);
-          const returned = await fresh.provider[method](boundInput, fresh.context);
-          actualResult = returned === undefined ? undefined : deepFreeze(cloneJson(returned, 'provider result'));
+          // Private dispatch-capability reservation above is not provider entry.
+          // No provider-call observation is attributed to a denied preflight.
+          providerEntered = true;
+          try {
+            actualResult = await observe('provider_call',attempt,async () => {
+              const returned = await fresh.provider[method](boundInput, fresh.context);
+              return returned === undefined ? undefined : deepFreeze(cloneJson(returned, 'provider result'));
+            });
+          } catch (error) { providerUnconfirmed = true; providerFailure = error; throw error; }
           actualHash = actualResult === undefined ? null : sha256Ref(actualResult);
           settled = true;
           return actualResult;
@@ -279,15 +311,25 @@ export function createManagedRiskForkWorker(options = {}) {
         return call;
       },
     }));
-    let result;
+    let result; let brokerReturned = false;
     try {
       result = await invokeProvider({ provider: boundProvider, method, input: boundInput, context, effectFence, signal: attempt.abort.signal });
+      brokerReturned = true;
       if (!authorized || !dispatched || !settled
         || (result === undefined ? null : sha256Ref(cloneJson(result, 'broker result'))) !== actualHash) {
         attempt.uncertain = true;
         throw managedError('Broker did not await its effect fence; recovery is required', 'WORKER_BROKER_FENCE_REQUIRED', 409);
       }
     } catch (error) {
+      // Private identity, never error fields: a propagated provider rejection is
+      // not a separate broker failure. Swallowing/rewriting it or returning an
+      // unsettled/fabricated result is a broker contract observation as well.
+      const propagatedPreflight = !brokerReturned && hasObjectIdentity(error) && preflightFailures.has(error) && !brokerFenceErrors.has(error);
+      const propagatedProvider = !brokerReturned && providerEntered && providerUnconfirmed
+        && hasObjectIdentity(error) && Object.is(error,providerFailure);
+      if (!propagatedPreflight && !propagatedProvider) {
+        unconfirmed('broker_contract',attempt);
+      }
       // Only driver-private state/identity classifies a broker violation. An
       // arbitrary provider error.code is not authority, nor does a caught
       // duplicate-capability denial invalidate the first successful fence.
@@ -308,6 +350,7 @@ export function createManagedRiskForkWorker(options = {}) {
       attempt.invocation = delivery ? await delivery.deliver(attempt.kind, 'recordResources', input)
         : await control.recordResources(principals[attempt.kind], input);
     } catch {
+      unconfirmed('resource_journal',attempt);
       attempt.uncertain = true;
       throw managedError('Resource journal acknowledgement is unavailable; no further effects allowed', 'WORKER_JOURNAL_AMBIGUOUS', 409);
     }
@@ -339,18 +382,18 @@ export function createManagedRiskForkWorker(options = {}) {
     }
     if (failed) throw incomplete();
     await fence(attempt);
-    return await control.completeCleanup(principals.cleanup, {
+    return await observe('cleanup_completion',attempt,() => control.completeCleanup(principals.cleanup, {
       invocation_ref: ref, lease_token: attempt.leaseToken, cleanup_evidence: evidence,
-    });
+    }));
     } catch (error) {
       // No callback retry and no provider/root-cause claim. Unknown completion
       // may already have committed: the store rejects terminal/stale authority.
       // Abort/close alone is not an incomplete-observation classification.
       if (!closed && !attempt.abort.signal.aborted) {
         try {
-          await control.recordCleanupIncomplete(principals.cleanup, {
+          await observe('cleanup_incomplete_append',attempt,() => control.recordCleanupIncomplete(principals.cleanup, {
             invocation_ref: ref, lease_token: attempt.leaseToken, lease_generation: attempt.claimGeneration,
-          });
+          }));
         } catch { /* Preserve the original failure and the cleanup obligation. */ }
       }
       throw error;
@@ -366,10 +409,13 @@ export function createManagedRiskForkWorker(options = {}) {
     assertAttemptOpen(attempt);
     attempt.policyFence = policyFence;
     const admission = attempt.invocation;
-    const input = await loadPrepareInput(admission);
-    if (!input || sha256Ref(input.operation) !== admission.operation_hash) {
-      throw managedError('Host preparation changed the admitted operation', 'WORKER_OPERATION_MISMATCH', 409);
-    }
+    const input = await observe('preparation_read',attempt,async () => {
+      const preparedInput = await loadPrepareInput(admission);
+      if (!preparedInput || sha256Ref(preparedInput.operation) !== admission.operation_hash) {
+        throw managedError('Host preparation changed the admitted operation', 'WORKER_OPERATION_MISMATCH', 409);
+      }
+      return preparedInput;
+    });
     const { provider } = await fence(attempt);
     const facade = { id: provider.id, capabilities: provider.capabilities };
     for (const method of REQUIRED_PROVIDER_METHODS) {
@@ -405,14 +451,14 @@ export function createManagedRiskForkWorker(options = {}) {
       throw managedError('Worker requires an actual cleaned, validated fork', 'WORKER_PREPARATION_FAILED', 409);
     }
     await fence(attempt);
-    const actualCost = requireInteger(await measureCost(admission, prepared), 'actual_cost_micros',
-      { min: 0, max: admission.estimated_cost_micros });
+    const actualCost = await observe('cost_read',attempt,async () => requireInteger(await measureCost(admission, prepared), 'actual_cost_micros',
+      { min: 0, max: admission.estimated_cost_micros }));
     await fence(attempt); // cost is pure host metering, but it can await
-    await control.recordExecutionOutcome(principals.execution, {
+    await observe('execution_outcome',attempt,() => control.recordExecutionOutcome(principals.execution, {
       invocation_ref: ref, lease_token: attempt.leaseToken, outcome: 'succeeded',
       actual_cost_micros: actualCost, execution_evidence_hash: prepared.lifecycle.chain_head,
       result_hash: prepared.artifact.artifact_hash,
-    });
+    }));
     // Normal outcome handoff retires the execution lease. A pending observer
     // snapshot must not mistake cleanup's new generation for execution failure.
     // Cancellation after handoff remains enforced by completeCleanup/import.
@@ -433,14 +479,17 @@ export function createManagedRiskForkWorker(options = {}) {
     try {
     const { provider, context } = await fence(attempt);
     assertAttemptOpen(attempt);
-    const found = cloneJson(await lookupResources({ provider, context,
-      invocation: attempt.invocation, signal: attempt.abort.signal }), 'recovery lookup');
-    assertAllowedKeys(found, ['savepoint_ref', 'fork_ref', 'absent_resource_kinds', 'absence_evidence'], 'recovery lookup');
+    const found = await observe('recovery_lookup',attempt,async () => {
+      const result = cloneJson(await lookupResources({ provider, context,
+        invocation: attempt.invocation, signal: attempt.abort.signal }), 'recovery lookup');
+      assertAllowedKeys(result, ['savepoint_ref', 'fork_ref', 'absent_resource_kinds', 'absence_evidence'], 'recovery lookup');
+      return result;
+    });
     await fence(attempt); // lookup delay/revocation must not retain authority
     if (found.savepoint_ref == null && found.fork_ref == null) {
-      return control.completeRecoveryAbsence(principals.recovery, {
+      return await observe('recovery_absence_completion',attempt,() => control.completeRecoveryAbsence(principals.recovery, {
         invocation_ref: ref, lease_token: attempt.leaseToken, recovery_evidence: found.absence_evidence,
-      });
+      }));
     }
     await journal(attempt, { savepoint_ref: found.savepoint_ref ?? null,
       fork_ref: found.fork_ref ?? null, absent_resource_kinds: found.absent_resource_kinds ?? [] });
@@ -469,7 +518,8 @@ export function createManagedRiskForkWorker(options = {}) {
     },
     status: () => Object.freeze({ closed, execution_stopped: executionStopped,
       pending_attempts: pendingAttempts.size, pending_provider_callbacks: pendingProviderCalls.size,
-      retained_attempts: attempts.size, termination_proven: false }),
+      retained_attempts: attempts.size, termination_proven: false, diagnostics: diagnostics.health() }),
+    flushDiagnostics: diagnostics.flush,
     close() {
       closed = true; shutdown.abort();
       for (const attempt of activeAttempts) clearTimeout(attempt.timer);

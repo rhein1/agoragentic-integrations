@@ -1001,8 +1001,110 @@ failure, process loss or a later bucket may leave an observation unrecorded.
 
 **Same-store outage cannot reliably record itself in that store.** Independent
 host monitoring and an observed sink/operator-response drill remain required.
-Worker/provider callback failure classes, independently observed DB health,
+V10 does not establish worker/provider callback failure classes; the opt-in v11
+section below adds local worker-boundary observations, not provider truth.
+Independently observed DB health,
 full traffic coverage, hostile-host resistance, maximum-capacity SLOs and real
 operational sink custody are not established here. This remains checkout-only,
 default-off and `local_test`; no provider call, billing observation, managed
 deployment or production activation is authorized or qualified by these tests.
+
+### Opt-in v11 durable worker-boundary unconfirmed observations
+
+V11 extends the same observer ledger, metric caps and `eventKind:'alert'`
+drainer with a **separate** worker packet/settings vocabulary. It does not
+change v10 observer identity, hash domains, rules, buckets or meanings. Every
+store selecting v11 must explicitly retain its unchanged v10
+`diagnosticSettings` and add immutable `workerDiagnosticSettings`:
+
+```js
+const workerDiagnosticSettings = {
+  bucket_ms: 1000, max_age_ms: 60000, max_future_ms: 1000,
+  rules: [
+    {rule_id: 'worker_provider_call_unconfirmed', threshold: 2, window_ms: 60000},
+    {rule_id: 'worker_recovery_lookup_unconfirmed', threshold: 1, window_ms: 60000},
+  ],
+};
+const options = {...unchangedV10TelemetryOptions, metricVersion: 11, workerDiagnosticSettings};
+// Drain old runtimes. Separately authorized owner migration, then ALL prior
+// role grants plus worker-diagnostic-grants.sql.template; never boot-time DDL.
+const store = await createPostgresManagedTelemetryStore(options);
+const worker = createManagedRiskForkWorker({
+  ...trustedWorkerOptions, workerDiagnosticSettings,
+  workerDiagnosticStore: store, workerDiagnosticTimeoutMs: 1000,
+});
+const alerts = await createPostgresManagedTelemetryStore({...options, eventKind: 'alert'});
+const drainer = createManagedTelemetryDrainer({
+  store: alerts, eventKind: 'alert', deliver: hostReviewedRedactedAlertSink,
+});
+// Host owns worker execution and drainer scheduling. No provider is provisioned.
+worker.close(); await worker.flushDiagnostics({timeoutMs: 1000});
+await drainer.close(); await alerts.close(); await store.close();
+```
+
+The twelve exact phases and the dispatch-versus-entry distinction are documented
+in [WORKER.md](./WORKER.md#optional-worker-boundary-observations-v11-sourcelocal-test-only).
+Rules are `worker_<phase>_unconfirmed`, with 1–12 unique closed rules, thresholds
+1–1,000,000 and whole-bucket fixed windows of at most one day. The bucket, new
+packet age and future-skew ranges match v10 but their hash domains/settings
+are distinct. A closed packet binds tenant hash, stable worker hash, phase,
+host-clock bucket and worker-settings hash. It contains only those fixed
+labels/hashes and `evidence_class:'host_worker_self_attested'`,
+`coverage:'ingested_unconfirmed_buckets_only'`, `production_qualified:false`.
+It contains no raw exception, credential, operation, resource, lease, worker ID
+or executable instruction. The diagnostic store is a trusted host dependency,
+not a security boundary against a malicious owner/runtime writer.
+
+Repeated attempts/replicas/restarts with the same tenant, stable worker ID,
+phase, bucket and settings count **once**. Different worker IDs intentionally
+count separately; keep IDs stable rather than using random per-start identities.
+Thresholds count successfully ingested unconfirmed buckets, not failed attempts,
+incidents, provider billing, complete traffic or outage duration. Unconfigured
+phases retain source custody but contribute no threshold window. Metric windows
+use DB ingestion time, not reconstructed historical host time. Exact retained
+replay can confirm an ambiguous COMMIT even after its age limit expires, without
+recounting or moving windows. New stale/future packets reject. These fixed-window
+facts never emit a clear, resolution or recovery merely because observations
+stop, expire or a callback later succeeds.
+
+The additive checkout-only `migrations/016_managed_worker_diagnostic_metrics.pg.sql`
+attests complete v10 catalog, settings and custody before adding the separate
+SELECT-only settings singleton and worker source/rule vocabulary. Apply the
+[worker settings grant](./ops/postgres/worker-diagnostic-grants.sql.template)
+after every prior grant. The full PG16 catalog is captured from actual DDL with
+`capture-metrics-catalog.mjs --v11`. Frozen 005–015 migration bytes, old settings,
+rules, source rows and windows remain unchanged; no historical worker packets,
+alerts or clears are backfilled. Old runtimes reject the v11 catalog. Restart
+with exact v11 settings; do not silently repurpose a v10 observer settings row.
+
+Entire closed worker packets/hashes and their original ingestion contributions
+remain in `telemetry_metric_sources`. Source, window, threshold alert and totals
+are one serialized transaction sharing all six existing global/per-tenant caps.
+Selected replay/delivery/window reads attest that custody and reject drift; no
+second runtime, queue, outbox or execution receipt is introduced. Delivery uses
+existing token/generation/lease/retry/ACK semantics and remains at least once.
+ACK-expired delivery may be owner-pruned, but permanent source/window custody
+prevents recounts or recreating a pruned threshold alert. Limits are row bounds,
+not measured megabytes, managed storage cost or maximum-capacity SLOs.
+
+Recording is nonblocking and best-effort: one actual pending append per phase,
+no FIFO, spool or automatic append/provider retry. A hung phase's later events
+increment local `dropped`; other phases remain independent. Timeout or close
+does not release the slot until actual settlement and never accepts late ACKs.
+`workerDiagnosticTimeoutMs` is 50–30,000 ms (default 1,000); the original store,
+settings and clock are captured at composition. Invalid/regressing host clock,
+malformed ACK, store loss or capacity can leave evidence unrecorded. Local
+counter/flush/host-close behavior and never-settling callback coverage are in
+WORKER.md. A worker callback that never settles is not diagnosed by an invented
+timeout event. Independent host monitoring must detect that retained work.
+
+Actual disposable PG16 tests cover producer-to-existing-alert delivery,
+same-bucket concurrency/restart, atomic rollback at each persistence edge,
+unknown COMMIT and expired replay, all shared caps, settings/catalog/source/
+window/alert drift, DB-lock cancellation, additive v10 upgrade, pruning custody,
+positive CA/wrong-CA TLS and SELECT-only settings roles. A same-store outage
+cannot reliably record itself there. Real redacted sink custody/operator drills,
+independent provider isolation/cleanup/billing evidence, managed DB HA/PITR/
+rotation, edge/WAF operations, publication, deployment, staging/canary and
+explicit production enrollment remain **open**. No live agent is protected by
+these local source tests, and no provider call or spend is authorized here.
