@@ -3,7 +3,7 @@
   "profile_version": 1,
   "host_release_asset_sha256": "sha256:bc5471f2a626d727b88a45eb745fff93b10c554a3c4fc5912f25d8c64b987f5e",
   "dependency_lock_digest": "sha256:924b09f57185f045d5ec941d45460181f4ddd1d1876dace7ed50bd63cf0147e8",
-  "extension_manifest_digest": "sha256:f005e3d9ebe829355783711109e6c54213454f202c321a7034ebca7b7fc7e5e5",
+  "extension_manifest_digest": "sha256:80a5fd6d097f23e0679967ba439b8233d3834fd2f7d8606cb0cd015c752b9d9f",
   "dependency_closures": [
     {
       "platform": "linux",
@@ -28,5 +28,5 @@
       "dependency_tree_digest": "sha256:a82b4affa2cdad38596b5cc3b5f9f8da62c42874a2f5609b81381ae5a3433bfa"
     }
   ],
-  "profile_hash": "sha256:bdcd560aad47f5322c1fd1a60ce55eec6f836125691d646eb44b436f61f01ca8"
+  "profile_hash": "sha256:6561e7a3637ce0c3c407b5f17ea0848e7ac01aca49102d708de9f28fb88d4f2c"
 }

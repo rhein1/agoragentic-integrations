@@ -414,6 +414,8 @@ jobs:
           node --test test/x402-buyer-demo-preflight.test.mjs
       - name: Test Shipyard no-funds x402 demo contracts
         run: node --test test/shipyard-inference-x402-receipt-flow.test.mjs
+      - name: Test authentication tampering and selected JSON request boundaries
+        run: node --test test/codeql-request-boundaries.test.mjs
 
   adapter-conformance:
     runs-on: ubuntu-latest

@@ -31,7 +31,7 @@ function validate(manifest, options = {}) {
   return validateInventoryHolds(manifest, {
     integrationDirectories: HELD_DIRECTORIES,
     representedDirectories: REPRESENTED,
-    today: '2026-08-08',
+    today: '2026-10-09',
     ...options,
   });
 }
@@ -44,10 +44,10 @@ test('current central inventory hold is bounded and valid', () => {
 
 test('expired inventory holds fail closed', () => {
   const expired = cloneManifest();
-  expired.inventory_holds[0].review_by = '2026-08-07';
+  expired.inventory_holds[0].review_by = '2026-10-08';
   const result = validate(expired);
   assert.equal(result.heldDirectories.size, expired.inventory_holds.length - 1);
-  assert.ok(result.errors.some((error) => error.includes('expired on 2026-08-07')));
+  assert.ok(result.errors.some((error) => error.includes('expired on 2026-10-08')));
 });
 
 test('inventory holds cannot delegate ownership or extend beyond 90 days', () => {
@@ -56,7 +56,7 @@ test('inventory holds cannot delegate ownership or extend beyond 90 days', () =>
   assert.ok(validate(delegated).errors.some((error) => error.includes('owner must be repository-maintainers')));
 
   const unbounded = cloneManifest();
-  unbounded.inventory_holds[0].review_by = '2027-01-01';
+  unbounded.inventory_holds[0].review_by = '2027-02-01';
   assert.ok(validate(unbounded).errors.some((error) => error.includes('exceeds the 90-day limit')));
 });
 
@@ -70,7 +70,7 @@ test('unknown, represented, duplicate, or authority-bearing holds are rejected',
   const representedResult = validateInventoryHolds(represented, {
     integrationDirectories: ['agent-os'],
     representedDirectories: ['agent-os'],
-    today: '2026-08-08',
+    today: '2026-10-09',
   });
   assert.ok(representedResult.errors.some((error) => error.includes('already represented')));
 
