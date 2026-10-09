@@ -676,6 +676,15 @@ test('only independently signed exact e2b@2.39.0 bindings can satisfy qualificat
     () => new E2BRiskForkAdapter({
       ...base,
       ...qualificationTrust(evidence, qualified.signed.verifier),
+      providerId: 'e2b-fake-hackathon-v1',
+    }),
+    /providerId overrides are restricted to offlineConformance fixtures/i,
+  );
+
+  assert.throws(
+    () => new E2BRiskForkAdapter({
+      ...base,
+      ...qualificationTrust(evidence, qualified.signed.verifier),
       SandboxClass: class Sandbox {},
       sdkVersion: '2.39.0',
     }),

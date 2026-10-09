@@ -76,6 +76,43 @@ adapter-digest binding, a production qualification class, provider authority or
 an activation path; an opaque registry receipt hash is still not proof that
 signed E2B evidence covers the exact managed adapter.
 
+### Cleanup recovery is not current qualification
+
+The E2B adapter can recover already-journaled local export obligations after an
+authentic observation receipt expires. Its cleanup-only provenance helper
+(`verifyE2BCleanupQualificationProvenance`, reachable through the existing
+`e2b-qualification` module subpath) preserves canonical evidence reconstruction,
+caller-pinned independent observer/trust keys, both signatures, audience, exact
+template/runtime pins, receipt ordering, maximum lifetime and rejection of future
+issue time. It omits only the not-expired-now condition. This helper grants no
+new effects or activation; it is not a production qualification receipt. New
+savepoints, allocation, execution and lease renewal keep current verification.
+An adapter constructed from expired evidence is permanently cleanup-only; a
+backward clock or mutable status property cannot restore new-effect authority.
+An adapter constructed while current also latches cleanup-only on its first
+explicit expiry rejection; a later clock rollback cannot undo that decision.
+The adapter captures qualification policy privately rather than trusting mutable
+public status properties for cleanup authority.
+
+Local-only restart reconciliation does not need an SDK. Real E2B provider I/O is
+still source-disabled, including provider cleanup; such obligations remain
+unresolved. The existing mock-only conformance seam cannot carry qualification
+evidence. Before a mock provider kill, source checks the journal provider/template,
+the requested persisted or exact-list identity, and exact returned sandbox ID,
+template, profile, cleanup reference and metadata hash. It rechecks the persisted
+binding after lookup and records cleanup intent before kill. Unknown/mismatched
+observations or failed journal writes never establish absence. An already-absent
+resource is verified separately and is not reported as an observed kill.
+
+These are source/local-test controls, not multi-process journal locking or
+managed operational qualification. The filesystem journal has an unkeyed
+self-hash, not an authenticity signature; protected host ownership/ACL custody
+and a qualified single-writer recovery boundary remain prerequisites before
+real provider cleanup can be enabled. No live cleanup metrics or alert drill is
+established by synthetic reconciled/unresolved record IDs. Preserve the separate
+request-bound cleanup evidence contract and qualify the managed metrics/alerts
+against actual recoveries before closing a production gate.
+
 ## 1. Source, CI and protected merge
 
 Run both package checks/tests, the mandatory disposable PostgreSQL tests,

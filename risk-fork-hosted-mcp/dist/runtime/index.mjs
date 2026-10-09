@@ -69972,6 +69972,8 @@ var E2B_RUNTIME_SDK_INTEGRITY_SCHEMA = "agoragentic.risk-fork.e2b-runtime-sdk-de
 var QUALIFICATION_TRUST_VERIFIERS = /* @__PURE__ */ new WeakSet();
 var EXTERNAL_QUALIFICATION_OBSERVATION_VERIFIERS = /* @__PURE__ */ new WeakSet();
 var RUNTIME_SDK_INTEGRITY_VERIFIERS = /* @__PURE__ */ new WeakSet();
+var CLEANUP_OBSERVATION_VERIFIERS = /* @__PURE__ */ new WeakMap();
+var CLEANUP_TRUST_VERIFIERS = /* @__PURE__ */ new WeakMap();
 var MAX_RUNTIME_SDK_PACKAGES = 128;
 var MAX_RUNTIME_SDK_FILES_PER_PACKAGE = 2048;
 var MAX_RUNTIME_SDK_FILES = 8192;
@@ -70699,7 +70701,7 @@ function normalizeObservationTimes(value, field) {
   }
   return { observed_at: observedAt, issued_at: issuedAt, expires_at: expiresAt };
 }
-function assertExternalObservationCurrent(times, policy) {
+function assertExternalObservationHistorical(times, policy) {
   const observedMs = Date.parse(times.observed_at);
   const issuedMs = Date.parse(times.issued_at);
   const expiresMs = Date.parse(times.expires_at);
@@ -70710,8 +70712,15 @@ function assertExternalObservationCurrent(times, policy) {
   if (issuedMs > nowMs) {
     throw new Error("E2B external qualification observation is future-issued");
   }
+  return nowMs;
+}
+function assertExternalObservationCurrent(times, policy) {
+  const nowMs = assertExternalObservationHistorical(times, policy);
+  const expiresMs = Date.parse(times.expires_at);
   if (nowMs >= expiresMs) {
-    throw new Error("E2B external qualification observation is expired");
+    const error = new Error("E2B external qualification observation is expired");
+    error.code = "E2B_QUALIFICATION_OBSERVATION_EXPIRED";
+    throw error;
   }
 }
 function normalizeStatusEvidence(value, field) {
@@ -70891,7 +70900,7 @@ function normalizeExternalNetwork(value) {
     )
   };
 }
-function externalObservationPayload(evidence, input, observer, policy) {
+function externalObservationPayload(evidence, input, observer, policy, assertTime = assertExternalObservationCurrent) {
   assertExternalObservationProvisional(evidence);
   assertPlainObject(input, "E2B external qualification observation input");
   assertAllowedKeys(input, [
@@ -70915,7 +70924,7 @@ function externalObservationPayload(evidence, input, observer, policy) {
   }
   const audience = externalObservationAudience(evidence);
   assertExternalObservationAudience(audience, policy.audience);
-  assertExternalObservationCurrent(times, policy);
+  assertTime(times, policy);
   const normalizedObserver = normalizeObserverIdentity(observer);
   const observerBoundary = normalizeExternalObserverBoundary(input.observer_boundary);
   const payload = {
@@ -71580,6 +71589,48 @@ function createE2BExternalQualificationObservationVerifier(options = {}) {
     ),
     audience: deepFreeze(normalizeExternalObservationAudience(options.audience))
   });
+  function verifyObservation(value, observation, assertTime) {
+    const evidence = validateE2BQualificationEvidence(value);
+    const normalizedObservation = normalizeExternalObservationReceipt(observation);
+    if (!safeEqual(normalizedObservation.observer.public_key_hash, keyHash) || normalizedObservation.observer.public_key_spki_base64url !== observer.public_key_spki_base64url) {
+      throw new Error("E2B external qualification observer does not match pinned policy");
+    }
+    assertExternalObservationAudience(normalizedObservation.audience, policy.audience);
+    const payload = externalObservationPayload(evidence, {
+      observed_at: normalizedObservation.observed_at,
+      issued_at: normalizedObservation.issued_at,
+      expires_at: normalizedObservation.expires_at,
+      observer_boundary: normalizedObservation.observer_boundary,
+      birth_controls: normalizedObservation.birth_controls,
+      first_instruction_ipv4_egress_denied: normalizedObservation.network.first_instruction_ipv4_egress_denied,
+      first_instruction_ipv6_egress_denied: normalizedObservation.network.first_instruction_ipv6_egress_denied,
+      ipv6_provider_denial: normalizedObservation.network.ipv6_provider_denial,
+      provider_controls: normalizedObservation.provider_controls,
+      cost: {
+        provider_cap: normalizedObservation.cost.provider_cap,
+        derived_estimate: normalizedObservation.cost.derived_estimate,
+        aggregate_console_delta: normalizedObservation.cost.aggregate_console_delta,
+        actual_sandbox: normalizedObservation.cost.actual_sandbox
+      }
+    }, observer, policy, assertTime);
+    const { signature: signatureValue, ...actualPayload } = normalizedObservation;
+    if (canonicalize(actualPayload) !== canonicalize(payload)) {
+      throw new Error("E2B external qualification observation binding mismatch");
+    }
+    const signature = requireEd25519Signature(
+      signatureValue,
+      "E2B external qualification observation signature"
+    );
+    if (!verifySignature(
+      null,
+      Buffer.from(canonicalize(payload), "utf8"),
+      publicKey,
+      signature
+    )) {
+      throw new Error("E2B external qualification observation signature is invalid");
+    }
+    return normalizedObservation;
+  }
   const verifier = {
     key_hash: keyHash,
     observer,
@@ -71590,49 +71641,11 @@ function createE2BExternalQualificationObservationVerifier(options = {}) {
       return externalObservationPayload(evidence, input, observer, policy);
     },
     verify(value, observation) {
-      const evidence = validateE2BQualificationEvidence(value);
-      const normalizedObservation = normalizeExternalObservationReceipt(observation);
-      if (!safeEqual(normalizedObservation.observer.public_key_hash, keyHash) || normalizedObservation.observer.public_key_spki_base64url !== observer.public_key_spki_base64url) {
-        throw new Error("E2B external qualification observer does not match pinned policy");
-      }
-      assertExternalObservationAudience(normalizedObservation.audience, policy.audience);
-      const payload = externalObservationPayload(evidence, {
-        observed_at: normalizedObservation.observed_at,
-        issued_at: normalizedObservation.issued_at,
-        expires_at: normalizedObservation.expires_at,
-        observer_boundary: normalizedObservation.observer_boundary,
-        birth_controls: normalizedObservation.birth_controls,
-        first_instruction_ipv4_egress_denied: normalizedObservation.network.first_instruction_ipv4_egress_denied,
-        first_instruction_ipv6_egress_denied: normalizedObservation.network.first_instruction_ipv6_egress_denied,
-        ipv6_provider_denial: normalizedObservation.network.ipv6_provider_denial,
-        provider_controls: normalizedObservation.provider_controls,
-        cost: {
-          provider_cap: normalizedObservation.cost.provider_cap,
-          derived_estimate: normalizedObservation.cost.derived_estimate,
-          aggregate_console_delta: normalizedObservation.cost.aggregate_console_delta,
-          actual_sandbox: normalizedObservation.cost.actual_sandbox
-        }
-      }, observer, policy);
-      const { signature: signatureValue, ...actualPayload } = normalizedObservation;
-      if (canonicalize(actualPayload) !== canonicalize(payload)) {
-        throw new Error("E2B external qualification observation binding mismatch");
-      }
-      const signature = requireEd25519Signature(
-        signatureValue,
-        "E2B external qualification observation signature"
-      );
-      if (!verifySignature(
-        null,
-        Buffer.from(canonicalize(payload), "utf8"),
-        publicKey,
-        signature
-      )) {
-        throw new Error("E2B external qualification observation signature is invalid");
-      }
-      return normalizedObservation;
+      return verifyObservation(value, observation, assertExternalObservationCurrent);
     }
   };
   EXTERNAL_QUALIFICATION_OBSERVATION_VERIFIERS.add(verifier);
+  CLEANUP_OBSERVATION_VERIFIERS.set(verifier, (value, observation) => verifyObservation(value, observation, assertExternalObservationHistorical));
   return Object.freeze(verifier);
 }
 function verifyE2BExternalQualificationObservation(value, observation, verifier) {
@@ -71667,6 +71680,29 @@ function createE2BQualificationTrustVerifier(options = {}) {
   if (!safeEqual(keyHash, expectedKeyHash)) {
     throw new Error("E2B qualification trust verifier public key hash mismatch");
   }
+  function verifyBoundTrust(evidence, trust) {
+    assertDistinctQualificationTrustKey(evidence, keyHash);
+    assertPlainObject(trust, "E2B qualification trust");
+    assertAllowedKeys(
+      trust,
+      ["schema", "evidence_hash", "verifier_key_hash", "signature"],
+      "E2B qualification trust"
+    );
+    const payload = qualificationTrustPayload(evidence, keyHash);
+    if (trust.schema !== payload.schema || !safeEqual(trust.evidence_hash, payload.evidence_hash) || !safeEqual(trust.verifier_key_hash, payload.verifier_key_hash)) {
+      throw new Error("E2B qualification trust binding mismatch");
+    }
+    const signature = requireEd25519Signature(trust.signature);
+    if (!verifySignature(
+      null,
+      Buffer.from(canonicalize(payload), "utf8"),
+      publicKey,
+      signature
+    )) {
+      throw new Error("E2B qualification trust signature is invalid");
+    }
+    return deepFreeze({ ...payload, signature: trust.signature });
+  }
   const verifier = {
     key_hash: keyHash,
     createPayload(value, expected = {}, externalObservationVerifier = null) {
@@ -71679,35 +71715,15 @@ function createE2BQualificationTrustVerifier(options = {}) {
       return qualificationTrustPayload(evidence, keyHash);
     },
     verify(value, trust, expected = {}, externalObservationVerifier = null) {
-      const evidence = validateE2BQualificationEvidence(
+      return verifyBoundTrust(validateE2BQualificationEvidence(
         value,
         expected,
         externalObservationVerifier
-      );
-      assertDistinctQualificationTrustKey(evidence, keyHash);
-      assertPlainObject(trust, "E2B qualification trust");
-      assertAllowedKeys(
-        trust,
-        ["schema", "evidence_hash", "verifier_key_hash", "signature"],
-        "E2B qualification trust"
-      );
-      const payload = qualificationTrustPayload(evidence, keyHash);
-      if (trust.schema !== payload.schema || !safeEqual(trust.evidence_hash, payload.evidence_hash) || !safeEqual(trust.verifier_key_hash, payload.verifier_key_hash)) {
-        throw new Error("E2B qualification trust binding mismatch");
-      }
-      const signature = requireEd25519Signature(trust.signature);
-      if (!verifySignature(
-        null,
-        Buffer.from(canonicalize(payload), "utf8"),
-        publicKey,
-        signature
-      )) {
-        throw new Error("E2B qualification trust signature is invalid");
-      }
-      return deepFreeze({ ...payload, signature: trust.signature });
+      ), trust);
     }
   };
   QUALIFICATION_TRUST_VERIFIERS.add(verifier);
+  CLEANUP_TRUST_VERIFIERS.set(verifier, verifyBoundTrust);
   return Object.freeze(verifier);
 }
 function verifyE2BQualificationTrust(value, trust, verifier, expected = {}, externalObservationVerifier = null) {
@@ -71877,14 +71893,15 @@ function finalizeE2BQualificationEvidence(evidence, verified) {
     external_observation_receipt: verified
   });
 }
-function assertFinalizedEvidenceMatchesReceipt(evidence, externalObservationVerifier) {
+function assertFinalizedEvidenceMatchesReceipt(evidence, externalObservationVerifier, cleanupOnly = false) {
   if (!externalObservationVerifier || !EXTERNAL_QUALIFICATION_OBSERVATION_VERIFIERS.has(externalObservationVerifier)) {
     throw new TypeError(
       "Finalized E2B qualification evidence requires a caller-pinned external observation verifier"
     );
   }
   const provisional = provisionalEvidenceFromFinalized(evidence);
-  const verified = externalObservationVerifier.verify(
+  const verifyObservation = cleanupOnly ? CLEANUP_OBSERVATION_VERIFIERS.get(externalObservationVerifier) : (value, observation) => externalObservationVerifier.verify(value, observation);
+  const verified = verifyObservation(
     provisional,
     evidence.external_observation_receipt
   );
@@ -71902,7 +71919,7 @@ function createE2BQualificationEvidence(input = {}) {
   }
   return evidence;
 }
-function validateE2BQualificationEvidence(value, expected = {}, externalObservationVerifier = null) {
+function validateQualificationEvidence(value, expected = {}, externalObservationVerifier = null, cleanupOnly = false) {
   const expectedBindings = normalizeExpectedBindings(expected);
   const normalized = normalizeEvidence3(value, { includeComputedFields: true });
   const expectedHash = sha256Ref({ ...normalized, evidence_hash: null });
@@ -71914,9 +71931,29 @@ function validateE2BQualificationEvidence(value, expected = {}, externalObservat
   }
   assertExpectedBindings(normalized, expectedBindings);
   if (normalized.external_observation_receipt !== null) {
-    assertFinalizedEvidenceMatchesReceipt(normalized, externalObservationVerifier);
+    assertFinalizedEvidenceMatchesReceipt(normalized, externalObservationVerifier, cleanupOnly);
   }
   return deepFreeze(normalized);
+}
+function validateE2BQualificationEvidence(value, expected = {}, externalObservationVerifier = null) {
+  return validateQualificationEvidence(value, expected, externalObservationVerifier);
+}
+function verifyE2BCleanupQualificationProvenance(value, trust, verifier, expected = {}, externalObservationVerifier = null) {
+  const evidence = validateQualificationEvidence(value, expected, externalObservationVerifier, true);
+  const verifyTrust = CLEANUP_TRUST_VERIFIERS.get(verifier);
+  if (!verifyTrust) {
+    throw new TypeError("E2B cleanup provenance requires a trusted qualification trust verifier");
+  }
+  if (evidence.status !== "verified" || evidence.external_observation_receipt === null) {
+    throw new Error("E2B cleanup provenance requires finalized signed qualified historical evidence");
+  }
+  return Object.freeze({
+    evidence,
+    trust: verifyTrust(evidence, trust),
+    cleanup_only: true,
+    grants_new_effects: false,
+    production_activation_granted: false
+  });
 }
 function isE2BQualificationEvidenceCanonical(value, expected = {}, externalObservationVerifier = null) {
   try {
@@ -75183,6 +75220,9 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
   #sdkVersionVerified;
   #sdkIntegrityVerifier;
   #sdkIntegrityVerified;
+  #qualificationState;
+  #qualificationExpiryObserved;
+  #cleanupPolicy;
   constructor(options = {}) {
     const templateProvenanceCandidate = options.cleanTemplateProvenanceHash ?? options.qualificationEvidence?.template?.provenance_hash;
     const profileValues = [
@@ -75201,14 +75241,51 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
     if (!configured && options.qualificationEvidence != null) {
       throw new TypeError("E2B qualification evidence requires the complete clean-template profile");
     }
-    const qualificationEvidence = options.qualificationEvidence == null ? null : validateE2BQualificationEvidence(options.qualificationEvidence, {
+    const hasQualificationTrust = options.qualificationTrust != null;
+    const hasQualificationVerifier = options.qualificationTrustVerifier != null;
+    if (hasQualificationTrust !== hasQualificationVerifier) {
+      throw new TypeError("E2B qualification trust and its verifier are required together");
+    }
+    const expectedBindings = Object.freeze({
       templateId: options.cleanTemplateId,
       templateHash: options.cleanTemplateHash,
       bootstrapArtifactHash: options.trustedBootstrapArtifactHash,
       runnerArtifactHash: options.trustedRunnerArtifactHash
-    }, options.externalQualificationObservationVerifier ?? null);
-    const hasQualificationTrust = options.qualificationTrust != null;
-    const hasQualificationVerifier = options.qualificationTrustVerifier != null;
+    });
+    let cleanupProvenance = null;
+    let qualificationCurrent = true;
+    let qualificationEvidence = null;
+    let qualificationTrust = null;
+    try {
+      if (options.qualificationEvidence != null) {
+        qualificationEvidence = validateE2BQualificationEvidence(
+          options.qualificationEvidence,
+          expectedBindings,
+          options.externalQualificationObservationVerifier ?? null
+        );
+        if (hasQualificationTrust) {
+          qualificationTrust = verifyE2BQualificationTrust(
+            qualificationEvidence,
+            options.qualificationTrust,
+            options.qualificationTrustVerifier,
+            expectedBindings,
+            options.externalQualificationObservationVerifier ?? null
+          );
+        }
+      }
+    } catch (error) {
+      if (error?.code !== "E2B_QUALIFICATION_OBSERVATION_EXPIRED" || !hasQualificationTrust) throw error;
+      cleanupProvenance = verifyE2BCleanupQualificationProvenance(
+        options.qualificationEvidence,
+        options.qualificationTrust,
+        options.qualificationTrustVerifier,
+        expectedBindings,
+        options.externalQualificationObservationVerifier ?? null
+      );
+      qualificationEvidence = cleanupProvenance.evidence;
+      qualificationTrust = cleanupProvenance.trust;
+      qualificationCurrent = false;
+    }
     if (!qualificationEvidence && (hasQualificationTrust || hasQualificationVerifier)) {
       throw new TypeError("E2B qualification trust requires qualification evidence");
     }
@@ -75217,29 +75294,20 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
         "E2B external qualification observation verifier requires qualification evidence"
       );
     }
-    if (hasQualificationTrust !== hasQualificationVerifier) {
-      throw new TypeError("E2B qualification trust and its verifier are required together");
-    }
-    const qualificationTrust = hasQualificationTrust ? verifyE2BQualificationTrust(
-      qualificationEvidence,
-      options.qualificationTrust,
-      options.qualificationTrustVerifier,
-      {
-        templateId: options.cleanTemplateId,
-        templateHash: options.cleanTemplateHash,
-        bootstrapArtifactHash: options.trustedBootstrapArtifactHash,
-        runnerArtifactHash: options.trustedRunnerArtifactHash
-      },
-      options.externalQualificationObservationVerifier ?? null
-    ) : null;
-    const qualificationEligible = qualificationEvidence?.status === "verified" && qualificationTrust !== null;
+    const qualificationEligible = qualificationEvidence?.status === "verified" && qualificationTrust !== null && qualificationCurrent;
     if (qualificationEvidence && templateProvenanceCandidate !== qualificationEvidence.template.provenance_hash) {
       throw new TypeError("cleanTemplateProvenanceHash does not match qualification evidence");
     }
+    const offlineConformance = options.offlineConformance === true;
+    const defaultProviderId = configured ? "e2b-clean-template-v1" : "e2b-snapshot-v1";
+    const providerId = options.providerId ?? defaultProviderId;
     super({
-      id: configured ? "e2b-clean-template-v1" : "e2b-snapshot-v1",
+      id: providerId,
       capabilities: makeCapabilities(configured, qualificationEligible)
     });
+    if (!offlineConformance && options.providerId !== void 0) {
+      throw new TypeError("providerId overrides are restricted to offlineConformance fixtures");
+    }
     if (typeof options.verifyAuthorityFreeSource !== "function") {
       throw new TypeError("verifyAuthorityFreeSource must be an external clean-controller verifier");
     }
@@ -75249,7 +75317,6 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
     if (options.offlineConformance !== void 0 && typeof options.offlineConformance !== "boolean") {
       throw new TypeError("offlineConformance must be boolean");
     }
-    const offlineConformance = options.offlineConformance === true;
     if (offlineConformance && typeof options.SandboxClass !== "function") {
       throw new TypeError("offlineConformance requires an injected SandboxClass");
     }
@@ -75270,7 +75337,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
         "sdkIntegrityVerifier must be created by createE2BRuntimeSdkIntegrityVerifier"
       );
     }
-    if (!qualificationEligible && options.sdkIntegrityVerifier !== void 0) {
+    if (!qualificationEligible && !cleanupProvenance && options.sdkIntegrityVerifier !== void 0) {
       throw new TypeError("sdkIntegrityVerifier is only valid with signed qualified evidence");
     }
     if (qualificationEligible && [
@@ -75306,6 +75373,15 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
     }) : Object.freeze({});
     this.qualificationEligible = qualificationEligible;
     this.qualified = E2B_LIVE_FORK_SOURCE_ENABLED && qualificationEligible;
+    this.#qualificationState = Object.freeze({
+      evidence: qualificationEvidence,
+      trust: qualificationTrust,
+      cleanupOnly: !qualificationCurrent,
+      trustVerifier: options.qualificationTrustVerifier ?? null,
+      observationVerifier: options.externalQualificationObservationVerifier ?? null,
+      expectedBindings
+    });
+    this.#qualificationExpiryObserved = !qualificationCurrent;
     this.#offlineConformance = offlineConformance;
     this.verifyAuthorityFreeSource = options.verifyAuthorityFreeSource;
     this.#SandboxClass = options.SandboxClass ?? null;
@@ -75356,6 +75432,12 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
       directory: options.cleanupJournalDirectory,
       clock: this.clock
     }) : null;
+    this.#cleanupPolicy = Object.freeze({
+      providerId: this.id,
+      templateId: this.cleanTemplateId,
+      templateIdHash: configured ? sha256Ref(this.cleanTemplateId) : null,
+      exportRoot: this.workspaceExportDirectory
+    });
     this.savepoints = /* @__PURE__ */ new Map();
     this.forks = /* @__PURE__ */ new Map();
     this.ownedRecordIds = /* @__PURE__ */ new Set();
@@ -75372,25 +75454,73 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
     }
   }
   #revalidateQualificationTrust() {
-    if (!this.qualificationEvidence) return null;
-    const evidence = validateE2BQualificationEvidence(
-      this.qualificationEvidence,
-      this.qualificationExpectedBindings,
-      this.externalQualificationObservationVerifier
-    );
-    const trust = verifyE2BQualificationTrust(
-      evidence,
-      this.qualificationTrust,
-      this.qualificationTrustVerifier,
-      this.qualificationExpectedBindings,
-      this.externalQualificationObservationVerifier
-    );
+    const pinned = this.#qualificationState;
+    if (!pinned.evidence) return null;
+    if (pinned.cleanupOnly || this.#qualificationExpiryObserved) {
+      throw new Error("E2B adapter constructed from expired evidence is cleanup-only; new effects require a new currently qualified adapter");
+    }
+    let evidence;
+    let trust;
+    try {
+      evidence = validateE2BQualificationEvidence(
+        pinned.evidence,
+        pinned.expectedBindings,
+        pinned.observationVerifier
+      );
+      trust = verifyE2BQualificationTrust(
+        evidence,
+        pinned.trust,
+        pinned.trustVerifier,
+        pinned.expectedBindings,
+        pinned.observationVerifier
+      );
+    } catch (error) {
+      if (error?.code === "E2B_QUALIFICATION_OBSERVATION_EXPIRED") {
+        this.#qualificationExpiryObserved = true;
+        this.qualificationEligible = false;
+        this.qualified = false;
+      }
+      throw error;
+    }
     if (evidence.status !== "verified" || !trust) {
       throw new Error("E2B qualification evidence and trust are no longer valid");
     }
     this.qualificationEvidence = evidence;
     this.qualificationTrust = trust;
     return Object.freeze({ evidence, trust });
+  }
+  #revalidateCleanupProvenance() {
+    const pinned = this.#qualificationState;
+    if (!pinned.evidence) return null;
+    if (!pinned.cleanupOnly && !this.#qualificationExpiryObserved) {
+      try {
+        this.#revalidateQualificationTrust();
+      } catch (error) {
+        if (error?.code !== "E2B_QUALIFICATION_OBSERVATION_EXPIRED") throw error;
+      }
+    }
+    return verifyE2BCleanupQualificationProvenance(
+      pinned.evidence,
+      pinned.trust,
+      pinned.trustVerifier,
+      pinned.expectedBindings,
+      pinned.observationVerifier
+    );
+  }
+  #assertCleanupRecordBinding(record) {
+    if (record.provider_id !== this.#cleanupPolicy.providerId || !safeEqual(record.template_id_hash, this.#cleanupPolicy.templateIdHash)) {
+      const error = new Error("E2B cleanup journal provider/template binding mismatch");
+      error.code = "E2B_CLEANUP_RECORD_BINDING_MISMATCH";
+      throw error;
+    }
+  }
+  #assertCleanupSandboxBinding(info, record, sandboxId) {
+    this.#assertCleanupRecordBinding(record);
+    if ((info?.sandboxId ?? info?.sandboxID) !== sandboxId || (info?.templateId ?? info?.templateID) !== this.#cleanupPolicy.templateId || info?.metadata?.["agoragentic.risk_fork.profile"] !== PROFILE_METADATA_SCHEMA || info?.metadata?.["agoragentic.risk_fork.cleanup_ref"] !== record.cleanup_ref || !safeEqual(sha256Ref(info.metadata), record.metadata_hash)) {
+      const error = new Error("E2B cleanup sandbox identity/metadata binding mismatch");
+      error.code = "E2B_CLEANUP_SANDBOX_BINDING_MISMATCH";
+      throw error;
+    }
   }
   async #sandboxClass(operation = "providerIo") {
     this.#requireForkRuntimeEnabled(operation);
@@ -75512,6 +75642,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
     return false;
   }
   async #listByCleanupRef(Sandbox, record) {
+    this.#assertCleanupRecordBinding(record);
     const query = {
       state: ["running", "paused"],
       metadata: {
@@ -75533,7 +75664,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
       for (const item of items) {
         const metadata = item?.metadata;
         const templateId = item?.templateId ?? item?.templateID;
-        if (metadata?.["agoragentic.risk_fork.profile"] !== PROFILE_METADATA_SCHEMA || metadata?.["agoragentic.risk_fork.cleanup_ref"] !== record.cleanup_ref || !safeEqual(sha256Ref(metadata), record.metadata_hash) || templateId !== this.cleanTemplateId) {
+        if (metadata?.["agoragentic.risk_fork.profile"] !== PROFILE_METADATA_SCHEMA || metadata?.["agoragentic.risk_fork.cleanup_ref"] !== record.cleanup_ref || !safeEqual(sha256Ref(metadata), record.metadata_hash) || templateId !== this.#cleanupPolicy.templateId) {
           throw new Error("E2B cleanup listing returned an item outside the exact metadata binding");
         }
         matches.push(requireString(
@@ -75563,6 +75694,10 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
     let record;
     try {
       record = await this.cleanupJournal.get(recordId);
+      this.#assertCleanupRecordBinding(record);
+      if (record.sandbox_id !== null && record.sandbox_id !== sandboxId) {
+        throw new Error("E2B absence target differs from its persisted sandbox identity");
+      }
     } catch {
       this.#poisonAllocationUntilReconciled(recordId);
       return { status: "unknown", outcome: "unknown", sandbox_id: sandboxId };
@@ -75634,6 +75769,11 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
         }
       }
       try {
+        const current = await this.cleanupJournal.get(recordId);
+        this.#assertCleanupRecordBinding(current);
+        if (current.cleanup_ref !== record.cleanup_ref || current.metadata_hash !== record.metadata_hash || current.sandbox_id !== null && current.sandbox_id !== sandboxId) {
+          throw new Error("E2B absence binding changed during verification");
+        }
         await this.cleanupJournal.markSandboxVerifiedAbsent(recordId, sandboxId);
       } catch {
         this.#poisonAllocationUntilReconciled(recordId);
@@ -75655,35 +75795,64 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
       };
     }
   }
-  async #destroyAndVerifySandbox({ Sandbox, recordId, sandboxId, sandbox = null }) {
+  async #killBoundSandbox({ Sandbox, recordId, sandboxId, expectedRecord = null, discoveredSandboxIds = null }) {
     this.#poisonAllocationUntilReconciled(recordId);
-    await this.cleanupJournal.markSandboxCleanupRequested(recordId, sandboxId).catch(() => {
-    });
     try {
-      if (sandbox && typeof sandbox.kill === "function") await sandbox.kill();
-      else await Sandbox.kill(sandboxId);
+      const record = await this.cleanupJournal.get(recordId);
+      this.#assertCleanupRecordBinding(record);
+      const assertTarget = (current) => {
+        this.#assertCleanupRecordBinding(current);
+        const expected = expectedRecord ?? record;
+        if (current.cleanup_ref !== expected.cleanup_ref || current.metadata_hash !== expected.metadata_hash || current.export_id !== expected.export_id || (discoveredSandboxIds ? !discoveredSandboxIds.includes(sandboxId) || current.sandbox_id !== null && !discoveredSandboxIds.includes(current.sandbox_id) : current.sandbox_id !== sandboxId && current.sandbox_id !== null || expected.sandbox_id !== null && expected.sandbox_id !== sandboxId)) {
+          const error = new Error("E2B cleanup target changed from its persisted or exact-list binding");
+          error.code = "E2B_CLEANUP_TARGET_BINDING_MISMATCH";
+          throw error;
+        }
+      };
+      assertTarget(record);
+      let info;
+      try {
+        info = await Sandbox.getInfo(sandboxId);
+      } catch (error) {
+        if (!isSandboxNotFound(error)) throw error;
+        return this.#verifySandboxAbsent(Sandbox, recordId, sandboxId);
+      }
+      this.#assertCleanupSandboxBinding(info, record, sandboxId);
+      assertTarget(await this.cleanupJournal.get(recordId));
+      await this.cleanupJournal.markSandboxCleanupRequested(recordId, sandboxId);
+      await Sandbox.kill(sandboxId);
     } catch (error) {
       this.#poisonAllocationUntilReconciled(recordId);
       await this.cleanupJournal.markSandboxUnknown(
         recordId,
-        errorCode(error, "E2B_KILL_FAILED"),
-        sandboxId
+        errorCode(error, "E2B_KILL_FAILED")
       ).catch(() => {
       });
       return { status: "unknown", outcome: "unknown", sandbox_id: sandboxId };
     }
+    return { status: "observed", outcome: "success", sandbox_id: sandboxId };
+  }
+  async #destroyAndVerifySandbox(input) {
+    const { Sandbox, recordId, sandboxId } = input;
+    const requested = await this.#killBoundSandbox(input);
+    if (requested.status !== "observed") return requested;
     return this.#verifySandboxAbsent(Sandbox, recordId, sandboxId);
   }
   async #cleanupExportRecord(record) {
     this.#poisonAllocationUntilReconciled(record.record_id);
     try {
+      const persisted = await this.cleanupJournal.get(record.record_id);
+      this.#assertCleanupRecordBinding(persisted);
+      if (record.export_id !== persisted.export_id) {
+        throw new Error("E2B cleanup export changed from its persisted binding");
+      }
       await this.cleanupJournal.markExportCleanupRequested(record.record_id);
       await destroyImmutableWorkspaceExport({
-        export_root: this.workspaceExportDirectory,
+        export_root: this.#cleanupPolicy.exportRoot,
         export_id: record.export_id
       });
       const absent = await verifyImmutableWorkspaceExportDestroyed({
-        export_root: this.workspaceExportDirectory,
+        export_root: this.#cleanupPolicy.exportRoot,
         export_id: record.export_id
       });
       if (!absent) {
@@ -75710,10 +75879,16 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
     }
     const pending = (await this.cleanupJournal.listPending()).filter((record) => !excludeOwned || !this.ownedRecordIds.has(record.record_id) || includeEligibleOwned && this.reconciliationEligibleRecordIds.has(record.record_id));
     if (pending.length === 0) return { reconciled: [], unresolved: [] };
-    const Sandbox = await this.#sandboxClass();
     const reconciled = [];
     const unresolved = [];
     for (const initial of pending) {
+      try {
+        this.#assertCleanupRecordBinding(initial);
+      } catch {
+        this.#poisonAllocationUntilReconciled(initial.record_id);
+        unresolved.push(initial.record_id);
+        continue;
+      }
       let exportOk = initial.export_absence_verified;
       if (!exportOk) exportOk = await this.#cleanupExportRecord(initial);
       let sandboxOk = initial.sandbox_absence_verified;
@@ -75724,6 +75899,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
             await this.cleanupJournal.markSandboxVerifiedAbsent(initial.record_id);
             sandboxOk = true;
           } else {
+            const Sandbox = await this.#sandboxClass("reconcilePendingCleanup");
             if (sandboxIds.length === 0) {
               const listing = await this.#listByCleanupRef(Sandbox, initial);
               sandboxIds = listing.sandbox_ids;
@@ -75740,7 +75916,9 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
                 outcomes.push(await this.#destroyAndVerifySandbox({
                   Sandbox,
                   recordId: initial.record_id,
-                  sandboxId
+                  sandboxId,
+                  expectedRecord: initial,
+                  discoveredSandboxIds: initial.sandbox_id ? null : sandboxIds
                 }));
               }
               sandboxOk = outcomes.every((outcome) => outcome.status === "verified");
@@ -75781,8 +75959,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
   }
   async reconcilePendingCleanup() {
     this.#requireConfigured("reconcilePendingCleanup");
-    this.#requireForkRuntimeEnabled("reconcilePendingCleanup");
-    this.#revalidateQualificationTrust();
+    this.#revalidateCleanupProvenance();
     await this.cleanupJournal.initialize();
     return this.#reconcilePendingCleanup({
       excludeOwned: true,
@@ -76555,7 +76732,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
   async destroyFork(input = {}) {
     this.#requireConfigured("destroyFork");
     this.#requireForkRuntimeEnabled("destroyFork");
-    this.#revalidateQualificationTrust();
+    this.#revalidateCleanupProvenance();
     assertAllowedKeys(
       input,
       ["fork_ref", "reason", "cleanup_request"],
@@ -76578,10 +76755,27 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
     }
     record.destruction_status = "destroy_requested";
     this.#poisonAllocationUntilReconciled(record.record_id);
-    await this.#sandboxClass();
+    const Sandbox = await this.#sandboxClass();
     try {
-      await this.cleanupJournal.markSandboxCleanupRequested(record.record_id, record.sandbox_id);
-      await record.sandbox.kill();
+      const outcome = await this.#killBoundSandbox({
+        Sandbox,
+        recordId: record.record_id,
+        sandboxId: record.sandbox_id
+      });
+      if (outcome.status !== "observed" && outcome.status !== "verified") {
+        throw new Error("E2B bound cleanup request could not be verified");
+      }
+      if (outcome.status === "verified") {
+        record.destroyed_verified = true;
+        record.destruction_status = "verified_destroyed";
+        record.status = "destroyed";
+        return deepFreeze({
+          fork_ref: record.ref,
+          status: "already_destroyed_verified",
+          evidence_status: "verified",
+          evidence_hash: outcome.evidence_hash
+        });
+      }
       record.destruction_status = "kill_observed";
       return deepFreeze({
         fork_ref: record.ref,
@@ -76612,7 +76806,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
   async verifyDestroyed(input = {}) {
     this.#requireConfigured("verifyDestroyed");
     this.#requireForkRuntimeEnabled("verifyDestroyed");
-    this.#revalidateQualificationTrust();
+    this.#revalidateCleanupProvenance();
     assertAllowedKeys(
       input,
       ["fork_ref", "cleanup_request"],
@@ -76656,7 +76850,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
   }
   async destroySavepoint(input = {}) {
     this.#requireConfigured("destroySavepoint");
-    this.#revalidateQualificationTrust();
+    this.#revalidateCleanupProvenance();
     assertAllowedKeys(
       input,
       ["savepoint_ref", "cleanup_request"],
@@ -76679,9 +76873,14 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
     }
     this.#poisonAllocationUntilReconciled(record.record_id);
     try {
+      const persisted = await this.cleanupJournal.get(record.record_id);
+      this.#assertCleanupRecordBinding(persisted);
+      if (persisted.export_id !== record.export_record.export_id) {
+        throw new Error("E2B cleanup savepoint export binding mismatch");
+      }
       await this.cleanupJournal.markExportCleanupRequested(record.record_id);
       await destroyImmutableWorkspaceExport({
-        export_root: this.workspaceExportDirectory,
+        export_root: this.#cleanupPolicy.exportRoot,
         export_id: record.export_record.export_id
       });
       return deepFreeze({
@@ -76710,7 +76909,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
   }
   async verifySavepointDestroyed(input = {}) {
     this.#requireConfigured("verifySavepointDestroyed");
-    this.#revalidateQualificationTrust();
+    this.#revalidateCleanupProvenance();
     assertAllowedKeys(
       input,
       ["savepoint_ref", "cleanup_request"],
@@ -76731,8 +76930,13 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
     this.#poisonAllocationUntilReconciled(record.record_id);
     let absent;
     try {
+      const persisted = await this.cleanupJournal.get(record.record_id);
+      this.#assertCleanupRecordBinding(persisted);
+      if (persisted.export_id !== record.export_record.export_id) {
+        throw new Error("E2B cleanup savepoint export binding mismatch");
+      }
       absent = await verifyImmutableWorkspaceExportDestroyed({
-        export_root: this.workspaceExportDirectory,
+        export_root: this.#cleanupPolicy.exportRoot,
         export_id: record.export_record.export_id
       });
     } catch (error) {
@@ -77646,7 +77850,7 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
 }
 
 // risk-fork-hosted-mcp/src/index.mjs
-var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:c261769b68f6752e550c272174d9a093b4c4aa3e14467a4237b33863481b9b31" : null;
+var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:16e28235bb108b3e10e59fa1e1abd85d5c8df905679388d508d7435ff666f725" : null;
 var HOSTED_MCP_BUNDLE_METADATA = Object.freeze({
   package_name: "@agoragentic/risk-fork-hosted-mcp",
   package_version: "0.1.0-alpha.0",
