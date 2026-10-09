@@ -204,7 +204,7 @@ test('retired keys cannot bypass key ID AAD, identity or current credential expi
   let sends = 0;
   const control = { ...f.controlPlane, async claimExecution(...args) {
     sends += 1;
-    const result = await f.controlPlane.claimExecution(...args);
+    await f.controlPlane.claimExecution(...args);
     throw new Error('lost response');
   } };
   const old = createManagedWorkerDeliveryJournal({ ...f.options, controlPlane: control });
