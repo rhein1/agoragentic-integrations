@@ -7,7 +7,12 @@ import {
   isE2BRuntimeSdkIntegrityVerifier,
   isE2BRuntimeSdkProcessIntegrityVerifier,
 } from '../src/e2b-qualification.mjs';
-import { createE2BRuntimeSdkProcessBoundary, isE2BRuntimeSdkProcessBoundary } from '../src/e2b-sdk-process.mjs';
+import {
+  createE2BRuntimeSdkProcessBoundary,
+  isE2BRuntimeSdkProcessBoundary,
+  isE2BRuntimeSdkProcessPreEntryFailure,
+  isE2BRuntimeSdkProcessSandboxClass,
+} from '../src/e2b-sdk-process.mjs';
 import * as publicRoot from '../src/index.mjs';
 import * as publicQualification from '../src/e2b-qualification.mjs';
 import { E2BRiskForkAdapter } from '../src/adapters/e2b.mjs';
@@ -17,6 +22,8 @@ test('public entrypoints do not export a raw provider process capability', () =>
   for (const entry of [publicRoot, publicQualification]) {
     assert.equal(Object.hasOwn(entry, 'createE2BRuntimeSdkProcessBoundary'), false);
     assert.equal(Object.hasOwn(entry, 'isE2BRuntimeSdkProcessBoundary'), false);
+    assert.equal(Object.hasOwn(entry, 'isE2BRuntimeSdkProcessPreEntryFailure'), false);
+    assert.equal(Object.hasOwn(entry, 'isE2BRuntimeSdkProcessSandboxClass'), false);
   }
 });
 test('adapter cannot configure provider process options without authentic signed qualification', () => {
@@ -42,13 +49,33 @@ test('SDK process capability and verifier brands reject copied and ordinary load
   await boundary.close();
 });
 
+test('private process pre-entry brands reject forged classes, proxies, and copied errors', () => {
+  class ForgedSandbox {}
+  const error = new Error('not entered');
+  assert.equal(isE2BRuntimeSdkProcessSandboxClass(ForgedSandbox), false);
+  assert.equal(isE2BRuntimeSdkProcessSandboxClass(new Proxy(ForgedSandbox, {})), false);
+  assert.equal(isE2BRuntimeSdkProcessPreEntryFailure(error, ForgedSandbox), false);
+  assert.equal(isE2BRuntimeSdkProcessPreEntryFailure({ ...error }, ForgedSandbox), false);
+});
+
 test('SDK process rejects alternate loaders, relative artifacts and missing exact pins before launch', () => {
   for (const extra of [{ sdkLoader() {} }, { SandboxClass: class {} }, { env: {} },
     { execArgv: ['--import=anything'] }, { runtimeArtifactPath: 'relative.mjs' },
-    { nodeArtifactHash: undefined }, { lifetimeMs: 600_001 }, { deadlineMs: 99 },
+    { nodeArtifactHash: undefined }, { lifetimeMs: 24 * 60 * 60 * 1_000 + 1 }, { deadlineMs: 99 },
     { providerApiKey: 'synthetic\0not-a-real-key' }, { providerApiKey: 'synthetic\nnot-a-real-key' }]) {
     assert.throws(() => createE2BRuntimeSdkProcessBoundary({ ...options(), ...extra }));
   }
+});
+
+test('SDK process lifetime accepts the adapter hard lease and keeps late read retirement explicit', async () => {
+  const boundary = createE2BRuntimeSdkProcessBoundary({ ...options(), lifetimeMs: 24 * 60 * 60 * 1_000 });
+  assert.equal(isE2BRuntimeSdkProcessBoundary(boundary), true);
+  await boundary.close();
+  const source = await (await import('node:fs/promises')).readFile(
+    new URL('../src/e2b-sdk-process.mjs', import.meta.url), 'utf8',
+  );
+  assert.match(source, /const MAX_PROVIDER_TIMEOUT_MS = 24 \* 60 \* 60 \* 1_000/);
+  assert.match(source, /if \(retiring\.has\(value\)\)[\s\S]*?await stream\.cancel\(\)\.catch/);
 });
 
 test('SDK process verifier cannot combine a capability with in-process loading options', async () => {

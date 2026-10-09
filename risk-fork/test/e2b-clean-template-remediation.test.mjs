@@ -961,6 +961,30 @@ test('an allocation with unknown provider outcome permanently poisons the one-us
   assert.equal(value.mock.events.filter((event) => event.type === 'create').length, 1);
 });
 
+test('an unbranded pre-entry error code remains an ambiguous allocation outcome', async (t) => {
+  const createError = new Error('caller-forged pre-entry result');
+  createError.code = 'E2B_SDK_PROCESS_NOT_ENTERED';
+  const value = await fixture(t, { createError });
+  const savepoint = await value.adapter.createSavepoint({
+    capsule: value.capsule,
+    source_workspace: value.source,
+  });
+  const request = {
+    savepoint_ref: savepoint.savepoint_ref,
+    fork_identity: makeForkIdentity(value.capsule),
+    network_policy: { mode: 'blocked', allowlist: [] },
+    ttl_ms: 60_000,
+  };
+  await assert.rejects(value.adapter.createFork(request), /caller-forged pre-entry result/i);
+  assert.equal(value.mock.events.filter((event) => event.type === 'create').length, 1);
+  await assert.rejects(value.adapter.createFork(request), /one-use|poison|already attempted/i);
+  const [journalName] = (await readdir(value.journalDirectory))
+    .filter((name) => name.endsWith('.json'));
+  const journal = JSON.parse(await readFile(path.join(value.journalDirectory, journalName), 'utf8'));
+  assert.equal(journal.sandbox_state, 'unknown');
+  assert.equal(journal.sandbox_absence_verified, false);
+});
+
 test('concurrent createFork calls cross the one-use allocation boundary exactly once', async (t) => {
   const value = await fixture(t);
   const savepoint = await value.adapter.createSavepoint({

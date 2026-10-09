@@ -69974,8 +69974,19 @@ var BOUNDARIES = /* @__PURE__ */ new WeakSet();
 var FRAME_BYTES = 2 * 1024 * 1024;
 var CHUNK_BYTES = 64 * 1024;
 var MAX_PROCESSES = 8;
+var MAX_PROVIDER_TIMEOUT_MS = 24 * 60 * 60 * 1e3;
 var EFFECTFUL_OPERATIONS = /* @__PURE__ */ new Set(["create", "kill", "write_commit", "file_remove", "child_kill", "set_timeout", "command_run"]);
+var PROCESS_SANDBOX_CLASS_SCOPES = /* @__PURE__ */ new WeakMap();
+var PROCESS_PRE_ENTRY_FAILURES = /* @__PURE__ */ new WeakMap();
 var retainedProcesses = 0;
+function isE2BRuntimeSdkProcessSandboxClass(value) {
+  return typeof value === "function" && PROCESS_SANDBOX_CLASS_SCOPES.has(value);
+}
+function isE2BRuntimeSdkProcessPreEntryFailure(error, SandboxClass) {
+  const scope = PROCESS_SANDBOX_CLASS_SCOPES.get(SandboxClass);
+  const association = error && typeof error === "object" ? PROCESS_PRE_ENTRY_FAILURES.get(error) : null;
+  return Boolean(scope && association?.scope === scope && association.operation === "create");
+}
 function failure(code = "E2B_SDK_PROCESS_OUTCOME_UNKNOWN") {
   const error = new Error("E2B SDK process boundary failed; provider outcome is not established");
   error.name = "E2BSdkProcessBoundaryError";
@@ -70042,6 +70053,7 @@ async function assertE2BRuntimeSdkReadonlyCustody(profile, runtimeFiles) {
 async function sdkProcessMain(checkCustody) {
   const crypto2 = await import("node:crypto");
   const { pathToFileURL: pathToFileURL2 } = await import("node:url");
+  const MAX_PROVIDER_TIMEOUT_MS2 = 24 * 60 * 60 * 1e3;
   const LIMIT = 2 * 1024 * 1024;
   const CHUNK = 64 * 1024;
   const WRITE_LIMIT = 32 * 1024 * 1024;
@@ -70303,7 +70315,7 @@ async function sdkProcessMain(checkCustody) {
         if (acknowledged) retireChild(value);
         return { acknowledged };
       }
-      integer(args.timeoutMs, 10 * 60 * 1e3, 1);
+      integer(args.timeoutMs, MAX_PROVIDER_TIMEOUT_MS2, 1);
       if (operation === "set_timeout") return mutate(value, enter, async () => {
         await value.setTimeout(args.timeoutMs);
         return { completed: true };
@@ -70319,8 +70331,8 @@ async function sdkProcessMain(checkCustody) {
     if (operation === "read_open") {
       closed(args, ["handle", "path", "timeoutMs", "idleTimeoutMs"]);
       if (reads.size + openingReads >= 8) throw new Error("reader capacity");
-      integer(args.timeoutMs, 10 * 60 * 1e3, 1);
-      integer(args.idleTimeoutMs, 10 * 60 * 1e3, 1);
+      integer(args.timeoutMs, MAX_PROVIDER_TIMEOUT_MS2, 1);
+      integer(args.idleTimeoutMs, MAX_PROVIDER_TIMEOUT_MS2, 1);
       const controller = new AbortController();
       const value = child(args.handle);
       const target = string(args.path, 4096);
@@ -70336,6 +70348,11 @@ async function sdkProcessMain(checkCustody) {
         });
       } finally {
         openingReads -= 1;
+      }
+      if (retiring.has(value)) {
+        await stream.cancel().catch(() => {
+        });
+        throw new ReadRetired();
       }
       const reader = stream.getReader();
       const handle = crypto2.randomUUID();
@@ -70404,7 +70421,7 @@ async function sdkProcessMain(checkCustody) {
         }
       });
       binding = await verifier.inspect();
-      setTimeout(() => process.exit(1), integer(config.lifetimeMs, 10 * 60 * 1e3, 1e3));
+      setTimeout(() => process.exit(1), integer(config.lifetimeMs, MAX_PROVIDER_TIMEOUT_MS2, 1e3));
       send({ id: 0, result: { binding, pid: process.pid, nonce: message.nonce, custody } });
       return;
     }
@@ -70458,7 +70475,7 @@ function createE2BRuntimeSdkProcessBoundary(options = {}) {
     packageDirectory: absolute(options.packageDirectory, "packageDirectory"),
     nodePath: process.execPath,
     nodeArtifactHash: requireSha256Ref(options.nodeArtifactHash, "nodeArtifactHash"),
-    lifetimeMs: boundedInteger(options.lifetimeMs ?? 3e5, "lifetimeMs", { min: 1e3, max: 6e5 })
+    lifetimeMs: boundedInteger(options.lifetimeMs ?? 3e5, "lifetimeMs", { min: 1e3, max: MAX_PROVIDER_TIMEOUT_MS })
   });
   const deadlineMs = boundedInteger(options.deadlineMs ?? 3e4, "deadlineMs", { min: 100, max: 6e5 });
   const env = /* @__PURE__ */ Object.create(null);
@@ -70503,7 +70520,7 @@ function createE2BRuntimeSdkProcessBoundary(options = {}) {
       }
     }
   };
-  const request = (operation, args, timeoutMs = deadlineMs) => {
+  const request = (operation, args, timeoutMs = deadlineMs, preEntryScope = null) => {
     if (retired || !child || exited || pending.size >= 4) return Promise.reject(failure());
     const id = sequence + 1;
     const bytes2 = Buffer.from(`${canonicalize({ id, operation, args })}
@@ -70517,7 +70534,7 @@ function createE2BRuntimeSdkProcessBoundary(options = {}) {
         terminate();
         reject(failure());
       }, timeoutMs);
-      pending.set(id, { resolve, reject, timer, operation });
+      pending.set(id, { resolve, reject, timer, operation, preEntryScope });
       child.stdin.write(bytes2, (error) => {
         if (error) terminate();
       });
@@ -70594,7 +70611,14 @@ function createE2BRuntimeSdkProcessBoundary(options = {}) {
                 entry.reject(error);
               } else if (value.error === "not_entered") {
                 metrics.requests_rejected_before_sdk += 1;
-                entry.reject(failure("E2B_SDK_PROCESS_NOT_ENTERED"));
+                const error = failure("E2B_SDK_PROCESS_NOT_ENTERED");
+                if (entry.operation === "create" && entry.preEntryScope) {
+                  PROCESS_PRE_ENTRY_FAILURES.set(error, Object.freeze({
+                    scope: entry.preEntryScope,
+                    operation: entry.operation
+                  }));
+                }
+                entry.reject(error);
               } else if (value.error === "read_retired" && entry.operation === "read_next") entry.reject(failure("E2B_SDK_PROCESS_READ_RETIRED"));
               else {
                 if (EFFECTFUL_OPERATIONS.has(entry.operation)) metrics.effectful_outcomes_unknown += 1;
@@ -70764,7 +70788,7 @@ function createE2BRuntimeSdkProcessBoundary(options = {}) {
         return expect(await request("command_run", { handle: owned, command, timeoutMs }, Math.min(deadlineMs, timeoutMs)), ["exitCode", "stdout", "stderr"]);
       } }),
       async setTimeout(timeoutMs) {
-        boundedInteger(timeoutMs, "SDK timeout", { min: 1, max: 6e5 });
+        boundedInteger(timeoutMs, "SDK timeout", { min: 1, max: MAX_PROVIDER_TIMEOUT_MS });
         await request("set_timeout", { handle: owned, timeoutMs });
       },
       async kill() {
@@ -70800,7 +70824,7 @@ function createE2BRuntimeSdkProcessBoundary(options = {}) {
           static async create(template, createOptions) {
             requireString(template, "SDK template", { maxLength: 500 });
             assertPlainObject(createOptions, "SDK create options");
-            return sandboxFacade(await request("create", { template, options: createOptions }));
+            return sandboxFacade(await request("create", { template, options: createOptions }, deadlineMs, PROCESS_SANDBOX_CLASS_SCOPES.get(SandboxFacade)));
           }
           static async getInfo(sandboxId) {
             requireString(sandboxId, "sandboxId", { maxLength: 500 });
@@ -70850,6 +70874,7 @@ function createE2BRuntimeSdkProcessBoundary(options = {}) {
             } });
           }
         }
+        PROCESS_SANDBOX_CLASS_SCOPES.set(SandboxFacade, Object.freeze({}));
         Object.freeze(SandboxFacade.prototype);
         Object.freeze(SandboxFacade);
         return Object.freeze({ module: Object.freeze({ Sandbox: SandboxFacade }), ...current });
@@ -75164,6 +75189,7 @@ var MAX_RESULT_BYTES = 4 * 1024 * 1024;
 var MAX_ATTESTATION_BYTES = 128 * 1024;
 var DEFAULT_BIRTH_ATTESTATION_TIMEOUT_MS = 1e4;
 var MAX_RESULT_STREAM_IDLE_TIMEOUT_MS = 5e3;
+var SDK_PROCESS_WRITE_LIMIT_BYTES = 32 * 1024 * 1024;
 var MIN_RESULT_STREAM_IDLE_TIMEOUT_MS = 50;
 var MAX_JSON_NODES = 2e4;
 var MAX_JSON_DEPTH = 50;
@@ -76475,7 +76501,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
       min: 1,
       max: 1e5
     });
-    this.maxBytes = boundedInteger(options.maxBytes ?? 32 * 1024 * 1024, "maxBytes", {
+    this.maxBytes = boundedInteger(options.maxBytes ?? SDK_PROCESS_WRITE_LIMIT_BYTES, "maxBytes", {
       min: 1,
       max: 1024 * 1024 * 1024
     });
@@ -76584,6 +76610,9 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
       error.code = "E2B_CLEANUP_SANDBOX_BINDING_MISMATCH";
       throw error;
     }
+  }
+  #isTrustedPreEntryNonallocationOutcome(error, Sandbox) {
+    return isE2BRuntimeSdkProcessSandboxClass(Sandbox) && isE2BRuntimeSdkProcessPreEntryFailure(error, Sandbox);
   }
   async #sandboxClass(operation = "providerIo") {
     this.#requireForkRuntimeEnabled(operation);
@@ -77202,8 +77231,25 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
       timeoutMs: createTimeoutMs,
       metadata
     });
-    savepoint.allocation_attempted = true;
     const Sandbox = await this.#sandboxClass();
+    if (savepoint.allocation_attempted) {
+      const error = new Error(
+        "E2B allocation was already attempted; the one-use Savepoint is poisoned and cannot be retried"
+      );
+      error.code = "E2B_ONE_USE_SAVEPOINT_ALLOCATION_ALREADY_ATTEMPTED";
+      throw error;
+    }
+    if (isE2BRuntimeSdkProcessSandboxClass(Sandbox)) {
+      const oversizedFile = savepoint.export_record.files.find(
+        (file) => file.bytes > SDK_PROCESS_WRITE_LIMIT_BYTES
+      );
+      if (oversizedFile) {
+        throw new TypeError(
+          `sdkProcessOptions cannot upload ${oversizedFile.path}: each file must be at most ${SDK_PROCESS_WRITE_LIMIT_BYTES} bytes`
+        );
+      }
+    }
+    savepoint.allocation_attempted = true;
     const createStartedAt = this.clock();
     await this.cleanupJournal.markAllocationRequested(savepoint.record_id, sha256Ref(metadata));
     if (this.reconciliationEligibleRecordIds.size > 0) {
@@ -77433,6 +77479,10 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
             "E2B child creation failed and cleanup absence was not verified"
           );
         }
+      } else if (this.#isTrustedPreEntryNonallocationOutcome(error, Sandbox)) {
+        await this.cleanupJournal.markSandboxVerifiedAbsent(savepoint.record_id);
+        await this.#clearAllocationPoisonIfFullyAbsent(savepoint.record_id);
+        savepoint.allocation_attempted = false;
       } else {
         this.#poisonAllocationUntilReconciled(savepoint.record_id);
         await this.cleanupJournal.markSandboxUnknown(
@@ -78920,7 +78970,7 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
 }
 
 // risk-fork-hosted-mcp/src/index.mjs
-var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:8214388569b189a75f95e8a76d97d4486dad3eedbd52e06eda82bfd27a4d1cf2" : null;
+var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:a5c1dba6f82ef657c6d3375e0407c3ab4bcd171f721f3c6a29318aa7f71f97ce" : null;
 var HOSTED_MCP_BUNDLE_METADATA = Object.freeze({
   package_name: "@agoragentic/risk-fork-hosted-mcp",
   package_version: "0.1.0-alpha.0",
