@@ -67,14 +67,34 @@ success summary.
 
 The existing E2B qualification validator and trust-verifier entry points accept
 only the current `expected` pin names: `templateId`, `templateHash`,
-`bootstrapArtifactHash`, and `runnerArtifactHash`. This host-supplied policy must
+`bootstrapArtifactHash`, `runnerArtifactHash`, and `adapterArtifactHash`. This host-supplied policy must
 be a non-Proxy plain object with own enumerable data properties; misspellings,
 unknown fields, symbols, hidden fields and accessors fail closed before external
 observation verification. Omitted, `null` and `undefined` pins retain their existing
-unset meaning. Supplied values must be canonical. This check does not add an
-adapter-digest binding, a production qualification class, provider authority or
-an activation path; an opaque registry receipt hash is still not proof that
-signed E2B evidence covers the exact managed adapter.
+unset meaning. Supplied values must be canonical. A supplied `adapterArtifactHash`
+must match the exact unique `evidence:e2b-risk-fork-adapter-artifact` ref/hash in
+the existing qualification evidence. Add that ref to provisional evidence before
+the independent observer signs its `base_evidence_hash`; the later distinct trust
+signature binds the finalized evidence. Never retrofit a digest into already
+signed evidence. Removing or changing the ref invalidates the signature chain,
+even if its public evidence self-hash is recomputed.
+
+The E2B adapter's optional host option `trustedAdapterArtifactHash` requires
+qualification evidence and signed trust, and captures the expected pin privately
+for both current and historical cleanup verification. Legacy evidence remains
+parseable under existing local-test/diagnostic/cleanup contracts; it fails if a
+host requires an artifact pin that the evidence does not contain.
+
+This is a signed-artifact identity contract, not inspection or proof of loaded
+code. The host must independently pin an authentic release/install digest,
+measure the exact immutable installed artifact/closure before loading, and prove
+its relation to the adapter actually executed. For the hosted package, the whole
+deterministic runtime bundle is a conservative candidate artifact; a manifest
+self-hash alone is not authenticity. Post-import disk hashes, mutable installs,
+module-cache hits, caller-supplied registry hashes and private brands do not
+establish loaded-byte provenance. That trusted install/load boundary, the reviewed
+production qualification class and actual registry wiring remain incomplete.
+No provider authority or activation path is added by this optional pin.
 
 ### Cleanup recovery is not current qualification
 

@@ -41,6 +41,10 @@ export const E2B_EXTERNAL_QUALIFICATION_OBSERVATION_SCHEMA =
   'agoragentic.risk-fork.e2b-external-qualification-observation.v1';
 export const E2B_RUNTIME_SDK_INTEGRITY_SCHEMA =
   'agoragentic.risk-fork.e2b-runtime-sdk-dependency-closure.v2';
+// Included in provisional evidence BEFORE observation signing. This identifies
+// a host-pinned artifact; it does not itself measure or prove loaded code bytes.
+export const E2B_ADAPTER_ARTIFACT_EVIDENCE_REF =
+  'evidence:e2b-risk-fork-adapter-artifact';
 
 const QUALIFICATION_TRUST_VERIFIERS = new WeakSet();
 const EXTERNAL_QUALIFICATION_OBSERVATION_VERIFIERS = new WeakSet();
@@ -609,7 +613,10 @@ function normalizeExpectedBindings(value) {
     throw new TypeError(`${field} must contain only own string-keyed data`);
   }
   const descriptors = Object.getOwnPropertyDescriptors(value);
-  const keys = ['templateId', 'templateHash', 'bootstrapArtifactHash', 'runnerArtifactHash'];
+  const keys = [
+    'templateId', 'templateHash', 'bootstrapArtifactHash', 'runnerArtifactHash',
+    'adapterArtifactHash',
+  ];
   const normalized = Object.create(null);
   for (const [key, descriptor] of Object.entries(descriptors)) {
     if (!keys.includes(key) || !descriptor.enumerable || !Object.hasOwn(descriptor, 'value')) {
@@ -627,6 +634,12 @@ function normalizeExpectedBindings(value) {
 }
 
 function assertExpectedBindings(evidence, expected) {
+  if (expected.adapterArtifactHash != null) {
+    const artifact = evidence.evidence_refs.find((entry) => entry.ref === E2B_ADAPTER_ARTIFACT_EVIDENCE_REF);
+    if (!artifact || !safeEqual(artifact.hash, expected.adapterArtifactHash)) {
+      throw new Error('E2B qualification adapter artifact binding mismatch');
+    }
+  }
   const bindings = [
     ['template_id_hash', expected.templateId == null ? null : sha256Ref(expected.templateId)],
     ['template_evidence_hash', expected.templateHash],
