@@ -9,6 +9,8 @@ import { verifyBacklogCustody } from './postgres-backlog-gauge-state.mjs';
 import { backlogAlertSettingsHash, backlogAlertTotalsHash } from './backlog-alert.mjs';
 import { baselineBacklogAlerts, verifyBacklogAlertCustody } from './postgres-backlog-alert-state.mjs';
 import { diagnosticSettingsHash } from './diagnostic-event.mjs';
+import { workerDiagnosticSettingsHash } from './worker-diagnostic-event.mjs';
+import { workerDiagnosticMetricsMigration } from './postgres-telemetry-config.mjs';
 
 export async function migratePostgresManagedTelemetry(options = {}) {
   const config = normalizeTelemetryOptions(options), migration = await telemetryMigration(config.schemaName);
@@ -149,7 +151,7 @@ export async function migratePostgresManagedTelemetry(options = {}) {
             await baselineBacklogAlerts(client,config);
           }
         }
-        if (config.metricVersion === 10) {
+        if (config.metricVersion >= 10) {
           const ledger = await client.query(`SELECT version FROM ${s}.telemetry_schema_migrations ORDER BY version`);
           if (ledger.rowCount === 9) {
             const previous = { ...config,metricVersion: 9,diagnosticSettings: undefined };
@@ -161,6 +163,19 @@ export async function migratePostgresManagedTelemetry(options = {}) {
             await client.query(`INSERT INTO ${s}.telemetry_schema_migrations VALUES (10,$1)`,[extension.hash]);
             await client.query(`INSERT INTO ${s}.telemetry_diagnostic_settings VALUES (true,$1,$2)`,[diagnosticSettingsHash(config.diagnosticSettings),config.diagnosticSettings]);
             // No inferred historical observations or prior settings/hash rewrite.
+          }
+        }
+        if (config.metricVersion === 11) {
+          const ledger = await client.query(`SELECT version FROM ${s}.telemetry_schema_migrations ORDER BY version`);
+          if (ledger.rowCount === 10) {
+            const previous = { ...config,metricVersion: 10,workerDiagnosticSettings: undefined };
+            await verifyPostgresManagedTelemetryAttestation(client,{ schemaName: config.schemaName,lifecycle: true,metrics: true,metricVersion: 10 });
+            await verifyTelemetrySettings(client,previous,migration.hash);
+            await verifyMetricTotals(client,previous); await verifyBacklogCustody(client,previous); await verifyBacklogAlertCustody(client,previous);
+            const extension = await workerDiagnosticMetricsMigration(config.schemaName);
+            await client.query(extension.sql);
+            await client.query(`INSERT INTO ${s}.telemetry_schema_migrations VALUES (11,$1)`,[extension.hash]);
+            await client.query(`INSERT INTO ${s}.telemetry_worker_diagnostic_settings VALUES (true,$1,$2)`,[workerDiagnosticSettingsHash(config.workerDiagnosticSettings),config.workerDiagnosticSettings]);
           }
         }
         await verifyPostgresManagedTelemetryAttestation(client, { schemaName: config.schemaName,lifecycle: config.lifecycle,metrics: config.metrics,metricVersion: config.metricVersion });

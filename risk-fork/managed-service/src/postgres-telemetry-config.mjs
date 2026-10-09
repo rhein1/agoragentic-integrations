@@ -7,6 +7,7 @@ import { metricSettingsHash, normalizeMetricSettings } from './metric-event.mjs'
 import { normalizeBacklogSettings } from './backlog-gauge.mjs';
 import { normalizeBacklogAlertSettings } from './backlog-alert.mjs';
 import { diagnosticSettingsHash, normalizeDiagnosticSettings } from './diagnostic-event.mjs';
+import { workerDiagnosticSettingsHash, normalizeWorkerDiagnosticSettings } from './worker-diagnostic-event.mjs';
 
 export { policyDbInteger as telemetryDbInteger, checkPolicySignal as checkTelemetrySignal };
 export const TELEMETRY_TABLES = Object.freeze(['telemetry_clock','telemetry_events','telemetry_schema_migrations','telemetry_settings']);
@@ -24,6 +25,7 @@ export const BACKLOG_TABLES = Object.freeze(['telemetry_backlog_settings','telem
 export const BACKLOG_ALERT_TABLES = Object.freeze(['telemetry_backlog_alert_settings','telemetry_backlog_alert_state','telemetry_backlog_alert_totals','telemetry_backlog_alerts']);
 export const BACKLOG_ALERT_INSERT_COLUMNS = Object.freeze(['event_ref','event_hash','tenant_hash','rule_id','episode','transition','payload','created_ms']);
 export const DIAGNOSTIC_TABLES = Object.freeze(['telemetry_diagnostic_settings']);
+export const WORKER_DIAGNOSTIC_TABLES = Object.freeze(['telemetry_worker_diagnostic_settings']);
 
 export function normalizeTelemetryLimits(value) {
   assertPlainRecord(value, 'telemetry limits');
@@ -39,20 +41,22 @@ export function normalizeTelemetryLimits(value) {
 export function normalizeTelemetryOptions(options, extraKeys = []) {
   assertPlainRecord(options, 'PostgreSQL telemetry options');
   assertAllowedKeys(options, ['pool','connectionString','schemaName','requireTls','tls','maxConnections',
-    'connectionTimeoutMs','statementTimeoutMs','deploymentMode','disposableDb','limits','expectedOwner','lifecycle','eventKind','metrics','metricSettings','metricVersion','backlogSettings','backlogAlertSettings','diagnosticSettings', ...extraKeys], 'PostgreSQL telemetry options');
+    'connectionTimeoutMs','statementTimeoutMs','deploymentMode','disposableDb','limits','expectedOwner','lifecycle','eventKind','metrics','metricSettings','metricVersion','backlogSettings','backlogAlertSettings','diagnosticSettings','workerDiagnosticSettings', ...extraKeys], 'PostgreSQL telemetry options');
   const lifecycle = options.lifecycle ?? false, metrics = options.metrics ?? false, eventKind = options.eventKind ?? 'policy';
   if (typeof lifecycle !== 'boolean' || typeof metrics !== 'boolean' || !['policy','lifecycle','alert','backlog_alert'].includes(eventKind)
     || (eventKind === 'lifecycle' && !lifecycle) || (metrics && !lifecycle) || (['alert','backlog_alert'].includes(eventKind) && !metrics)) throw new TypeError('Invalid telemetry version selection');
   if (!metrics && options.metricSettings !== undefined) throw new TypeError('Metric settings require explicit metrics=true');
   if (!metrics && options.metricVersion !== undefined) throw new TypeError('Metric version requires explicit metrics=true');
   const metricVersion = metrics ? (options.metricVersion ?? 3) : undefined;
-  if (metrics && ![3,4,5,6,7,8,9,10].includes(metricVersion)) throw new TypeError('Invalid metric version');
-  if (![8,9,10].includes(metricVersion) && options.backlogSettings !== undefined) throw new TypeError('Backlog settings require explicit metricVersion=8 or later');
+  if (metrics && ![3,4,5,6,7,8,9,10,11].includes(metricVersion)) throw new TypeError('Invalid metric version');
+  if (![8,9,10,11].includes(metricVersion) && options.backlogSettings !== undefined) throw new TypeError('Backlog settings require explicit metricVersion=8 or later');
   const backlogSettings = metricVersion >= 8 ? normalizeBacklogSettings(options.backlogSettings) : undefined;
-  if (![9,10].includes(metricVersion) && (options.backlogAlertSettings !== undefined || eventKind === 'backlog_alert')) throw new TypeError('Backlog alerts require explicit metricVersion=9 or later');
+  if (![9,10,11].includes(metricVersion) && (options.backlogAlertSettings !== undefined || eventKind === 'backlog_alert')) throw new TypeError('Backlog alerts require explicit metricVersion=9 or later');
   const backlogAlertSettings = metricVersion >= 9 ? normalizeBacklogAlertSettings(options.backlogAlertSettings) : undefined;
-  if (metricVersion !== 10 && options.diagnosticSettings !== undefined) throw new TypeError('Diagnostics require explicit metricVersion=10');
-  const diagnosticSettings = metricVersion === 10 ? normalizeDiagnosticSettings(options.diagnosticSettings) : undefined;
+  if (![10,11].includes(metricVersion) && options.diagnosticSettings !== undefined) throw new TypeError('Diagnostics require explicit metricVersion=10 or later');
+  const diagnosticSettings = metricVersion >= 10 ? normalizeDiagnosticSettings(options.diagnosticSettings) : undefined;
+  if (metricVersion !== 11 && options.workerDiagnosticSettings !== undefined) throw new TypeError('Worker diagnostics require explicit metricVersion=11');
+  const workerDiagnosticSettings = metricVersion === 11 ? normalizeWorkerDiagnosticSettings(options.workerDiagnosticSettings) : undefined;
   const metricSettings = metrics ? normalizeMetricSettings(options.metricSettings) : undefined;
   if (metricVersion === 3 && metricSettings.rules.some((rule) => rule.rule_id === 'execution_failure_observed')) {
     throw new TypeError('Execution failure metrics require explicit metricVersion=4');
@@ -78,7 +82,7 @@ export function normalizeTelemetryOptions(options, extraKeys = []) {
   const quotedSchema = quotePostgresAuthorityIdentifier(schemaName);
   if (options.expectedOwner !== undefined) quotePostgresAuthorityIdentifier(options.expectedOwner);
   const limits = normalizeTelemetryLimits(options.limits);
-  return Object.freeze({ schemaName, quotedSchema, limits, settingsHash: sha256Ref(limits), requireTls,lifecycle,eventKind,metrics,metricSettings,metricVersion,backlogSettings,backlogAlertSettings,diagnosticSettings,
+  return Object.freeze({ schemaName, quotedSchema, limits, settingsHash: sha256Ref(limits), requireTls,lifecycle,eventKind,metrics,metricSettings,metricVersion,backlogSettings,backlogAlertSettings,diagnosticSettings,workerDiagnosticSettings,
     expectedOwner: options.expectedOwner,
     statementTimeoutMs: requireInteger(options.statementTimeoutMs ?? 2000, 'statementTimeoutMs', { min: 100, max: 30_000 }) });
 }
@@ -123,6 +127,10 @@ export async function diagnosticMetricsMigration(schemaName) {
   const source = (await readFile(new URL('../migrations/015_managed_diagnostic_metrics.pg.sql',import.meta.url),'utf8')).replace(/\r\n?/g,'\n');
   return Object.freeze({ hash: sha256Ref(source),sql: source.replaceAll('__RISK_FORK_TELEMETRY_SCHEMA__',quotePostgresAuthorityIdentifier(schemaName)) });
 }
+export async function workerDiagnosticMetricsMigration(schemaName) {
+  const source = (await readFile(new URL('../migrations/016_managed_worker_diagnostic_metrics.pg.sql',import.meta.url),'utf8')).replace(/\r\n?/g,'\n');
+  return Object.freeze({ hash: sha256Ref(source),sql: source.replaceAll('__RISK_FORK_TELEMETRY_SCHEMA__',quotePostgresAuthorityIdentifier(schemaName)) });
+}
 
 export async function verifyTelemetrySettings(client, config, hash) {
   const settings = await client.query(`SELECT version,migration_hash FROM ${config.quotedSchema}.telemetry_schema_migrations ORDER BY version`);
@@ -134,8 +142,9 @@ export async function verifyTelemetrySettings(client, config, hash) {
   const incomplete = config.metricVersion >= 7 ? await cleanupIncompleteMetricsMigration(config.schemaName) : null;
   const backlog = config.metricVersion >= 8 ? await backlogGaugesMigration(config.schemaName) : null;
   const backlogAlerts = config.metricVersion >= 9 ? await backlogAlertsMigration(config.schemaName) : null;
-  const diagnostic = config.metricVersion === 10 ? await diagnosticMetricsMigration(config.schemaName) : null;
-  if (settings.rowCount !== (diagnostic ? 10 : backlogAlerts ? 9 : backlog ? 8 : incomplete ? 7 : cleanup ? 6 : budget ? 5 : execution ? 4 : metrics ? 3 : extension ? 2 : 1) || settings.rows[0].version !== 1 || settings.rows[0].migration_hash !== hash
+  const diagnostic = config.metricVersion >= 10 ? await diagnosticMetricsMigration(config.schemaName) : null;
+  const workerDiagnostic = config.metricVersion === 11 ? await workerDiagnosticMetricsMigration(config.schemaName) : null;
+  if (settings.rowCount !== (workerDiagnostic ? 11 : diagnostic ? 10 : backlogAlerts ? 9 : backlog ? 8 : incomplete ? 7 : cleanup ? 6 : budget ? 5 : execution ? 4 : metrics ? 3 : extension ? 2 : 1) || settings.rows[0].version !== 1 || settings.rows[0].migration_hash !== hash
     || (extension && (settings.rows[1].version !== 2 || settings.rows[1].migration_hash !== extension.hash))
     || (metrics && (settings.rows[2].version !== 3 || settings.rows[2].migration_hash !== metrics.hash))
     || (execution && (settings.rows[3].version !== 4 || settings.rows[3].migration_hash !== execution.hash))
@@ -144,7 +153,8 @@ export async function verifyTelemetrySettings(client, config, hash) {
     || (incomplete && (settings.rows[6].version !== 7 || settings.rows[6].migration_hash !== incomplete.hash))
     || (backlog && (settings.rows[7].version !== 8 || settings.rows[7].migration_hash !== backlog.hash))
     || (backlogAlerts && (settings.rows[8].version !== 9 || settings.rows[8].migration_hash !== backlogAlerts.hash))
-    || (diagnostic && (settings.rows[9].version !== 10 || settings.rows[9].migration_hash !== diagnostic.hash))) throw new TypeError('Telemetry migration drift');
+    || (diagnostic && (settings.rows[9].version !== 10 || settings.rows[9].migration_hash !== diagnostic.hash))
+    || (workerDiagnostic && (settings.rows[10].version !== 11 || settings.rows[10].migration_hash !== workerDiagnostic.hash))) throw new TypeError('Telemetry migration drift');
   const result = await client.query(`SELECT settings_hash,max_events,max_events_per_tenant,lease_ms,retry_ms,retention_ms
     FROM ${config.quotedSchema}.telemetry_settings WHERE singleton=true`);
   const row = result.rows[0], l = config.limits;
@@ -162,6 +172,12 @@ export async function verifyTelemetrySettings(client, config, hash) {
     const state = bound.rows[0], normalized = state ? normalizeDiagnosticSettings(state.payload) : null;
     if (bound.rowCount !== 1 || state.settings_hash !== diagnosticSettingsHash(config.diagnosticSettings)
       || diagnosticSettingsHash(normalized) !== state.settings_hash || canonicalize(normalized) !== canonicalize(state.payload)) throw new TypeError('Diagnostic settings drift');
+  }
+  if (workerDiagnostic) {
+    const bound = await client.query(`SELECT settings_hash,payload FROM ${config.quotedSchema}.telemetry_worker_diagnostic_settings WHERE singleton=true`);
+    const state = bound.rows[0], normalized = state ? normalizeWorkerDiagnosticSettings(state.payload) : null;
+    if (bound.rowCount !== 1 || state.settings_hash !== workerDiagnosticSettingsHash(config.workerDiagnosticSettings)
+      || workerDiagnosticSettingsHash(normalized) !== state.settings_hash || canonicalize(normalized) !== canonicalize(state.payload)) throw new TypeError('Worker diagnostic settings drift');
   }
 }
 

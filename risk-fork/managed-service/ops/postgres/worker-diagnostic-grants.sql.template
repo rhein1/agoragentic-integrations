@@ -1,0 +1,5 @@
+-- Explicit v11 addition AFTER all existing telemetry/lifecycle/metric/backlog/diagnostic grants.
+-- Dedicated owner only. The runtime cannot rewrite worker diagnostic meaning.
+BEGIN;
+GRANT SELECT ON __TELEMETRY_SCHEMA__.telemetry_worker_diagnostic_settings TO __TELEMETRY_RUNTIME__;
+COMMIT;
