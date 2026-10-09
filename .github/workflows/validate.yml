@@ -84,6 +84,7 @@ jobs:
           ORATION_ALLOW_IGNORE_DND: 'false'
         run: |
           npm ci --ignore-scripts --prefix deliverables/openrouter-top60-integration-pack
+          npm audit --audit-level=moderate --prefix deliverables/openrouter-top60-integration-pack
           npm --prefix deliverables/openrouter-top60-integration-pack run check
           npm --prefix deliverables/openrouter-top60-integration-pack test
           npm --prefix deliverables/openrouter-top60-integration-pack run typecheck
@@ -101,6 +102,7 @@ jobs:
           AGORAGENTIC_ALLOW_NETWORK_CANARIES: '0'
         run: |
           npm ci --ignore-scripts
+          npm audit --audit-level=moderate
           npm run check
           npm test
 
