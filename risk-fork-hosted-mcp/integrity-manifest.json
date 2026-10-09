@@ -9,7 +9,7 @@
     "schema": "agoragentic.risk-fork-hosted-mcp.reviewed-sources.v2",
     "normalization": "utf8_crlf_to_lf_lone_cr_preserved",
     "files": 70,
-    "sha256": "sha256:8aa4826477e7d89c3ff41065ebadeed010cc4c59ba43c8d5319f1a88ec17fb8f"
+    "sha256": "sha256:2f84fbbee64349acfba4cfcfbe0d74f3f8dc60880867aad0ec9a5dd2b5ec65eb"
   },
   "reviewed_sources": [
     {
@@ -25,7 +25,7 @@
     {
       "path": "mcp/package.json",
       "bytes": 3195,
-      "sha256": "sha256:d08735b2c0cfbd204e1a94c414e421dea95ae9ec70c7319deb979b128193cbb6"
+      "sha256": "sha256:e14ac7eb8912d3f04eccb19f2bca913810184aa3c33ea22a526a556b98c2f6b7"
     },
     {
       "path": "risk-fork/LICENSE",
@@ -560,7 +560,7 @@
       "path": "mcp/package.json",
       "source": "reviewed_source",
       "bytes": 3195,
-      "sha256": "sha256:d08735b2c0cfbd204e1a94c414e421dea95ae9ec70c7319deb979b128193cbb6"
+      "sha256": "sha256:e14ac7eb8912d3f04eccb19f2bca913810184aa3c33ea22a526a556b98c2f6b7"
     },
     {
       "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/core/LICENSE",
@@ -569,22 +569,22 @@
       "sha256": "sha256:0382b0057770ca05e9c350a50aa3b1c1fea84da0bc81d723bf00b9aa841be58a"
     },
     {
-      "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/core/dist/auth-CfDMXiII.cjs",
+      "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/core/dist/auth-D1CeV_Jr.cjs",
       "source": "workspace_dependency",
-      "bytes": 95518,
-      "sha256": "sha256:96c04c491ce6d6e654e84e94a0cf860cf6d1b0a5a0aa2ce25dbd070f2e4d6a5c"
+      "bytes": 95698,
+      "sha256": "sha256:289e333f19e5871f9f929413b27385f1ceef17cc354910935c4eeaae15f12b42"
     },
     {
       "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/core/dist/internal.cjs",
       "source": "workspace_dependency",
       "bytes": 14675,
-      "sha256": "sha256:821524fc4e0c2a41bef38f5827130b7918560e485ecfbcee608f4135a80e5cba"
+      "sha256": "sha256:aba08d51704ef8f718245f0990d7a60dde24a34b387ca61b1a554f364e3cee8a"
     },
     {
       "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/core/package.json",
       "source": "workspace_dependency",
-      "bytes": 2282,
-      "sha256": "sha256:dc2e8e1fc31878b0b537b0ea034d4a11284cce20fe81f4c6ea823dd6db7e7ad5"
+      "bytes": 2289,
+      "sha256": "sha256:19c23aa473379c8e8c485370b29562f156deec855b72e5231f7b8db89c21e4c6"
     },
     {
       "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/server/LICENSE",
@@ -613,14 +613,14 @@
     {
       "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/server/dist/index.cjs",
       "source": "workspace_dependency",
-      "bytes": 84708,
-      "sha256": "sha256:c76c1228e92286e0a0d844ce8d5aaeef2185e50df62beb495a8f34139cc47248"
+      "bytes": 82029,
+      "sha256": "sha256:122152e5d72cbe78e35d3519c901682d3ca14f881fba414967caeaa8fbe252d5"
     },
     {
-      "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/server/dist/mcp-D7GmuPnv.cjs",
+      "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/server/dist/mcp-BumlNux0.cjs",
       "source": "workspace_dependency",
-      "bytes": 90315,
-      "sha256": "sha256:b0afb7de7a8d17edc6f49e3b690afd8baf58c2fa975d1d41b29dababb8ee9f02"
+      "bytes": 111211,
+      "sha256": "sha256:f845f6f1dd26d7563ad829abc3ebe7944352c455578307c864dc1a09c34fb65b"
     },
     {
       "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/server/dist/shimsNode.cjs",
@@ -629,22 +629,22 @@
       "sha256": "sha256:cdc43bbac0b2349278c244d86ea66fc2e42dd9789cce70e73b32f121da2eede3"
     },
     {
-      "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/server/dist/src-STyD_Vvf.cjs",
+      "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/server/dist/src-BhnGYybN.cjs",
       "source": "workspace_dependency",
-      "bytes": 348065,
-      "sha256": "sha256:e942bd5edc709d40d8bfc955306a179cdee3d4d35ad236deaac19bb14ecd5ba1"
+      "bytes": 354231,
+      "sha256": "sha256:190c8d44a63d4d428b63d7311658ecc10bc7f3544a6b81787f2a42a2a0ed3c50"
     },
     {
       "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/server/dist/stdio.cjs",
       "source": "workspace_dependency",
-      "bytes": 20864,
-      "sha256": "sha256:87793e7807897eb57c266b39280151b616204d6e66a81d4ddb250d987d189bd8"
+      "bytes": 22327,
+      "sha256": "sha256:a3940a75c365c46b460381c2a561b484cd2bee1e5bf959827037fdcc33223820"
     },
     {
       "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/server/package.json",
       "source": "workspace_dependency",
-      "bytes": 4390,
-      "sha256": "sha256:ff7f23c4a4a3162a34a2cb21087e1844bb8631724d8e43aa14aaa86d3f7e07c2"
+      "bytes": 4397,
+      "sha256": "sha256:392dfd0e6b5a8cb60ecdac6bfa39297c77bc5ef164a256e5aab9e59e42746504"
     },
     {
       "path": "risk-fork-hosted-mcp/node_modules/ajv-formats/LICENSE",
@@ -2431,13 +2431,13 @@
   ],
   "third_party_notices": {
     "path": "THIRD_PARTY_NOTICES.txt",
-    "bytes": 56885,
-    "sha256": "sha256:84761a19dbe9d442127b5dd3d83f35831a756f888589ae6fc5132b31af733855",
+    "bytes": 56899,
+    "sha256": "sha256:b8c79be5675c2d93dedcc0e6e8074be43a6cd33b90539a995d88fe0e5bbf5185",
     "sources": [
       {
         "package": "@modelcontextprotocol/core",
-        "version": "2.0.0",
-        "declared_license": "MIT",
+        "version": "2.3.0",
+        "declared_license": "Apache-2.0",
         "method": "standalone_license_file",
         "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/core/LICENSE",
         "source_bytes": 12227,
@@ -2447,8 +2447,8 @@
       },
       {
         "package": "@modelcontextprotocol/server",
-        "version": "2.0.0",
-        "declared_license": "MIT",
+        "version": "2.3.0",
+        "declared_license": "Apache-2.0",
         "method": "standalone_license_file",
         "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/server/LICENSE",
         "source_bytes": 12227,
@@ -2680,8 +2680,8 @@
   },
   "artifact": {
     "path": "dist/runtime/index.mjs",
-    "bytes": 3227124,
-    "sha256": "sha256:59442d551316f05c1e6eeac28d71b81c4579691f7ced8048acdc6a87f0ff69f3"
+    "bytes": 3247590,
+    "sha256": "sha256:e9042558b3ea295e0fafc1c40246dcf6cce7e470a22e1ba2028a2bdda22ee8e5"
   },
   "packaged_assets": [
     {
@@ -2704,8 +2704,8 @@
     },
     {
       "path": "THIRD_PARTY_NOTICES.txt",
-      "bytes": 56885,
-      "sha256": "sha256:84761a19dbe9d442127b5dd3d83f35831a756f888589ae6fc5132b31af733855"
+      "bytes": 56899,
+      "sha256": "sha256:b8c79be5675c2d93dedcc0e6e8074be43a6cd33b90539a995d88fe0e5bbf5185"
     },
     {
       "path": "e2b-context/risk-fork/e2b-template/bin/boot-guard.mjs",

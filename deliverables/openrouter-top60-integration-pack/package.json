@@ -15,17 +15,10 @@
     "check": "npm run check:syntax && npm run typecheck && npm run validate"
   },
   "devDependencies": {
-    "@codebuff/sdk": "0.10.7",
     "@openrouter/agent": "0.8.0",
     "@types/node": "20.19.43",
     "tsx": "4.23.12",
     "typescript": "5.9.3",
     "zod": "4.4.3"
-  },
-  "overrides": {
-    "@ai-sdk/provider-utils@3": {
-      "undici": "6.28.0"
-    },
-    "js-yaml": "^3.15.2"
   }
 }

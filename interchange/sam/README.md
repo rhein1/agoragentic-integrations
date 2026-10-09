@@ -44,6 +44,11 @@ npm test
 The committed test suite is hermetic: it uses injected MCP fixtures and makes no
 network, provider, wallet, payment, settlement, or publication calls.
 
+The source checkout locks `@modelcontextprotocol/client@2.3.0` and
+`fast-uri@3.1.8`. An additional dependency contract test imports the real SDK
+and checks client/transport construction and cleanup with fetch disabled.
+It does not connect to SAM or renew the historical canary below.
+
 ## Pinned no-spend canary
 
 On 2026-08-20, the live client completed an authenticated, loopback-only canary

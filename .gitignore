@@ -16,6 +16,7 @@ examples/anydoc-document-evidence/conformance/generated/
 examples/anydoc-document-evidence/conformance/report.json
 examples/anydoc-document-evidence/*.tgz
 interchange/runpay/node_modules/
+interchange/sam/node_modules/
 __pycache__/
 *.pyc
 sdk/python/build/

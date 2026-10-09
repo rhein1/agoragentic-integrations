@@ -1387,7 +1387,8 @@ async function fetchJsonRequest(url, options = {}, config = {}) {
     const hasSignedClaimProof = requestUrl.pathname === '/api/x402/claim'
         && typeof options.body?.proof?.signature === 'string'
         && options.body.proof.signature.length > 0;
-    fetchOptions.redirect = hasCredentialHeader || hasSignedClaimProof
+    // Explicit JSON/file payloads stay bound to the selected endpoint as well.
+    fetchOptions.redirect = options.body !== undefined || hasCredentialHeader || hasSignedClaimProof
         ? 'error'
         : (config.redirect || 'follow');
 

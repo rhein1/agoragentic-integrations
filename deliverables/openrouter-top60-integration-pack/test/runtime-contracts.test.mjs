@@ -234,7 +234,7 @@ test('pinned OpenRouter agent tools keep approval and enforce bounds behaviorall
   assert.equal(JSON.parse(calls[0].init.body).constraints.max_cost, 0.01);
 });
 
-test('pinned Codebuff tools remain read-only and use the live methods and paths', async () => {
+test('structural Codebuff tools preserve the custom-tool contract and read-only methods', async () => {
   const calls = [];
   const tools = createAgoragenticCodebuffTools({
     baseUrl: 'https://agoragentic.example/',
@@ -248,7 +248,15 @@ test('pinned Codebuff tools remain read-only and use the live methods and paths'
     (error) => error?.code === 'invalid_input' && error?.status === 400,
   );
   assert.equal(calls.length, 0);
-  await tools.match.execute({ task: 'match', constraints: { max_cost: 0.02, max_latency_ms: 50 } });
+  for (const tool of tools.all) {
+    assert.deepEqual(Object.keys(tool).sort(), [
+      'toolName', 'inputSchema', 'description', 'endsAgentStep', 'exampleInputs', 'execute',
+    ].sort());
+    assert.equal(tool.endsAgentStep, true);
+    assert.deepEqual(tool.exampleInputs, []);
+  }
+  const matchResult = await tools.match.execute({ task: 'match', constraints: { max_cost: 0.02, max_latency_ms: 50 } });
+  assert.deepEqual(matchResult, [{ type: 'json', value: { ok: true } }]);
   await tools.quote.execute({ task: 'quote', constraints: { category: 'research', payment_network: 'base' } });
   await tools.status.execute({ invocationId: 'inv/a' });
   await tools.receipt.execute({ invocationId: 'inv/a' });

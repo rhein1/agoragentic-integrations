@@ -108,10 +108,10 @@ var require_package = __commonJS({
         url: "https://github.com/rhein1/agoragentic-integrations/issues"
       },
       devDependencies: {
-        "@modelcontextprotocol/client": "2.2.0",
-        "@modelcontextprotocol/node": "2.0.0",
+        "@modelcontextprotocol/client": "2.3.0",
+        "@modelcontextprotocol/node": "2.1.1",
         "@modelcontextprotocol/sdk": "1.31.0",
-        "@modelcontextprotocol/server": "2.0.0",
+        "@modelcontextprotocol/server": "2.3.0",
         esbuild: "0.28.2"
       },
       overrides: {
@@ -17133,9 +17133,9 @@ var require_v4 = __commonJS({
   }
 });
 
-// risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/core/dist/auth-CfDMXiII.cjs
-var require_auth_CfDMXiII = __commonJS({
-  "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/core/dist/auth-CfDMXiII.cjs"(exports) {
+// risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/core/dist/auth-D1CeV_Jr.cjs
+var require_auth_D1CeV_Jr = __commonJS({
+  "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/core/dist/auth-D1CeV_Jr.cjs"(exports) {
     var __create2 = Object.create;
     var __defProp2 = Object.defineProperty;
     var __getOwnPropDesc2 = Object.getOwnPropertyDescriptor;
@@ -18007,7 +18007,8 @@ var require_auth_CfDMXiII = __commonJS({
       introspection_endpoint_auth_signing_alg_values_supported: zod_v4.array(zod_v4.string()).optional(),
       code_challenge_methods_supported: zod_v4.array(zod_v4.string()).optional(),
       client_id_metadata_document_supported: zod_v4.boolean().optional(),
-      authorization_response_iss_parameter_supported: zod_v4.boolean().optional().catch(void 0)
+      authorization_response_iss_parameter_supported: zod_v4.boolean().optional().catch(void 0),
+      dpop_signing_alg_values_supported: zod_v4.array(zod_v4.string()).optional()
     });
     var OpenIdProviderMetadataSchema = zod_v4.looseObject({
       issuer: zod_v4.string(),
@@ -18058,7 +18059,8 @@ var require_auth_CfDMXiII = __commonJS({
       token_type: zod_v4.string(),
       expires_in: zod_v4.coerce.number().optional(),
       scope: zod_v4.string().optional(),
-      refresh_token: zod_v4.string().optional()
+      refresh_token: zod_v4.string().optional(),
+      issuer: zod_v4.string().optional().catch(void 0)
     }).strip();
     var IdJagTokenExchangeResponseSchema = zod_v4.object({
       issued_token_type: zod_v4.literal("urn:ietf:params:oauth:token-type:id-jag"),
@@ -18096,7 +18098,8 @@ var require_auth_CfDMXiII = __commonJS({
       client_id: zod_v4.string(),
       client_secret: zod_v4.string().optional(),
       client_id_issued_at: zod_v4.number().optional(),
-      client_secret_expires_at: zod_v4.number().optional()
+      client_secret_expires_at: zod_v4.number().optional(),
+      issuer: zod_v4.string().optional().catch(void 0)
     }).strip();
     var OAuthClientInformationFullSchema = OAuthClientMetadataSchema.merge(OAuthClientInformationSchema);
     var OAuthClientRegistrationErrorSchema = zod_v4.object({
@@ -19307,7 +19310,7 @@ var require_auth_CfDMXiII = __commonJS({
 // risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/core/dist/internal.cjs
 var require_internal = __commonJS({
   "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/core/dist/internal.cjs"(exports) {
-    var require_auth = require_auth_CfDMXiII();
+    var require_auth = require_auth_D1CeV_Jr();
     exports.AnnotationsSchema = require_auth.AnnotationsSchema;
     exports.AudioContentSchema = require_auth.AudioContentSchema;
     exports.BAGGAGE_META_KEY = require_auth.BAGGAGE_META_KEY;
@@ -19510,9 +19513,9 @@ var require_internal = __commonJS({
   }
 });
 
-// risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/server/dist/src-STyD_Vvf.cjs
-var require_src_STyD_Vvf = __commonJS({
-  "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/server/dist/src-STyD_Vvf.cjs"(exports) {
+// risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/server/dist/src-BhnGYybN.cjs
+var require_src_BhnGYybN = __commonJS({
+  "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/server/dist/src-BhnGYybN.cjs"(exports) {
     var require_chunk = require_chunk_Bnu9O96Y();
     var require_dialects = require_dialects_D8eXzoGv();
     var _modelcontextprotocol_core_internal = require_internal();
@@ -19563,6 +19566,8 @@ var require_src_STyD_Vvf = __commonJS({
       OAuthErrorCode$1["InvalidRedirectUri"] = "invalid_redirect_uri";
       OAuthErrorCode$1["InsufficientScope"] = "insufficient_scope";
       OAuthErrorCode$1["InvalidTarget"] = "invalid_target";
+      OAuthErrorCode$1["InvalidDpopProof"] = "invalid_dpop_proof";
+      OAuthErrorCode$1["UseDpopNonce"] = "use_dpop_nonce";
       return OAuthErrorCode$1;
     })({});
     var OAuthError = class OAuthError2 extends Error {
@@ -19652,8 +19657,18 @@ var require_src_STyD_Vvf = __commonJS({
         if (typeof this !== "function") throw new TypeError("isInstance must be called on the class (e.g. `SdkError.isInstance(value)`); for callbacks use `v => SdkError.isInstance(v)`");
         return brandedHasInstance(this, value);
       }
-      constructor(code, message, data) {
-        super(message);
+      /**
+      * @param code - Stable string code identifying the failure ({@linkcode SdkErrorCode}).
+      * @param message - Human-readable description.
+      * @param data - Optional structured payload (for example the HTTP status carried by
+      * {@linkcode SdkHttpError}). Opaque to the SDK: a `cause` key inside `data` is not
+      * promoted to `Error.cause`.
+      * @param options - Standard `ErrorOptions`, forwarded to `Error`. Pass the underlying
+      * failure as `{ cause }` so it is reachable through the `Error.cause` chain that
+      * loggers and error trackers walk.
+      */
+      constructor(code, message, data, options) {
+        super(message, options);
         this.code = code;
         this.data = data;
         this.name = "SdkError";
@@ -19664,8 +19679,11 @@ var require_src_STyD_Vvf = __commonJS({
       static {
         Object.defineProperty(this, "mcpBrand", { value: "mcp.SdkHttpError" });
       }
-      constructor(code, message, data) {
-        super(code, message, data);
+      /**
+      * @param options - Standard `ErrorOptions`, forwarded to `Error` (see {@linkcode SdkError}).
+      */
+      constructor(code, message, data, options) {
+        super(code, message, data, options);
         this.name = "SdkHttpError";
       }
       get status() {
@@ -21789,7 +21807,8 @@ var require_src_STyD_Vvf = __commonJS({
         ListResourceTemplatesResultResponseSchema: wireResultResponse(ListResourceTemplatesResultSchema$1),
         ReadResourceResultResponseSchema: wireResultResponse(zod_v4.union([ReadResourceResultSchema$1, InputRequiredResultSchema])),
         CompleteResultResponseSchema: wireResultResponse(CompleteResultSchema$1),
-        DiscoverResultResponseSchema: wireResultResponse(DiscoverResultSchema$1)
+        DiscoverResultResponseSchema: wireResultResponse(DiscoverResultSchema$1),
+        SubscriptionsListenResultResponseSchema: wireResultResponse(SubscriptionsListenResultSchema$1)
       };
     }
     var memo;
@@ -22220,6 +22239,8 @@ var require_src_STyD_Vvf = __commonJS({
           const rawInputRequests = raw["inputRequests"];
           const inputRequests = isPlainObject$4(rawInputRequests) ? rawInputRequests : {};
           const requestState = raw["requestState"];
+          const metaParse = raw["_meta"] === void 0 ? void 0 : buildSchemas2026().ResultMetaSchema.safeParse(raw["_meta"]);
+          const meta = metaParse?.success ? metaParse.data : void 0;
           if (Object.keys(inputRequests).length === 0 && typeof requestState !== "string") return {
             kind: "invalid",
             error: new SdkError(SdkErrorCode.InvalidResult, `Invalid result for ${method}: input_required carries neither inputRequests nor requestState (every input_required result must include at least one of the two)`, {
@@ -22230,7 +22251,8 @@ var require_src_STyD_Vvf = __commonJS({
           return {
             kind: "input_required",
             inputRequests,
-            ...typeof requestState === "string" && { requestState }
+            ...typeof requestState === "string" && { requestState },
+            ...meta !== void 0 && { _meta: meta }
           };
         }
         if (rawResultType !== "complete") return {
@@ -22299,6 +22321,9 @@ var require_src_STyD_Vvf = __commonJS({
     }
     function isSpecNotificationMethod(method) {
       return ALL_CODECS.some((codec) => codec.hasNotificationMethod(method));
+    }
+    function isExtensionReusedRequestMethod(method) {
+      return method === "tasks/get" || method === "tasks/cancel";
     }
     var ALL_CODECS = [rev2025Codec, rev2026Codec];
     function isPlainObject$3(value) {
@@ -22721,7 +22746,7 @@ var require_src_STyD_Vvf = __commonJS({
         evaluatedAt: "pre-dispatch",
         codes: [HEADER_MISMATCH_ERROR_CODE],
         conformance: ["http-header-validation"],
-        rationale: "SEP-2243 standard `Mcp-Method` / `Mcp-Name` headers — presence, sentinel decoding, and `Mcp-Name` ↔ body cross-check — are validated by the HTTP entry on a modern-classified request after the supported-revision gate and before dispatch. The classifier’s own header-mismatch cells (protocol-version, `Mcp-Method` mismatch) stay on the edge `era-classification` rung; this rung carries the entry-layer presence/`Mcp-Name` half. Evaluated before the capability gate, the factory call, and the `Mcp-Param-*` rung so a request that fails several rungs is answered by the standard-header rung first. The documented order (after method-registry 5 and request-params 6) is NOT the observed precedence: serveModern evaluates this rung immediately after the supported-revision gate, so a request that also fails a dispatch rung is answered here before the dispatch rungs (5–6) are consulted."
+        rationale: "SEP-2243 standard `MCP-Protocol-Version` / `Mcp-Method` / `Mcp-Name` headers — presence, sentinel decoding, and `Mcp-Name` ↔ body cross-check — are validated by the HTTP entry on a modern-classified request after the supported-revision gate and before dispatch. The spec requires `MCP-Protocol-Version` and `Mcp-Method` on every modern *request* POST (`Mcp-Name` only for the methods that mirror `params.name` / `params.uri` / `params.taskId`, see `MCP_NAME_HEADER_SOURCE`) and names them in that order, so a request missing several is answered by the earliest. Notification POSTs are exempt: the presence half runs on requests only, so a modern-enveloped notification is dispatched even with no standard headers at all. The classifier’s own header-mismatch cells (protocol-version, `Mcp-Method` mismatch) stay on the edge `era-classification` rung; this rung carries the entry-layer presence/`Mcp-Name` half — including the missing `MCP-Protocol-Version` cell, which cannot live on the edge rung without breaking body-primary classification. Evaluated before the capability gate, the factory call, and the `Mcp-Param-*` rung so a request that fails several rungs is answered by the standard-header rung first. The documented order (after method-registry 5 and request-params 6) is NOT the observed precedence: serveModern evaluates this rung immediately after the supported-revision gate, so a request that also fails a dispatch rung is answered here before the dispatch rungs (5–6) are consulted."
       },
       {
         rung: "client-capabilities",
@@ -22773,8 +22798,20 @@ var require_src_STyD_Vvf = __commonJS({
     var MCP_NAME_HEADER_SOURCE = {
       "tools/call": "name",
       "prompts/get": "name",
-      "resources/read": "uri"
+      "resources/read": "uri",
+      "tasks/get": "taskId",
+      "tasks/update": "taskId",
+      "tasks/cancel": "taskId"
     };
+    function mcpNameSource(method, params) {
+      const field = Object.hasOwn(MCP_NAME_HEADER_SOURCE, method) ? MCP_NAME_HEADER_SOURCE[method] : void 0;
+      if (field === void 0) return;
+      const raw = isPlainObject$2(params) ? params[field] : void 0;
+      return {
+        field,
+        value: typeof raw === "string" ? raw : void 0
+      };
+    }
     function stripHttpOws(value) {
       let start = 0;
       while (start < value.length) {
@@ -22793,11 +22830,14 @@ var require_src_STyD_Vvf = __commonJS({
     function validateStandardRequestHeaders(request, route) {
       if (route.messageKind !== "request") return;
       const method = route.message.method;
+      if (request.protocolVersionHeader === void 0) {
+        const claimed = route.classification.revision;
+        return crossCheckMismatch("version-header-missing", "(missing)", claimed === void 0 ? "the body carries a modern per-request envelope but the required MCP-Protocol-Version header is absent" : `the body envelope names protocol version ${claimed} but the required MCP-Protocol-Version header is absent`, "standard-header-validation");
+      }
       if (request.mcpMethodHeader === void 0) return crossCheckMismatch("method-header-missing", "(missing)", `the body names method ${method} but the required Mcp-Method header is absent`, "standard-header-validation");
-      const sourceField = Object.hasOwn(MCP_NAME_HEADER_SOURCE, method) ? MCP_NAME_HEADER_SOURCE[method] : void 0;
-      if (sourceField === void 0) return;
-      const sourceValue = route.message.params?.[sourceField];
-      const bodyValue = typeof sourceValue === "string" ? sourceValue : void 0;
+      const source = mcpNameSource(method, route.message.params);
+      if (source === void 0) return;
+      const { field: sourceField, value: bodyValue } = source;
       if (request.mcpNameHeader === void 0) {
         if (bodyValue === void 0) return;
         return crossCheckMismatch("name-header-missing", "(missing)", `the body carries params.${sourceField}="${bodyValue}" but the required Mcp-Name header is absent`, "standard-header-validation");
@@ -23558,6 +23598,8 @@ var require_src_STyD_Vvf = __commonJS({
       _transport;
       _requestMessageId = 0;
       _requestHandlers = /* @__PURE__ */ new Map();
+      /** Methods registered with an explicit schema; the era gate in `_onrequest` reads it for the Tasks extension names. */
+      _customSchemaRequestMethods = /* @__PURE__ */ new Set();
       _requestHandlerAbortControllers = /* @__PURE__ */ new Map();
       _notificationHandlers = /* @__PURE__ */ new Map();
       _responseHandlers = /* @__PURE__ */ new Map();
@@ -23694,7 +23736,7 @@ var require_src_STyD_Vvf = __commonJS({
         return this._requestHandlers.get(method);
       }
       async _oncancel(notification) {
-        if (!notification.params.requestId) return;
+        if (notification.params.requestId === void 0) return;
         this._requestHandlerAbortControllers.get(notification.params.requestId)?.abort(notification.params.reason);
       }
       _setupTimeout(messageId, timeout, maxTotalTimeout, onTimeout, resetTimeoutOnProgress = false) {
@@ -23841,7 +23883,7 @@ var require_src_STyD_Vvf = __commonJS({
             return;
           }
         }
-        if (isSpecRequestMethod(request.method) && !codec.hasRequestMethod(request.method)) {
+        if (isSpecRequestMethod(request.method) && !codec.hasRequestMethod(request.method) && !(isExtensionReusedRequestMethod(request.method) && this._customSchemaRequestMethods.has(request.method))) {
           sendErrorResponse(ProtocolErrorCode.MethodNotFound, "Method not found");
           return;
         }
@@ -23974,8 +24016,11 @@ var require_src_STyD_Vvf = __commonJS({
       }
       request(request, schemaOrOptions, maybeOptions) {
         const codec = this._resolveOutboundCodec(request.method);
+        if (isStandardSchema(schemaOrOptions)) {
+          if (!isExtensionReusedRequestMethod(request.method)) this._assertOutboundRequestInEra(codec, request.method);
+          return this._requestWithSchemaViaCodec(codec, request, schemaOrOptions, maybeOptions);
+        }
         this._assertOutboundRequestInEra(codec, request.method);
-        if (isStandardSchema(schemaOrOptions)) return this._requestWithSchemaViaCodec(codec, request, schemaOrOptions, maybeOptions);
         const validate = codecResultValidator(codec, request.method);
         if (validate === void 0) throw new TypeError(`'${request.method}' is not a spec method; pass a result schema as the second argument to request().`);
         return this._requestWithSchemaViaCodec(codec, request, validate, schemaOrOptions);
@@ -24093,19 +24138,20 @@ var require_src_STyD_Vvf = __commonJS({
           const cancel = (reason2) => {
             if (responseReceived) return;
             this._progressHandlers.delete(messageId);
-            if (requestAbort === void 0) this._transport?.send(this._envelopeOutbound({
-              jsonrpc: "2.0",
-              method: "notifications/cancelled",
-              params: {
-                requestId: messageId,
-                reason: String(reason2)
-              }
-            }), {
-              relatedRequestId,
-              resumptionToken,
-              onresumptiontoken
-            }).catch((error) => this._onerror(/* @__PURE__ */ new Error(`Failed to send cancellation: ${error}`)));
-            else requestAbort.abort();
+            if (requestAbort === void 0) {
+              if (request.method !== "initialize") this._transport?.send(this._envelopeOutbound({
+                jsonrpc: "2.0",
+                method: "notifications/cancelled",
+                params: {
+                  requestId: messageId,
+                  reason: String(reason2)
+                }
+              }), {
+                relatedRequestId,
+                resumptionToken,
+                onresumptiontoken
+              }).catch((error) => this._onerror(/* @__PURE__ */ new Error(`Failed to send cancellation: ${error}`)));
+            } else requestAbort.abort();
             reject(reason2 instanceof SdkError ? reason2 : new SdkError(SdkErrorCode.RequestTimeout, String(reason2)));
           };
           this._responseHandlers.set(messageId, (response) => {
@@ -24167,7 +24213,7 @@ var require_src_STyD_Vvf = __commonJS({
       * Emits a notification, which is a one-way message that does not expect a response.
       */
       async notification(notification, options) {
-        return this._notificationViaCodec(this._resolveOutboundCodec(notification.method), notification, options);
+        return await this._notificationViaCodec(this._resolveOutboundCodec(notification.method), notification, options);
       }
       /**
       * The notification funnel proper, keyed by the resolved era codec —
@@ -24185,7 +24231,7 @@ var require_src_STyD_Vvf = __commonJS({
           jsonrpc: "2.0",
           ...notification
         });
-        if ((this._options?.debouncedNotificationMethods ?? []).includes(notification.method) && !notification.params && !options?.relatedRequestId) {
+        if ((this._options?.debouncedNotificationMethods ?? []).includes(notification.method) && !notification.params && options?.relatedRequestId === void 0) {
           if (this._pendingDebouncedNotifications.has(notification.method)) return;
           this._pendingDebouncedNotifications.add(notification.method);
           Promise.resolve().then(() => {
@@ -24218,6 +24264,8 @@ var require_src_STyD_Vvf = __commonJS({
           return maybeHandler(parsed.data, ctx);
         };
         else throw new TypeError("setRequestHandler: handler is required");
+        if (typeof schemasOrHandler === "function") this._customSchemaRequestMethods.delete(method);
+        else this._customSchemaRequestMethods.add(method);
         this._requestHandlers.set(method, this._wrapHandler(method, stored));
       }
       /**
@@ -24247,6 +24295,7 @@ var require_src_STyD_Vvf = __commonJS({
       */
       removeRequestHandler(method) {
         this._requestHandlers.delete(method);
+        this._customSchemaRequestMethods.delete(method);
       }
       /**
       * Asserts that a request handler has not already been set for the given method, in preparation for a new one being automatically installed.
@@ -24324,7 +24373,8 @@ var require_src_STyD_Vvf = __commonJS({
       return {
         resultType: "input_required",
         inputRequests: decoded.inputRequests,
-        ...decoded.requestState !== void 0 && { requestState: decoded.requestState }
+        ...decoded.requestState !== void 0 && { requestState: decoded.requestState },
+        ...decoded._meta !== void 0 && { _meta: decoded._meta }
       };
     }
     var require_content_type = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2) => {
@@ -32336,11 +32386,11 @@ var require_shimsNode = __commonJS({
   }
 });
 
-// risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/server/dist/mcp-D7GmuPnv.cjs
-var require_mcp_D7GmuPnv = __commonJS({
-  "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/server/dist/mcp-D7GmuPnv.cjs"(exports) {
+// risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/server/dist/mcp-BumlNux0.cjs
+var require_mcp_BumlNux0 = __commonJS({
+  "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/server/dist/mcp-BumlNux0.cjs"(exports) {
     var require_chunk = require_chunk_Bnu9O96Y();
-    var require_src = require_src_STyD_Vvf();
+    var require_src = require_src_BhnGYybN();
     var _modelcontextprotocol_server__shims = require_shimsNode();
     var _modelcontextprotocol_core_internal = require_internal();
     var COMPLETABLE_SYMBOL = /* @__PURE__ */ Symbol.for("mcp.completable");
@@ -32547,6 +32597,10 @@ data: ${JSON.stringify({
               params: { notifications: honored }
             }, subscriptionId);
             writeNotification(ack.method, ack.params);
+            if (Object.keys(honored).length === 0) {
+              teardown(true);
+              return;
+            }
             unsubscribe = bus.subscribe((event) => {
               if (closed || !listenFilterAccepts(honored, event)) return;
               const note = stampSubscriptionId(serverEventToNotification(event), subscriptionId);
@@ -32603,7 +32657,7 @@ data: ${JSON.stringify({
       _serverCapabilities;
       /**
       * The serving instance's identity, stamped onto the graceful-close
-      * results' `_meta` (the spec's `SubscriptionsListenResultMeta` extends
+      * results' `_meta` (the spec's `SubscriptionsListenResultMetaObject` extends
       * `ResultMetaObject`). Handed over together with the capabilities.
       */
       _serverInfo;
@@ -32730,6 +32784,197 @@ data: ${JSON.stringify({
             uri: uri ?? ""
           };
       }
+    }
+    function comparableResource(value) {
+      const text = String(value);
+      const hash = text.indexOf("#");
+      return (hash === -1 ? text : text.slice(0, hash)).replace(/\/$/, "");
+    }
+    function sameResource(reported, expected) {
+      if (!reported) return false;
+      return comparableResource(reported) === comparableResource(expected);
+    }
+    function headerQuotedValue(value) {
+      return value.replaceAll(/[\\"]/g, String.raw`\$&`).replaceAll(/[^\u0020-\u007E]/g, " ");
+    }
+    function buildWwwAuthenticateHeader(errorCode2, description, requiredScopes, resourceMetadataUrl) {
+      let header = `Bearer error="${headerQuotedValue(errorCode2)}", error_description="${headerQuotedValue(description)}"`;
+      if (requiredScopes.length > 0) header += `, scope="${headerQuotedValue(requiredScopes.join(" "))}"`;
+      if (resourceMetadataUrl) header += `, resource_metadata="${headerQuotedValue(resourceMetadataUrl)}"`;
+      return header;
+    }
+    async function verifyBearerToken(authorizationHeader, options) {
+      const { verifier, requiredScopes = [], expectedResource } = options;
+      if (!authorizationHeader) throw new require_src.OAuthError(require_src.OAuthErrorCode.InvalidToken, "Missing Authorization header");
+      const [type, token] = authorizationHeader.split(" ");
+      if (type?.toLowerCase() !== "bearer" || !token) throw new require_src.OAuthError(require_src.OAuthErrorCode.InvalidToken, "Invalid Authorization header format, expected 'Bearer TOKEN'");
+      const authInfo = await verifier.verifyAccessToken(token);
+      if (expectedResource !== void 0 && !sameResource(authInfo.resource, expectedResource)) throw new require_src.OAuthError(require_src.OAuthErrorCode.InvalidToken, "Token was not issued for this resource");
+      if (requiredScopes.length > 0) {
+        if (!requiredScopes.every((scope) => authInfo.scopes.includes(scope))) throw new require_src.OAuthError(require_src.OAuthErrorCode.InsufficientScope, "Insufficient scope");
+      }
+      if (typeof authInfo.expiresAt !== "number" || Number.isNaN(authInfo.expiresAt)) throw new require_src.OAuthError(require_src.OAuthErrorCode.InvalidToken, "Token has no expiration time");
+      else if (authInfo.expiresAt < Date.now() / 1e3) throw new require_src.OAuthError(require_src.OAuthErrorCode.InvalidToken, "Token has expired");
+      if (options.resourceMetadataUrl !== void 0 && authInfo.resourceMetadataUrl === void 0) return {
+        ...authInfo,
+        resourceMetadataUrl: options.resourceMetadataUrl
+      };
+      return authInfo;
+    }
+    function bearerAuthChallengeResponse(error, options) {
+      const { requiredScopes = [], resourceMetadataUrl } = options ?? {};
+      if (!(error instanceof require_src.OAuthError)) {
+        const serverError = new require_src.OAuthError(require_src.OAuthErrorCode.ServerError, "Internal Server Error");
+        return Response.json(serverError.toResponseObject(), { status: 500 });
+      }
+      switch (error.code) {
+        case require_src.OAuthErrorCode.InvalidToken: {
+          const challenge = buildWwwAuthenticateHeader(error.code, error.message, requiredScopes, resourceMetadataUrl);
+          return Response.json(error.toResponseObject(), {
+            status: 401,
+            headers: { "WWW-Authenticate": challenge }
+          });
+        }
+        case require_src.OAuthErrorCode.InsufficientScope: {
+          const challenge = buildWwwAuthenticateHeader(error.code, error.message, requiredScopes, resourceMetadataUrl);
+          return Response.json(error.toResponseObject(), {
+            status: 403,
+            headers: { "WWW-Authenticate": challenge }
+          });
+        }
+        case require_src.OAuthErrorCode.ServerError:
+          return Response.json(error.toResponseObject(), { status: 500 });
+        default:
+          return Response.json(error.toResponseObject(), { status: 400 });
+      }
+    }
+    function requireBearerAuth(options) {
+      const { verifier, requiredScopes = [], resourceMetadataUrl, expectedResource } = options;
+      const resolved = {
+        verifier,
+        requiredScopes,
+        resourceMetadataUrl,
+        expectedResource
+      };
+      return async (request) => {
+        const [authorizationHeader] = (request.headers.get("authorization") ?? "").split(",");
+        try {
+          return await verifyBearerToken(authorizationHeader || void 0, resolved);
+        } catch (error) {
+          return bearerAuthChallengeResponse(error, resolved);
+        }
+      };
+    }
+    function checkIssuerUrl(issuer, allowInsecure) {
+      if (issuer.protocol !== "https:" && issuer.hostname !== "localhost" && issuer.hostname !== "127.0.0.1" && !allowInsecure) throw new Error("Issuer URL must be HTTPS");
+      if (issuer.hash) throw new Error(`Issuer URL must not have a fragment: ${issuer}`);
+      if (issuer.search) throw new Error(`Issuer URL must not have a query string: ${issuer}`);
+    }
+    function buildOAuthProtectedResourceMetadata(options) {
+      checkIssuerUrl(new URL(options.oauthMetadata.issuer), options.dangerouslyAllowInsecureIssuerUrl);
+      return {
+        resource: options.resourceServerUrl.href,
+        authorization_servers: [options.oauthMetadata.issuer],
+        scopes_supported: options.scopesSupported,
+        resource_name: options.resourceName,
+        resource_documentation: options.serviceDocumentationUrl?.href
+      };
+    }
+    function getOAuthProtectedResourceMetadataUrl(serverUrl) {
+      const metadataUrl = new URL(serverUrl);
+      metadataUrl.pathname = protectedResourceMetadataPath(serverUrl);
+      metadataUrl.hash = "";
+      return metadataUrl.href;
+    }
+    function protectedResourceMetadataPath(resourceServerUrl) {
+      const rsPath = stripTrailingSlash(resourceServerUrl.pathname);
+      return `/.well-known/oauth-protected-resource${rsPath === "/" ? "" : rsPath}`;
+    }
+    function stripTrailingSlash(path8) {
+      return path8.length > 1 && path8.endsWith("/") ? path8.slice(0, -1) : path8;
+    }
+    var ALLOWED_METHODS = "GET, HEAD, OPTIONS";
+    function metadataDocumentResponse(request, metadata) {
+      if (request.method === "OPTIONS") {
+        const requestedHeaders = request.headers.get("access-control-request-headers");
+        return new Response(null, {
+          status: 204,
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": ALLOWED_METHODS,
+            ...requestedHeaders === null ? {} : {
+              "Access-Control-Allow-Headers": requestedHeaders,
+              Vary: "Access-Control-Request-Headers"
+            }
+          }
+        });
+      }
+      if (request.method !== "GET" && request.method !== "HEAD") {
+        const error = new require_src.OAuthError(require_src.OAuthErrorCode.MethodNotAllowed, `The method ${request.method} is not allowed for this endpoint`);
+        return Response.json(error.toResponseObject(), {
+          status: 405,
+          headers: {
+            Allow: ALLOWED_METHODS,
+            "Access-Control-Allow-Origin": "*"
+          }
+        });
+      }
+      const response = Response.json(metadata, { headers: { "Access-Control-Allow-Origin": "*" } });
+      return request.method === "HEAD" ? new Response(null, {
+        status: response.status,
+        headers: response.headers
+      }) : response;
+    }
+    function oauthMetadataResponse(request, options) {
+      const requestPath = stripTrailingSlash(new URL(request.url).pathname);
+      if (requestPath === protectedResourceMetadataPath(options.resourceServerUrl)) return metadataDocumentResponse(request, buildOAuthProtectedResourceMetadata(options));
+      if (requestPath === "/.well-known/oauth-authorization-server") {
+        buildOAuthProtectedResourceMetadata(options);
+        return metadataDocumentResponse(request, options.oauthMetadata);
+      }
+    }
+    function supportsScopeChallengeResolver(transport) {
+      return typeof transport === "object" && transport !== null && "setScopeChallengeResolver" in transport && typeof transport.setScopeChallengeResolver === "function";
+    }
+    function assertScope(scope, location) {
+      if (typeof scope !== "string" || !/^[\u0021\u0023-\u005B\u005D-\u007E]+$/.test(scope)) throw new TypeError(`${location} must satisfy the OAuth scope-token grammar`);
+    }
+    function validateScopeChallenge(challenge) {
+      if (challenge === null || typeof challenge !== "object" || !Array.isArray(challenge.scopes) || challenge.scopes.length === 0) throw new TypeError("scope challenge must contain at least one scope");
+      for (const [index, scope] of challenge.scopes.entries()) assertScope(scope, `scope challenge scopes[${index}]`);
+      if (challenge.errorDescription !== void 0 && typeof challenge.errorDescription !== "string") throw new TypeError("scope challenge errorDescription must be a string");
+      if (challenge.errorDescription !== void 0 && !/^[\u0020-\u0021\u0023-\u005B\u005D-\u007E]+$/.test(challenge.errorDescription)) throw new TypeError("scope challenge errorDescription must satisfy the RFC 6750 error-description grammar");
+      return challenge;
+    }
+    function requireScopes(...scopes) {
+      if (scopes.length === 0) throw new TypeError("requireScopes must contain at least one scope");
+      for (const [index, scope] of scopes.entries()) assertScope(scope, `requireScopes scope[${index}]`);
+      const requiredScopes = [...scopes];
+      return ({ authInfo }) => {
+        if (authInfo === void 0) return;
+        const activeScopes = new Set(authInfo.scopes);
+        if (requiredScopes.every((scope) => activeScopes.has(scope))) return;
+        return { scopes: requiredScopes };
+      };
+    }
+    async function findScopeChallenge(requests, authInfo, resolve) {
+      for (const request of requests) {
+        const challenge = await resolve({
+          request,
+          ...authInfo !== void 0 && { authInfo }
+        });
+        if (challenge !== void 0) return validateScopeChallenge(challenge);
+      }
+    }
+    function scopeChallengeResourceMetadataUrl(authInfo) {
+      if (authInfo?.resourceMetadataUrl !== void 0) return authInfo.resourceMetadataUrl;
+      if (authInfo?.resource?.protocol === "https:" || authInfo?.resource?.protocol === "http:") return getOAuthProtectedResourceMetadataUrl(authInfo.resource);
+    }
+    function createScopeChallengeResponse(challenge, resourceMetadataUrl) {
+      return bearerAuthChallengeResponse(new require_src.OAuthError(require_src.OAuthErrorCode.InsufficientScope, challenge.errorDescription ?? "Insufficient scope"), {
+        requiredScopes: [...challenge.scopes],
+        resourceMetadataUrl
+      });
     }
     var DEFAULT_LEGACY_SHIM_MAX_ROUNDS = 8;
     var DEFAULT_LEGACY_SHIM_ROUND_TIMEOUT_MS = 6e5;
@@ -32934,6 +33179,11 @@ data: ${JSON.stringify({
         this.setNotificationHandler("notifications/initialized", () => this.oninitialized?.());
         if (require_src.modernProtocolVersions(this._supportedProtocolVersions).length > 0) this.setRequestHandler("server/discover", () => this._ondiscover());
         if (this._capabilities.logging) this._registerLoggingHandler();
+      }
+      /** Attaches to the given transport; rejects while this instance is connected to another one. */
+      async connect(transport) {
+        if (this.transport !== void 0) throw new require_src.SdkError(require_src.SdkErrorCode.AlreadyConnected, "Use a separate Server instance per connection: this instance is already connected to a transport. To connect it to a new transport, call close() first.");
+        await super.connect(transport);
       }
       /**
       * Registers the built-in `logging/setLevel` request handler.
@@ -33488,21 +33738,41 @@ data: ${JSON.stringify({
     function discoverAdvertisedCapabilities(capabilities) {
       return { ...capabilities };
     }
+    function toolInputElementCount(value, max) {
+      let count = 0;
+      const stack = [value];
+      while (stack.length > 0) {
+        const node = stack.pop();
+        if (node === null || typeof node !== "object") continue;
+        if (Array.isArray(node)) for (const child of node) {
+          if (++count > max) return count;
+          if (child !== null && typeof child === "object") stack.push(child);
+        }
+        else for (const key in node) {
+          if (!Object.prototype.hasOwnProperty.call(node, key)) continue;
+          if (++count > max) return count;
+          const child = node[key];
+          if (child !== null && typeof child === "object") stack.push(child);
+        }
+      }
+      return count;
+    }
+    function resolveMaxToolInputElements(value) {
+      if (value === void 0 || value === Infinity) return void 0;
+      if (typeof value !== "number" || Number.isNaN(value) || value < 1) throw new RangeError(`maxToolInputElements must be a number of at least 1, or Infinity, got ${String(value)}`);
+      return value;
+    }
     var McpServer = class {
       /**
       * The underlying {@linkcode Server} instance, useful for advanced operations like sending notifications.
       */
       server;
+      _maxToolInputElements;
       _registeredResources = {};
       _registeredResourceTemplates = {};
       _registeredTools = {};
       _registeredPrompts = {};
-      /**
-      * Per-tool JSON-converted `inputSchema`, memoized so the SEP-2243
-      * registration-time scan and the pre-dispatch validation step share one
-      * conversion instead of paying it twice per request under the
-      * per-request-factory `createMcpHandler` model.
-      */
+      /** Per-tool JSON-converted `inputSchema`, filled on first use by `toolInputSchemaJson()`. */
       _toolInputSchemaJson = {};
       /**
       * The JSON-serialized `inputSchema` of a registered tool, or `undefined`
@@ -33527,6 +33797,7 @@ data: ${JSON.stringify({
       }
       constructor(serverInfo, options) {
         this.server = new Server(serverInfo, options);
+        this._maxToolInputElements = resolveMaxToolInputElements(options?.maxToolInputElements);
         if (options?.capabilities?.tools) this.setToolRequestHandlers();
         if (options?.capabilities?.resources) this.setResourceRequestHandlers();
         if (options?.capabilities?.prompts) this.setPromptRequestHandlers();
@@ -33544,6 +33815,7 @@ data: ${JSON.stringify({
       * ```
       */
       async connect(transport) {
+        if (supportsScopeChallengeResolver(transport)) transport.setScopeChallengeResolver((context) => this.resolveScopeChallenge(context));
         return await this.server.connect(transport);
       }
       /**
@@ -33552,6 +33824,41 @@ data: ${JSON.stringify({
       async close() {
         await this.server.close();
       }
+      /** @internal */
+      resolveScopeChallenge = (context) => {
+        switch (context.request.method) {
+          case "tools/call": {
+            const toolName = context.request.params?.name;
+            if (typeof toolName !== "string") return;
+            const tool = this._registeredTools[toolName];
+            if (tool === void 0 || !tool.enabled) return;
+            return tool.scopeChallenge?.(context);
+          }
+          case "resources/read": {
+            const resourceUri = context.request.params?.uri;
+            if (typeof resourceUri !== "string") return;
+            let uri;
+            try {
+              uri = new URL(resourceUri);
+            } catch {
+              return;
+            }
+            const resource = this._registeredResources[uri.toString()];
+            if (resource !== void 0) return resource.enabled ? resource.scopeChallenge?.(context) : void 0;
+            for (const template of Object.values(this._registeredResourceTemplates)) if (template.resourceTemplate.uriTemplate.match(uri.toString())) return template.enabled ? template.scopeChallenge?.(context) : void 0;
+            return;
+          }
+          case "prompts/get": {
+            const promptName = context.request.params?.name;
+            if (typeof promptName !== "string") return;
+            const prompt = this._registeredPrompts[promptName];
+            if (prompt === void 0 || !prompt.enabled) return;
+            return prompt.scopeChallenge?.(context);
+          }
+          default:
+            return;
+        }
+      };
       _toolHandlersInitialized = false;
       setToolRequestHandlers() {
         if (this._toolHandlersInitialized) return;
@@ -33563,7 +33870,7 @@ data: ${JSON.stringify({
             name,
             title: tool.title,
             description: tool.description,
-            inputSchema: tool.inputSchema ? require_src.standardSchemaToJsonSchema(tool.inputSchema, "input") : EMPTY_OBJECT_JSON_SCHEMA,
+            inputSchema: tool.inputSchema ? convertListedInputSchema(name, tool.inputSchema) : EMPTY_OBJECT_JSON_SCHEMA,
             annotations: tool.annotations,
             icons: tool.icons,
             execution: tool.execution,
@@ -33608,6 +33915,7 @@ data: ${JSON.stringify({
       * Validates tool input arguments against the tool's input schema.
       */
       async validateToolInput(tool, args, toolName) {
+        if (this._maxToolInputElements !== void 0 && toolInputElementCount(args, this._maxToolInputElements) > this._maxToolInputElements) throw new require_src.ProtocolError(require_src.ProtocolErrorCode.InvalidParams, `Invalid arguments for tool ${toolName}: arguments contain more than the maximum of ${this._maxToolInputElements} elements`);
         if (!tool.inputSchema) return;
         const parseResult = await require_src.validateStandardSchema(tool.inputSchema, args ?? {});
         if (!parseResult.success) throw new require_src.ProtocolError(require_src.ProtocolErrorCode.InvalidParams, `Input validation error: Invalid arguments for tool ${toolName}: ${parseResult.error}`);
@@ -33718,7 +34026,10 @@ data: ${JSON.stringify({
           }
           for (const template of Object.values(this._registeredResourceTemplates)) {
             const variables = template.resourceTemplate.uriTemplate.match(uri.toString());
-            if (variables) return require_src.attachCacheHintFallback(await template.readCallback(uri, variables, ctx), template.cacheHint);
+            if (variables) {
+              if (!template.enabled) throw new require_src.ProtocolError(require_src.ProtocolErrorCode.InvalidParams, `Resource template ${template.resourceTemplate.uriTemplate} disabled`);
+              return require_src.attachCacheHintFallback(await template.readCallback(uri, variables, ctx), template.cacheHint);
+            }
           }
           throw new require_src.ResourceNotFoundError(request.params.uri);
         });
@@ -33749,36 +34060,32 @@ data: ${JSON.stringify({
         this._promptHandlersInitialized = true;
       }
       registerResource(name, uriOrTemplate, config, readCallback) {
-        const cacheHint = config.cacheHint;
-        let metadata = config;
-        if (cacheHint !== void 0) {
-          require_src.assertValidCacheHint(cacheHint, `resource ${name}`);
-          const rest = { ...config };
-          delete rest.cacheHint;
-          metadata = rest;
-        }
+        const { cacheHint, scopeChallenge, ...resourceMetadata } = config;
+        const metadata = resourceMetadata;
+        if (cacheHint !== void 0) require_src.assertValidCacheHint(cacheHint, `resource ${name}`);
         if (typeof uriOrTemplate === "string") {
           if (this._registeredResources[uriOrTemplate]) throw new Error(`Resource ${uriOrTemplate} is already registered`);
-          const registeredResource = this._createRegisteredResource(name, config.title, uriOrTemplate, metadata, readCallback);
+          const registeredResource = this._createRegisteredResource(name, config.title, uriOrTemplate, metadata, scopeChallenge, readCallback);
           if (cacheHint !== void 0) registeredResource.cacheHint = cacheHint;
           this.setResourceRequestHandlers();
           this.sendResourceListChanged();
           return registeredResource;
         } else {
           if (this._registeredResourceTemplates[name]) throw new Error(`Resource template ${name} is already registered`);
-          const registeredResourceTemplate = this._createRegisteredResourceTemplate(name, config.title, uriOrTemplate, metadata, readCallback);
+          const registeredResourceTemplate = this._createRegisteredResourceTemplate(name, config.title, uriOrTemplate, metadata, scopeChallenge, readCallback);
           if (cacheHint !== void 0) registeredResourceTemplate.cacheHint = cacheHint;
           this.setResourceRequestHandlers();
           this.sendResourceListChanged();
           return registeredResourceTemplate;
         }
       }
-      _createRegisteredResource(name, title, uri, metadata, readCallback) {
+      _createRegisteredResource(name, title, uri, metadata, scopeChallenge, readCallback) {
         const registeredResource = {
           name,
           title,
           metadata,
           readCallback,
+          scopeChallenge,
           enabled: true,
           disable: () => registeredResource.update({ enabled: false }),
           enable: () => registeredResource.update({ enabled: true }),
@@ -33792,6 +34099,7 @@ data: ${JSON.stringify({
             if (updates.title !== void 0) registeredResource.title = updates.title;
             if (updates.metadata !== void 0) registeredResource.metadata = updates.metadata;
             if (updates.callback !== void 0) registeredResource.readCallback = updates.callback;
+            if (updates.scopeChallenge !== void 0) registeredResource.scopeChallenge = updates.scopeChallenge === null ? void 0 : updates.scopeChallenge;
             if (updates.enabled !== void 0) registeredResource.enabled = updates.enabled;
             this.sendResourceListChanged();
           }
@@ -33799,12 +34107,13 @@ data: ${JSON.stringify({
         this._registeredResources[uri] = registeredResource;
         return registeredResource;
       }
-      _createRegisteredResourceTemplate(name, title, template, metadata, readCallback) {
+      _createRegisteredResourceTemplate(name, title, template, metadata, scopeChallenge, readCallback) {
         const registeredResourceTemplate = {
           resourceTemplate: template,
           title,
           metadata,
           readCallback,
+          scopeChallenge,
           enabled: true,
           disable: () => registeredResourceTemplate.update({ enabled: false }),
           enable: () => registeredResourceTemplate.update({ enabled: true }),
@@ -33818,6 +34127,7 @@ data: ${JSON.stringify({
             if (updates.template !== void 0) registeredResourceTemplate.resourceTemplate = updates.template;
             if (updates.metadata !== void 0) registeredResourceTemplate.metadata = updates.metadata;
             if (updates.callback !== void 0) registeredResourceTemplate.readCallback = updates.callback;
+            if (updates.scopeChallenge !== void 0) registeredResourceTemplate.scopeChallenge = updates.scopeChallenge === null ? void 0 : updates.scopeChallenge;
             if (updates.enabled !== void 0) registeredResourceTemplate.enabled = updates.enabled;
             this.sendResourceListChanged();
           }
@@ -33827,7 +34137,7 @@ data: ${JSON.stringify({
         if (Array.isArray(variableNames) && variableNames.some((v) => !!template.completeCallback(v))) this.setCompletionRequestHandler();
         return registeredResourceTemplate;
       }
-      _createRegisteredPrompt(name, title, description, argsSchema, callback, icons, _meta) {
+      _createRegisteredPrompt(name, title, description, argsSchema, callback, icons, scopeChallenge, _meta) {
         let currentArgsSchema = argsSchema;
         let currentCallback = callback;
         const registeredPrompt = {
@@ -33835,6 +34145,7 @@ data: ${JSON.stringify({
           description,
           argsSchema,
           icons,
+          scopeChallenge,
           _meta,
           handler: createPromptHandler(name, argsSchema, callback),
           enabled: true,
@@ -33849,6 +34160,7 @@ data: ${JSON.stringify({
             if (updates.title !== void 0) registeredPrompt.title = updates.title;
             if (updates.description !== void 0) registeredPrompt.description = updates.description;
             if (updates.icons !== void 0) registeredPrompt.icons = updates.icons;
+            if (updates.scopeChallenge !== void 0) registeredPrompt.scopeChallenge = updates.scopeChallenge === null ? void 0 : updates.scopeChallenge;
             if (updates._meta !== void 0) registeredPrompt._meta = updates._meta;
             let needsHandlerRegen = false;
             if (updates.argsSchema !== void 0) {
@@ -33876,25 +34188,25 @@ data: ${JSON.stringify({
         }
         return registeredPrompt;
       }
-      _createRegisteredTool(name, title, description, inputSchema, outputSchema, annotations, icons, execution, _meta, handler) {
+      _createRegisteredTool(name, title, description, inputSchema, outputSchema, annotations, icons, execution, scopeChallenge, _meta, handler) {
         require_src.validateAndWarnToolName(name);
-        if (inputSchema !== void 0) try {
-          const json = require_src.standardSchemaToJsonSchema(inputSchema, "input");
-          this._toolInputSchemaJson[name] = json;
-          const scan = require_src.scanXMcpHeaderDeclarations(json);
-          if (!scan.valid) console.warn(`[mcp-sdk] tool '${name}' carries an invalid x-mcp-header declaration and will be excluded by conforming Streamable HTTP clients: ${scan.reason}`);
-        } catch {
-        }
         let currentHandler = handler;
+        let outputSchemaJson;
         const registeredTool = {
           title,
           description,
           inputSchema,
           outputSchema,
-          outputSchemaJson: convertOutputSchemaJson(outputSchema),
+          get outputSchemaJson() {
+            return outputSchemaJson ??= convertOutputSchemaJson(registeredTool.outputSchema);
+          },
+          set outputSchemaJson(value) {
+            outputSchemaJson = value;
+          },
           annotations,
           icons,
           execution,
+          scopeChallenge,
           _meta,
           handler,
           executor: createToolExecutor(inputSchema, handler),
@@ -33933,6 +34245,7 @@ data: ${JSON.stringify({
             }
             if (updates.annotations !== void 0) registeredTool.annotations = updates.annotations;
             if (updates.icons !== void 0) registeredTool.icons = updates.icons;
+            if (updates.scopeChallenge !== void 0) registeredTool.scopeChallenge = updates.scopeChallenge === null ? void 0 : updates.scopeChallenge;
             if (updates._meta !== void 0) registeredTool._meta = updates._meta;
             if (updates.enabled !== void 0) registeredTool.enabled = updates.enabled;
             this.sendToolListChanged();
@@ -33945,13 +34258,13 @@ data: ${JSON.stringify({
       }
       registerTool(name, config, cb) {
         if (this._registeredTools[name]) throw new Error(`Tool ${name} is already registered`);
-        const { title, description, inputSchema, outputSchema, annotations, icons, _meta } = config;
-        return this._createRegisteredTool(name, title, description, require_src.normalizeRawShapeSchema(inputSchema), require_src.normalizeRawShapeSchema(outputSchema), annotations, icons, void 0, _meta, cb);
+        const { title, description, inputSchema, outputSchema, annotations, icons, scopeChallenge, _meta } = config;
+        return this._createRegisteredTool(name, title, description, require_src.normalizeRawShapeSchema(inputSchema), require_src.normalizeRawShapeSchema(outputSchema), annotations, icons, void 0, scopeChallenge, _meta, cb);
       }
       registerPrompt(name, config, cb) {
         if (this._registeredPrompts[name]) throw new Error(`Prompt ${name} is already registered`);
-        const { title, description, argsSchema, icons, _meta } = config;
-        const registeredPrompt = this._createRegisteredPrompt(name, title, description, require_src.normalizeRawShapeSchema(argsSchema), cb, icons, _meta);
+        const { title, description, argsSchema, icons, scopeChallenge, _meta } = config;
+        const registeredPrompt = this._createRegisteredPrompt(name, title, description, require_src.normalizeRawShapeSchema(argsSchema), cb, icons, scopeChallenge, _meta);
         this.setPromptRequestHandlers();
         this.sendPromptListChanged();
         return registeredPrompt;
@@ -34041,6 +34354,12 @@ data: ${JSON.stringify({
       type: "object",
       properties: {}
     };
+    function convertListedInputSchema(name, inputSchema) {
+      const json = require_src.standardSchemaToJsonSchema(inputSchema, "input");
+      const scan = require_src.scanXMcpHeaderDeclarations(json);
+      if (!scan.valid) console.warn(`[mcp-sdk] tool '${name}' carries an invalid x-mcp-header declaration and will be excluded by conforming Streamable HTTP clients: ${scan.reason}`);
+      return json;
+    }
     function convertOutputSchemaJson(outputSchema) {
       if (outputSchema === void 0) return void 0;
       try {
@@ -34053,7 +34372,7 @@ data: ${JSON.stringify({
       if (argsSchema) {
         const typedCallback = callback;
         return async (args, ctx) => {
-          const parseResult = await require_src.validateStandardSchema(argsSchema, args);
+          const parseResult = await require_src.validateStandardSchema(argsSchema, args ?? {});
           if (!parseResult.success) throw new require_src.ProtocolError(require_src.ProtocolErrorCode.InvalidParams, `Invalid arguments for prompt ${name}: ${parseResult.error}`);
           return typedCallback(parseResult.data, ctx);
         };
@@ -34134,6 +34453,18 @@ data: ${JSON.stringify({
         return armSseKeepAlive;
       }
     });
+    Object.defineProperty(exports, "bearerAuthChallengeResponse", {
+      enumerable: true,
+      get: function() {
+        return bearerAuthChallengeResponse;
+      }
+    });
+    Object.defineProperty(exports, "buildOAuthProtectedResourceMetadata", {
+      enumerable: true,
+      get: function() {
+        return buildOAuthProtectedResourceMetadata;
+      }
+    });
     Object.defineProperty(exports, "completable", {
       enumerable: true,
       get: function() {
@@ -34146,10 +34477,28 @@ data: ${JSON.stringify({
         return createListenRouter;
       }
     });
+    Object.defineProperty(exports, "createScopeChallengeResponse", {
+      enumerable: true,
+      get: function() {
+        return createScopeChallengeResponse;
+      }
+    });
     Object.defineProperty(exports, "createServerNotifier", {
       enumerable: true,
       get: function() {
         return createServerNotifier;
+      }
+    });
+    Object.defineProperty(exports, "findScopeChallenge", {
+      enumerable: true,
+      get: function() {
+        return findScopeChallenge;
+      }
+    });
+    Object.defineProperty(exports, "getOAuthProtectedResourceMetadataUrl", {
+      enumerable: true,
+      get: function() {
+        return getOAuthProtectedResourceMetadataUrl;
       }
     });
     Object.defineProperty(exports, "installModernOnlyHandlers", {
@@ -34164,6 +34513,30 @@ data: ${JSON.stringify({
         return isCompletable;
       }
     });
+    Object.defineProperty(exports, "oauthMetadataResponse", {
+      enumerable: true,
+      get: function() {
+        return oauthMetadataResponse;
+      }
+    });
+    Object.defineProperty(exports, "requireBearerAuth", {
+      enumerable: true,
+      get: function() {
+        return requireBearerAuth;
+      }
+    });
+    Object.defineProperty(exports, "requireScopes", {
+      enumerable: true,
+      get: function() {
+        return requireScopes;
+      }
+    });
+    Object.defineProperty(exports, "scopeChallengeResourceMetadataUrl", {
+      enumerable: true,
+      get: function() {
+        return scopeChallengeResourceMetadataUrl;
+      }
+    });
     Object.defineProperty(exports, "seedClientIdentityFromEnvelope", {
       enumerable: true,
       get: function() {
@@ -34176,6 +34549,12 @@ data: ${JSON.stringify({
         return serverIdentityOf;
       }
     });
+    Object.defineProperty(exports, "verifyBearerToken", {
+      enumerable: true,
+      get: function() {
+        return verifyBearerToken;
+      }
+    });
   }
 });
 
@@ -34183,8 +34562,8 @@ data: ${JSON.stringify({
 var require_dist = __commonJS({
   "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/server/dist/index.cjs"(exports) {
     var require_chunk = require_chunk_Bnu9O96Y();
-    var require_mcp = require_mcp_D7GmuPnv();
-    var require_src = require_src_STyD_Vvf();
+    var require_mcp = require_mcp_BumlNux0();
+    var require_src = require_src_BhnGYybN();
     var _modelcontextprotocol_server__shims = require_shimsNode();
     var _modelcontextprotocol_core_internal = require_internal();
     var PerRequestHTTPServerTransport = class {
@@ -34414,9 +34793,46 @@ data: ${JSON.stringify(message)}
         ...ctx.authInfo !== void 0 && { authInfo: ctx.authInfo }
       });
     }
+    var DEFAULT_MAX_REQUEST_BODY_SIZE = 4 * 1024 * 1024;
+    var MAX_BATCH_SIZE = 100;
+    function requestBodyTooLargeMessage(maxBytes) {
+      return `Payload Too Large: Request body must not exceed ${maxBytes} bytes`;
+    }
+    function resolveMaxRequestBodySize(value) {
+      if (value === void 0) return DEFAULT_MAX_REQUEST_BODY_SIZE;
+      if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) throw new RangeError(`maxRequestBodySize must be a positive number of bytes, got ${String(value)}`);
+      return value;
+    }
+    async function readRequestBody(request, maxBytes = DEFAULT_MAX_REQUEST_BODY_SIZE) {
+      if (Number(request.headers.get("content-length")) > maxBytes) return { tooLarge: true };
+      if (request.body === null) return {
+        tooLarge: false,
+        text: ""
+      };
+      const reader = request.body.getReader();
+      const decoder = new TextDecoder();
+      let received = 0;
+      let text = "";
+      try {
+        for (; ; ) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          received += value.byteLength;
+          if (received > maxBytes) return { tooLarge: true };
+          text += decoder.decode(value, { stream: true });
+        }
+      } finally {
+        reader.releaseLock();
+      }
+      return {
+        tooLarge: false,
+        text: text + decoder.decode()
+      };
+    }
     var WebStandardStreamableHTTPServerTransport = class {
       sessionIdGenerator;
       _started = false;
+      _hasHandledRequest = false;
       _closed = false;
       _streamMapping = /* @__PURE__ */ new Map();
       _requestToStreamMapping = /* @__PURE__ */ new Map();
@@ -34433,6 +34849,8 @@ data: ${JSON.stringify(message)}
       _retryInterval;
       _supportedProtocolVersions;
       _keepAliveMs;
+      _maxRequestBodySize;
+      _scopeChallengeResolver;
       sessionId;
       onclose;
       onerror;
@@ -34449,6 +34867,7 @@ data: ${JSON.stringify(message)}
         this._retryInterval = options.retryInterval;
         this._supportedProtocolVersions = options.supportedProtocolVersions ?? _modelcontextprotocol_core_internal.SUPPORTED_PROTOCOL_VERSIONS;
         this._keepAliveMs = options.keepAliveMs ?? require_mcp.DEFAULT_SSE_KEEP_ALIVE_MS;
+        this._maxRequestBodySize = resolveMaxRequestBodySize(options.maxRequestBodySize);
       }
       startKeepAlive(controller, encoder) {
         if (this._closed) return void 0;
@@ -34460,6 +34879,10 @@ data: ${JSON.stringify(message)}
           }
         });
         return timer;
+      }
+      /** Sets the scope challenge resolver for parsed JSON-RPC requests. */
+      setScopeChallengeResolver(resolver) {
+        this._scopeChallengeResolver = resolver;
       }
       /**
       * Starts the transport. This is required by the {@linkcode Transport} interface but is a no-op
@@ -34497,6 +34920,11 @@ data: ${JSON.stringify(message)}
           }
         });
       }
+      async _checkScopeChallenge(messages, authInfo) {
+        if (!this._scopeChallengeResolver) return;
+        const challenge = await require_mcp.findScopeChallenge(messages.filter((message) => require_src.isJSONRPCRequest(message)), authInfo, this._scopeChallengeResolver);
+        return challenge === void 0 ? void 0 : require_mcp.createScopeChallengeResponse(challenge, require_mcp.scopeChallengeResourceMetadataUrl(authInfo));
+      }
       /**
       * Validates request headers for DNS rebinding protection.
       * @returns Error response if validation fails, `undefined` if validation passes.
@@ -34526,6 +34954,8 @@ data: ${JSON.stringify(message)}
       */
       async handleRequest(req, options) {
         if (this._closed) return this.createJsonErrorResponse(404, -32001, "Session not found");
+        if (!this.sessionIdGenerator && this._hasHandledRequest) throw new Error("Stateless transport cannot be reused across requests. Create a new transport per request.");
+        this._hasHandledRequest = true;
         const validationError = this.validateRequestHeaders(req);
         if (validationError) return validationError;
         switch (req.method) {
@@ -34774,12 +35204,22 @@ data:
           const request = req;
           let rawMessage;
           if (options?.parsedBody === void 0) try {
-            rawMessage = await req.json();
+            const body = await readRequestBody(req, this._maxRequestBodySize);
+            if (body.tooLarge) {
+              const message = requestBodyTooLargeMessage(this._maxRequestBodySize);
+              this.onerror?.(new Error(message));
+              return this.createJsonErrorResponse(413, -32e3, message);
+            }
+            rawMessage = JSON.parse(body.text);
           } catch (error) {
             this.onerror?.(error);
             return this.createJsonErrorResponse(400, -32700, "Parse error: Invalid JSON");
           }
           else rawMessage = options.parsedBody;
+          if (Array.isArray(rawMessage) && rawMessage.length > MAX_BATCH_SIZE) {
+            this.onerror?.(/* @__PURE__ */ new Error(`Invalid Request: Batch must not exceed ${MAX_BATCH_SIZE} messages`));
+            return this.createJsonErrorResponse(400, -32600, `Invalid Request: Batch must not exceed ${MAX_BATCH_SIZE} messages`);
+          }
           let messages;
           try {
             messages = Array.isArray(rawMessage) ? rawMessage.map((msg) => _modelcontextprotocol_core_internal.JSONRPCMessageSchema.parse(msg)) : [_modelcontextprotocol_core_internal.JSONRPCMessageSchema.parse(rawMessage)];
@@ -34809,6 +35249,14 @@ data:
             if (protocolError) return protocolError;
           }
           if (this._closed) return this.createJsonErrorResponse(404, -32001, "Session not found");
+          let scopeChallengeResponse;
+          try {
+            scopeChallengeResponse = await this._checkScopeChallenge(messages, options?.authInfo);
+          } catch (error) {
+            this.onerror?.(error);
+            return this.createJsonErrorResponse(500, -32603, "Internal server error");
+          }
+          if (scopeChallengeResponse) return scopeChallengeResponse;
           if (!messages.some((element) => require_src.isJSONRPCRequest(element))) {
             for (const message of messages) this.onmessage?.(message, {
               authInfo: options?.authInfo,
@@ -35069,7 +35517,10 @@ data:
     function internalServerErrorResponse(id = null) {
       return jsonRpcErrorResponse(500, -32603, "Internal server error", void 0, id);
     }
-    function createLegacyStatelessFallback(factory, onerror, keepAliveMs) {
+    function assertNotServing(server) {
+      if (server.transport !== void 0) throw new Error("The factory returned an instance that is still serving another request. Return a new instance for each request.");
+    }
+    function createLegacyStatelessFallback(factory, onerror, keepAliveMs, maxRequestBodySize) {
       return async (request, options) => {
         if (request.method.toUpperCase() !== "POST") return jsonRpcErrorResponse(405, -32e3, "Method not allowed.");
         try {
@@ -35080,7 +35531,8 @@ data:
           });
           const transport = new WebStandardStreamableHTTPServerTransport({
             sessionIdGenerator: void 0,
-            ...keepAliveMs !== void 0 && { keepAliveMs }
+            ...keepAliveMs !== void 0 && { keepAliveMs },
+            ...maxRequestBodySize !== void 0 && { maxRequestBodySize }
           });
           await product.connect(transport);
           const teardown = () => {
@@ -35141,10 +35593,17 @@ data:
         }
       };
     }
-    function legacyStatelessFallback(factory, onerror) {
-      return createLegacyStatelessFallback(factory, onerror);
+    function legacyStatelessFallback(factory, onerror, options) {
+      return createLegacyStatelessFallback(factory, onerror, void 0, resolveMaxRequestBodySize(options?.maxRequestBodySize));
     }
-    async function classifyEntryRequest(request, providedParsedBody, needsForward = true) {
+    function standardHeadersOf(request) {
+      return {
+        protocolVersionHeader: request.headers.get("mcp-protocol-version") ?? void 0,
+        mcpMethodHeader: request.headers.get("mcp-method") ?? void 0,
+        mcpNameHeader: request.headers.get("mcp-name") ?? void 0
+      };
+    }
+    async function classifyEntryRequest(request, providedParsedBody, needsForward = true, maxRequestBodySize = DEFAULT_MAX_REQUEST_BODY_SIZE) {
       const httpMethod = request.method.toUpperCase();
       let body;
       let parsedBody = providedParsedBody;
@@ -35155,7 +35614,9 @@ data:
           if (needsForward) forwardRequest = request.clone();
           let bodyText;
           try {
-            bodyText = await request.text();
+            const read = await readRequestBody(request, maxRequestBodySize);
+            if (read.tooLarge) return { step: "body-too-large" };
+            bodyText = read.text;
           } catch {
             return { step: "unreadable-body" };
           }
@@ -35175,9 +35636,7 @@ data:
         step: "classified",
         outcome: require_src.classifyInboundRequest({
           httpMethod,
-          protocolVersionHeader: request.headers.get("mcp-protocol-version") ?? void 0,
-          mcpMethodHeader: request.headers.get("mcp-method") ?? void 0,
-          mcpNameHeader: request.headers.get("mcp-name") ?? void 0,
+          ...standardHeadersOf(request),
           ...body !== void 0 && { body }
         }),
         body,
@@ -35185,12 +35644,14 @@ data:
         forwardRequest
       };
     }
-    async function isLegacyRequest(request, parsedBody) {
-      const classified = await classifyEntryRequest(parsedBody === void 0 && request.method.toUpperCase() === "POST" ? request.clone() : request, parsedBody, false);
+    async function isLegacyRequest(request, parsedBody, options) {
+      const maxRequestBodySize = resolveMaxRequestBodySize(options?.maxRequestBodySize);
+      const classified = await classifyEntryRequest(parsedBody === void 0 && request.method.toUpperCase() === "POST" ? request.clone() : request, parsedBody, false, maxRequestBodySize);
       return classified.step === "no-json-body" || classified.step === "classified" && classified.outcome.kind === "legacy";
     }
     function createMcpHandler(factory, options = {}) {
       const { legacy, onerror, responseMode } = options;
+      const maxRequestBodySize = resolveMaxRequestBodySize(options.maxRequestBodySize);
       if (typeof legacy === "function") throw new TypeError("The 'legacy' option only accepts 'stateless' or 'reject', not a handler function. To serve 2025-era traffic with your own handler, route in user land with the exported isLegacyRequest(request) predicate in front of a strict (legacy: 'reject') handler.");
       const inflight = /* @__PURE__ */ new Set();
       let closed = false;
@@ -35209,7 +35670,7 @@ data:
         onerror: reportError
       });
       if (responseMode === "json") console.warn("responseMode: 'json' drops mid-call notifications. subscriptions/listen streams are always served over SSE regardless; other notifications emitted before a result are dropped.");
-      const legacyHandler = legacy === "reject" ? void 0 : createLegacyStatelessFallback(factory, reportError, options.keepAliveMs);
+      const legacyHandler = legacy === "reject" ? void 0 : createLegacyStatelessFallback(factory, reportError, options.keepAliveMs, maxRequestBodySize);
       async function serveModern(route, request, authInfo) {
         const claimedRevision = route.classification.revision;
         if (claimedRevision === void 0 || !require_src.SUPPORTED_MODERN_PROTOCOL_VERSIONS.includes(claimedRevision)) {
@@ -35222,8 +35683,7 @@ data:
         }
         const stdHeaderRejection = require_src.validateStandardRequestHeaders({
           httpMethod: request.method,
-          mcpMethodHeader: request.headers.get("mcp-method") ?? void 0,
-          mcpNameHeader: request.headers.get("mcp-name") ?? void 0
+          ...standardHeadersOf(request)
         }, route);
         if (stdHeaderRejection !== void 0) {
           reportError(/* @__PURE__ */ new Error(`Rejected inbound request (${stdHeaderRejection.cell}): ${stdHeaderRejection.message}`));
@@ -35248,6 +35708,7 @@ data:
           requestInfo: request
         });
         const server = product instanceof require_mcp.McpServer ? product.server : product;
+        assertNotServing(server);
         if (route.messageKind === "request" && route.message.method === "subscriptions/listen") {
           const capabilities = server.getCapabilities();
           const serverInfo = require_mcp.serverIdentityOf(server);
@@ -35270,6 +35731,18 @@ data:
             }
           }
         }
+        if (route.messageKind === "request" && product instanceof require_mcp.McpServer) try {
+          const challenge = await require_mcp.findScopeChallenge([route.message], authInfo, (context) => product.resolveScopeChallenge(context));
+          if (challenge !== void 0) {
+            product.close().catch(reportError);
+            return require_mcp.createScopeChallengeResponse(challenge, require_mcp.scopeChallengeResourceMetadataUrl(authInfo));
+          }
+        } catch (error) {
+          product.close().catch(reportError);
+          reportError(toError(error));
+          return internalServerErrorResponse(route.message.id);
+        }
+        assertNotServing(server);
         require_src.setNegotiatedProtocolVersion(server, claimedRevision);
         require_mcp.installModernOnlyHandlers(server, require_src.SUPPORTED_MODERN_PROTOCOL_VERSIONS);
         if (meta !== void 0) require_mcp.seedClientIdentityFromEnvelope(server, {
@@ -35278,10 +35751,12 @@ data:
         });
         const previousOnClose = server.onclose;
         inflight.add(server);
-        server.onclose = () => {
+        const onExchangeClose = () => {
           inflight.delete(server);
+          if (server.onclose === onExchangeClose) server.onclose = previousOnClose;
           previousOnClose?.();
         };
+        server.onclose = onExchangeClose;
         try {
           const response = await invoke(product, route.message, {
             classification: route.classification,
@@ -35318,8 +35793,9 @@ data:
           reportError(/* @__PURE__ */ new Error("Unsupported Media Type: Content-Type must be application/json"));
           return jsonRpcErrorResponse(415, -32e3, "Unsupported Media Type: Content-Type must be application/json");
         }
-        const classified = await classifyEntryRequest(request, requestOptions?.parsedBody);
+        const classified = await classifyEntryRequest(request, requestOptions?.parsedBody, true, maxRequestBodySize);
         if (classified.step === "unreadable-body") return jsonRpcErrorResponse(400, -32700, "Parse error: the request body could not be read");
+        if (classified.step === "body-too-large") return jsonRpcErrorResponse(413, -32e3, requestBodyTooLargeMessage(maxRequestBodySize));
         if (classified.step === "no-json-body") {
           if (legacyHandler !== void 0) return legacyHandler(classified.forwardRequest, { ...authInfo !== void 0 && { authInfo } });
           return jsonRpcErrorResponse(400, -32700, "Parse error: the request body is not valid JSON");
@@ -35360,71 +35836,6 @@ data:
           }));
           inflight.clear();
           await Promise.all(closing);
-        }
-      };
-    }
-    function headerQuotedValue(value) {
-      return value.replaceAll(/[\\"]/g, String.raw`\$&`).replaceAll(/[^\u0020-\u007E]/g, " ");
-    }
-    function buildWwwAuthenticateHeader(errorCode2, description, requiredScopes, resourceMetadataUrl) {
-      let header = `Bearer error="${headerQuotedValue(errorCode2)}", error_description="${headerQuotedValue(description)}"`;
-      if (requiredScopes.length > 0) header += `, scope="${requiredScopes.join(" ")}"`;
-      if (resourceMetadataUrl) header += `, resource_metadata="${resourceMetadataUrl}"`;
-      return header;
-    }
-    async function verifyBearerToken(authorizationHeader, options) {
-      const { verifier, requiredScopes = [] } = options;
-      if (!authorizationHeader) throw new require_src.OAuthError(require_src.OAuthErrorCode.InvalidToken, "Missing Authorization header");
-      const [type, token] = authorizationHeader.split(" ");
-      if (type?.toLowerCase() !== "bearer" || !token) throw new require_src.OAuthError(require_src.OAuthErrorCode.InvalidToken, "Invalid Authorization header format, expected 'Bearer TOKEN'");
-      const authInfo = await verifier.verifyAccessToken(token);
-      if (requiredScopes.length > 0) {
-        if (!requiredScopes.every((scope) => authInfo.scopes.includes(scope))) throw new require_src.OAuthError(require_src.OAuthErrorCode.InsufficientScope, "Insufficient scope");
-      }
-      if (typeof authInfo.expiresAt !== "number" || Number.isNaN(authInfo.expiresAt)) throw new require_src.OAuthError(require_src.OAuthErrorCode.InvalidToken, "Token has no expiration time");
-      else if (authInfo.expiresAt < Date.now() / 1e3) throw new require_src.OAuthError(require_src.OAuthErrorCode.InvalidToken, "Token has expired");
-      return authInfo;
-    }
-    function bearerAuthChallengeResponse(error, options) {
-      const { requiredScopes = [], resourceMetadataUrl } = options ?? {};
-      if (!(error instanceof require_src.OAuthError)) {
-        const serverError = new require_src.OAuthError(require_src.OAuthErrorCode.ServerError, "Internal Server Error");
-        return Response.json(serverError.toResponseObject(), { status: 500 });
-      }
-      switch (error.code) {
-        case require_src.OAuthErrorCode.InvalidToken: {
-          const challenge = buildWwwAuthenticateHeader(error.code, error.message, requiredScopes, resourceMetadataUrl);
-          return Response.json(error.toResponseObject(), {
-            status: 401,
-            headers: { "WWW-Authenticate": challenge }
-          });
-        }
-        case require_src.OAuthErrorCode.InsufficientScope: {
-          const challenge = buildWwwAuthenticateHeader(error.code, error.message, requiredScopes, resourceMetadataUrl);
-          return Response.json(error.toResponseObject(), {
-            status: 403,
-            headers: { "WWW-Authenticate": challenge }
-          });
-        }
-        case require_src.OAuthErrorCode.ServerError:
-          return Response.json(error.toResponseObject(), { status: 500 });
-        default:
-          return Response.json(error.toResponseObject(), { status: 400 });
-      }
-    }
-    function requireBearerAuth(options) {
-      const { verifier, requiredScopes = [], resourceMetadataUrl } = options;
-      const resolved = {
-        verifier,
-        requiredScopes,
-        resourceMetadataUrl
-      };
-      return async (request) => {
-        const [authorizationHeader] = (request.headers.get("authorization") ?? "").split(",");
-        try {
-          return await verifyBearerToken(authorizationHeader || void 0, resolved);
-        } catch (error) {
-          return bearerAuthChallengeResponse(error, resolved);
         }
       };
     }
@@ -35479,76 +35890,14 @@ data:
         headers: { "Content-Type": "application/json" }
       });
     }
-    function checkIssuerUrl(issuer, allowInsecure) {
-      if (issuer.protocol !== "https:" && issuer.hostname !== "localhost" && issuer.hostname !== "127.0.0.1" && !allowInsecure) throw new Error("Issuer URL must be HTTPS");
-      if (issuer.hash) throw new Error(`Issuer URL must not have a fragment: ${issuer}`);
-      if (issuer.search) throw new Error(`Issuer URL must not have a query string: ${issuer}`);
-    }
-    function buildOAuthProtectedResourceMetadata(options) {
-      checkIssuerUrl(new URL(options.oauthMetadata.issuer), options.dangerouslyAllowInsecureIssuerUrl);
-      return {
-        resource: options.resourceServerUrl.href,
-        authorization_servers: [options.oauthMetadata.issuer],
-        scopes_supported: options.scopesSupported,
-        resource_name: options.resourceName,
-        resource_documentation: options.serviceDocumentationUrl?.href
-      };
-    }
-    function getOAuthProtectedResourceMetadataUrl(serverUrl) {
-      return new URL(protectedResourceMetadataPath(serverUrl), serverUrl).href;
-    }
-    function protectedResourceMetadataPath(resourceServerUrl) {
-      const rsPath = stripTrailingSlash(resourceServerUrl.pathname);
-      return `/.well-known/oauth-protected-resource${rsPath === "/" ? "" : rsPath}`;
-    }
-    function stripTrailingSlash(path8) {
-      return path8.length > 1 && path8.endsWith("/") ? path8.slice(0, -1) : path8;
-    }
-    var ALLOWED_METHODS = "GET, HEAD, OPTIONS";
-    function metadataDocumentResponse(request, metadata) {
-      if (request.method === "OPTIONS") {
-        const requestedHeaders = request.headers.get("access-control-request-headers");
-        return new Response(null, {
-          status: 204,
-          headers: {
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": ALLOWED_METHODS,
-            ...requestedHeaders === null ? {} : {
-              "Access-Control-Allow-Headers": requestedHeaders,
-              Vary: "Access-Control-Request-Headers"
-            }
-          }
-        });
-      }
-      if (request.method !== "GET" && request.method !== "HEAD") {
-        const error = new require_src.OAuthError(require_src.OAuthErrorCode.MethodNotAllowed, `The method ${request.method} is not allowed for this endpoint`);
-        return Response.json(error.toResponseObject(), {
-          status: 405,
-          headers: {
-            Allow: ALLOWED_METHODS,
-            "Access-Control-Allow-Origin": "*"
-          }
-        });
-      }
-      const response = Response.json(metadata, { headers: { "Access-Control-Allow-Origin": "*" } });
-      return request.method === "HEAD" ? new Response(null, {
-        status: response.status,
-        headers: response.headers
-      }) : response;
-    }
-    function oauthMetadataResponse(request, options) {
-      const requestPath = stripTrailingSlash(new URL(request.url).pathname);
-      if (requestPath === protectedResourceMetadataPath(options.resourceServerUrl)) return metadataDocumentResponse(request, buildOAuthProtectedResourceMetadata(options));
-      if (requestPath === "/.well-known/oauth-authorization-server") {
-        buildOAuthProtectedResourceMetadata(options);
-        return metadataDocumentResponse(request, options.oauthMetadata);
-      }
-    }
     function validateOriginHeader(originHeader, allowedOriginHostnames) {
       if (originHeader === null || originHeader === void 0 || originHeader === "") return { ok: true };
       let hostname;
+      let scheme;
       try {
-        hostname = new URL(originHeader).hostname;
+        const url = new URL(originHeader);
+        hostname = url.hostname;
+        scheme = url.protocol;
       } catch {
         return {
           ok: false,
@@ -35563,7 +35912,7 @@ data:
         message: `Invalid Origin header: ${originHeader}`,
         originHeader
       };
-      if (!allowedOriginHostnames.includes(hostname)) return {
+      if (!(scheme !== "http:" && scheme !== "https:" && allowedOriginHostnames.includes(`${scheme}//*`)) && !allowedOriginHostnames.includes(hostname)) return {
         ok: false,
         errorCode: "invalid_origin",
         message: `Invalid Origin: ${hostname}`,
@@ -35696,6 +36045,7 @@ data:
         return _modelcontextprotocol_core_internal.CLIENT_INFO_META_KEY;
       }
     });
+    exports.DEFAULT_MAX_REQUEST_BODY_SIZE = DEFAULT_MAX_REQUEST_BODY_SIZE;
     Object.defineProperty(exports, "DEFAULT_NEGOTIATED_PROTOCOL_VERSION", {
       enumerable: true,
       get: function() {
@@ -35818,8 +36168,8 @@ data:
     exports.acceptedContent = require_src.acceptedContent;
     exports.assertCompleteRequestPrompt = require_src.assertCompleteRequestPrompt;
     exports.assertCompleteRequestResourceTemplate = require_src.assertCompleteRequestResourceTemplate;
-    exports.bearerAuthChallengeResponse = bearerAuthChallengeResponse;
-    exports.buildOAuthProtectedResourceMetadata = buildOAuthProtectedResourceMetadata;
+    exports.bearerAuthChallengeResponse = require_mcp.bearerAuthChallengeResponse;
+    exports.buildOAuthProtectedResourceMetadata = require_mcp.buildOAuthProtectedResourceMetadata;
     exports.checkResourceAllowed = require_src.checkResourceAllowed;
     exports.classifyInboundRequest = require_src.classifyInboundRequest;
     exports.completable = require_mcp.completable;
@@ -35829,7 +36179,7 @@ data:
     exports.deserializeMessage = require_src.deserializeMessage;
     exports.fromJsonSchema = fromJsonSchema;
     exports.getDisplayName = require_src.getDisplayName;
-    exports.getOAuthProtectedResourceMetadataUrl = getOAuthProtectedResourceMetadataUrl;
+    exports.getOAuthProtectedResourceMetadataUrl = require_mcp.getOAuthProtectedResourceMetadataUrl;
     exports.hostHeaderValidationResponse = hostHeaderValidationResponse;
     exports.inputRequired = require_src.inputRequired;
     exports.inputResponse = require_src.inputResponse;
@@ -35851,17 +36201,19 @@ data:
     exports.localhostAllowedHostnames = localhostAllowedHostnames;
     exports.localhostAllowedOrigins = localhostAllowedOrigins;
     exports.mergeCapabilities = require_src.mergeCapabilities;
-    exports.oauthMetadataResponse = oauthMetadataResponse;
+    exports.oauthMetadataResponse = require_mcp.oauthMetadataResponse;
     exports.originValidationResponse = originValidationResponse;
     exports.parseJSONRPCMessage = require_src.parseJSONRPCMessage;
     exports.preloadSchemas = require_src.preloadSchemas;
-    exports.requireBearerAuth = requireBearerAuth;
+    exports.readRequestBody = readRequestBody;
+    exports.requireBearerAuth = require_mcp.requireBearerAuth;
+    exports.requireScopes = require_mcp.requireScopes;
     exports.resourceUrlFromServerUrl = require_src.resourceUrlFromServerUrl;
     exports.serializeMessage = require_src.serializeMessage;
     exports.specTypeSchemas = require_src.specTypeSchemas;
     exports.validateHostHeader = validateHostHeader;
     exports.validateOriginHeader = validateOriginHeader;
-    exports.verifyBearerToken = verifyBearerToken;
+    exports.verifyBearerToken = require_mcp.verifyBearerToken;
   }
 });
 
@@ -35869,9 +36221,10 @@ data:
 var require_stdio = __commonJS({
   "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/server/dist/stdio.cjs"(exports) {
     var require_chunk = require_chunk_Bnu9O96Y();
-    var require_mcp = require_mcp_D7GmuPnv();
-    var require_src = require_src_STyD_Vvf();
+    var require_mcp = require_mcp_BumlNux0();
+    var require_src = require_src_BhnGYybN();
     var _modelcontextprotocol_server__shims = require_shimsNode();
+    var swallowsErrorsAfterClose = /* @__PURE__ */ Symbol("swallowsErrorsAfterClose");
     var StdioServerTransport = class {
       _readBuffer;
       _started = false;
@@ -35898,7 +36251,12 @@ var require_stdio = __commonJS({
         this.onerror?.(error);
       };
       _onstdouterror = (error) => {
+        if (this._closed) return;
         this.onerror?.(error);
+        this.close().catch(() => {
+        });
+      };
+      _onstdinclose = () => {
         this.close().catch(() => {
         });
       };
@@ -35908,8 +36266,12 @@ var require_stdio = __commonJS({
       async start() {
         if (this._started) throw new Error("StdioServerTransport already started! If using Server class, note that connect() calls start() automatically.");
         this._started = true;
+        for (const listener of this._stdout.listeners("error")) if (listener[swallowsErrorsAfterClose]) this._stdout.off("error", listener);
+        if (this._stdin.readableEnded || this._stdin.destroyed) setImmediate(this._onstdinclose);
         this._stdin.on("data", this._ondata);
         this._stdin.on("error", this._onerror);
+        this._stdin.on("end", this._onstdinclose);
+        this._stdin.on("close", this._onstdinclose);
         this._stdout.on("error", this._onstdouterror);
       }
       processReadBuffer() {
@@ -35926,7 +36288,9 @@ var require_stdio = __commonJS({
         this._closed = true;
         this._stdin.off("data", this._ondata);
         this._stdin.off("error", this._onerror);
-        this._stdout.off("error", this._onstdouterror);
+        this._stdin.off("end", this._onstdinclose);
+        this._stdin.off("close", this._onstdinclose);
+        this._onstdouterror[swallowsErrorsAfterClose] = true;
         if (this._stdin.listenerCount("data") === 0) this._stdin.pause();
         this._readBuffer.clear();
         this.onclose?.();
@@ -36203,6 +36567,7 @@ var require_stdio = __commonJS({
             return;
           }
           if (state.era === "modern" && await tryServeListen(message)) return;
+          if (isTornDown()) return;
           state.instance.channel.deliver(message);
           return;
         }
@@ -36269,6 +36634,7 @@ var require_stdio = __commonJS({
               };
             }
             if (await tryServeListen(message)) return;
+            if (isTornDown()) return;
             state.instance.channel.deliver(message, { classification: opening.classification });
             return;
           case "legacy": {
@@ -77254,7 +77620,7 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
 }
 
 // risk-fork-hosted-mcp/src/index.mjs
-var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:8aa4826477e7d89c3ff41065ebadeed010cc4c59ba43c8d5319f1a88ec17fb8f" : null;
+var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:2f84fbbee64349acfba4cfcfbe0d74f3f8dc60880867aad0ec9a5dd2b5ec65eb" : null;
 var HOSTED_MCP_BUNDLE_METADATA = Object.freeze({
   package_name: "@agoragentic/risk-fork-hosted-mcp",
   package_version: "0.1.0-alpha.0",
@@ -77410,7 +77776,7 @@ export {
 };
 /*! Bundled license information:
 
-@modelcontextprotocol/server/dist/src-STyD_Vvf.cjs:
+@modelcontextprotocol/server/dist/src-BhnGYybN.cjs:
   (*!
   * content-type
   * Copyright(c) 2015 Douglas Christopher Wilson
