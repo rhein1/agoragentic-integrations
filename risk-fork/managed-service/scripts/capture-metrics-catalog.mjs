@@ -4,11 +4,12 @@ import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { backlogAlertsMigration, backlogGaugesMigration, budgetMetricsMigration, cleanupIncompleteMetricsMigration, cleanupMetricsMigration, diagnosticMetricsMigration, executionMetricsMigration, lifecycleMigration, metricsMigration, telemetryMigration } from '../src/postgres-telemetry-config.mjs';
 import { readManagedTelemetryPostgresCatalog } from '../src/postgres-telemetry-attestation.mjs';
+import { workerDiagnosticMetricsMigration } from '../src/postgres-telemetry-config.mjs';
 
 const connectionString = process.env.RISK_FORK_MANAGED_TEST_POSTGRES_URL;
 const args = process.argv.slice(2);
-if (args.length > 1 || (args.length === 1 && !['--v4','--v5','--v6','--v7','--v8','--v9','--v10'].includes(args[0]))) throw new Error('Only explicit --v4/--v5/--v6/--v7/--v8/--v9/--v10 capture is supported');
-const v10 = args[0] === '--v10', v9 = v10 || args[0] === '--v9', v8 = v9 || args[0] === '--v8', v7 = v8 || args[0] === '--v7', v6 = v7 || args[0] === '--v6', v5 = v6 || args[0] === '--v5', v4 = v5 || args[0] === '--v4';
+if (args.length > 1 || (args.length === 1 && !['--v4','--v5','--v6','--v7','--v8','--v9','--v10','--v11'].includes(args[0]))) throw new Error('Only explicit --v4 through --v11 capture is supported');
+const v11 = args[0] === '--v11', v10 = v11 || args[0] === '--v10', v9 = v10 || args[0] === '--v9', v8 = v9 || args[0] === '--v8', v7 = v8 || args[0] === '--v7', v6 = v7 || args[0] === '--v6', v5 = v6 || args[0] === '--v5', v4 = v5 || args[0] === '--v4';
 const url = new URL(connectionString);
 if (!['127.0.0.1','localhost','[::1]'].includes(url.hostname) || url.pathname !== '/risk_fork_managed_test'
   || process.env.RISK_FORK_MANAGED_TEST_CONFIRM_DISPOSABLE !== 'YES_DELETE_DATA') throw new Error('Catalog capture needs the explicit disposable loopback lab');
@@ -34,9 +35,11 @@ try {
   if (i) await client.query(i.sql);
   const j = v10 ? await diagnosticMetricsMigration(schemaName) : null;
   if (j) await client.query(j.sql);
+  const k = v11 ? await workerDiagnosticMetricsMigration(schemaName) : null;
+  if (k) await client.query(k.sql);
   const version = await client.query("SELECT current_setting('server_version_num')::integer AS version");
   if (version.rows[0].version < 160000 || version.rows[0].version >= 170000) throw new Error('PG16 catalog required');
-  const manifest = { schema: `agoragentic.risk-fork.telemetry-postgres-catalog.v${v10 ? 10 : v9 ? 9 : v8 ? 8 : v7 ? 7 : v6 ? 6 : v5 ? 5 : v4 ? 4 : 3}`,postgres_major: 16,
+  const manifest = { schema: `agoragentic.risk-fork.telemetry-postgres-catalog.v${v11 ? 11 : v10 ? 10 : v9 ? 9 : v8 ? 8 : v7 ? 7 : v6 ? 6 : v5 ? 5 : v4 ? 4 : 3}`,postgres_major: 16,
     migration_hash: a.hash,lifecycle_migration_hash: b.hash,metrics_migration_hash: c.hash,
     ...(d ? { execution_metrics_migration_hash: d.hash } : {}),
     ...(e ? { budget_metrics_migration_hash: e.hash } : {}),
@@ -45,6 +48,7 @@ try {
     ...(h ? { backlog_gauges_migration_hash: h.hash } : {}),
     ...(i ? { backlog_alerts_migration_hash: i.hash } : {}),
     ...(j ? { diagnostic_metrics_migration_hash: j.hash } : {}),
+    ...(k ? { worker_diagnostic_metrics_migration_hash: k.hash } : {}),
     catalog: await readManagedTelemetryPostgresCatalog(client,schemaName) };
   await client.query('ROLLBACK');
   if ((await client.query('SELECT 1 FROM pg_namespace WHERE nspname=$1',[schemaName])).rowCount !== 0) throw new Error('Catalog capture cleanup failed');

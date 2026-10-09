@@ -86,6 +86,7 @@
     "managed-service/ops/postgres/backlog-grants.sql.template",
     "managed-service/ops/postgres/backlog-alert-grants.sql.template",
     "managed-service/ops/postgres/diagnostic-grants.sql.template",
+    "managed-service/ops/postgres/worker-diagnostic-grants.sql.template",
     "FRAMEWORK_ADAPTERS.md",
     "CITATION.cff",
     "AUTHORS.md",
