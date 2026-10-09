@@ -79,7 +79,7 @@ corroboration. This bundle includes neither.
 
 ## E2B and PostgreSQL host surfaces
 
-The main export also includes the framework-neutral Risk Fork host-boundary/import constructors, cleanup verification request/evidence validators, reviewed E2B adapter, paths, qualification evidence/trust functions, exact SDK dependency-closure verifier/loader, authority-free source verifier, PostgreSQL authority class and production predicate, and PostgreSQL migration/schema-verification functions. These are library contracts only: they do not provide a production host, provider authority, or live activation. `e2b` is the only unbundled package surface: it is an optional, exact `e2b@2.39.0` peer. Qualified use must verify its installed dependency closure and load it with `loadVerifiedE2BRuntimeSdk`; merely installing that peer does not qualify E2B or grant execution authority.
+The main export also includes the framework-neutral Risk Fork host-boundary/import constructors, cleanup verification request/evidence validators, reviewed E2B adapter, paths, qualification evidence/trust functions, exact SDK dependency-closure verifier, authority-free source verifier, PostgreSQL authority class and production predicate, and PostgreSQL migration/schema-verification functions. These are library contracts only: they do not provide a production host, provider authority, or live activation. `e2b` is the only unbundled package surface: it is an optional, exact `e2b@2.39.0` peer. Qualified and historical-cleanup adapter use must provide the full signed evidence/trust chain plus `sdkProcessOptions`; the adapter privately constructs the original branded host-owned SDK process verifier. The raw process factory is internal and is not exported by the core root, qualification subpath, or this bundle. The older in-process loader path is not accepted for qualified SDK effects or historical cleanup, and merely installing that peer does not qualify E2B or grant execution authority.
 
 The E2B build context preserves its reviewed repository-relative layout and is importable from:
 
@@ -101,6 +101,28 @@ These files are inputs for an owner-controlled staging procedure, not a migratio
 ### E2B is not the outbound MCP transport
 
 The E2B adapter cannot safely be substituted for the host-owned outbound MCP session. Its clean-template requests use deny-all network settings and boot probes, but no credentialed run proves first-instruction or IPv6 containment; it runs bounded workspace operations and does not implement an arbitrary remote MCP transport. Its live SDK/provider path is also hard-disabled in the reviewed source because the same-UID birth watcher is not a separately privileged attestation authority. Signed qualification evidence cannot enable that path. `connectRemoteClient` therefore still requires a separately qualified host enforcement boundary that owns the network session and clean import. This artifact alone does not close the hosted-MCP runtime qualification gate.
+
+### SDK process and cleanup migration
+
+The `sdkProcessOptions` profile requires canonical absolute paths and exact
+SHA-256 pins for the runtime artifact, Node binary, and complete SDK package
+directory, with bounded process deadlines and lifetime. The host must provide
+Linux non-root/read-only custody for every resolved runtime and dependency file,
+zero effective/permitted/ambient capabilities, no-new-privileges, and no root
+supplementary group. The bundle checks those conditions before SDK import, but
+does not create the host custody, network policy, provider cap, or production
+qualification. `providerApiKey` is accepted only as an explicit host input for
+a separately authorized provider run; no ambient key is retrieved.
+
+Expired signed evidence is cleanup-only. New savepoints, allocation, execution,
+and lease renewal remain denied. Historical cleanup also requires the exact
+signed provenance and original branded process verifier; a copied verifier,
+caller-created raw factory, or legacy in-process loader is rejected. Validate
+the documented behavior with the core fixture at
+`risk-fork/test/e2b-cleanup-integrity.test.mjs`, which constructs the adapter
+and asserts that `createSavepoint()` remains denied after expiry. The bundle's
+`closeSdkProcess()` result reports direct process termination only and never
+claims provider cleanup or production qualification.
 
 ## Reproducible artifact checks
 

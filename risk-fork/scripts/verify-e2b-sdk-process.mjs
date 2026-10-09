@@ -11,7 +11,11 @@ import {
   createE2BRuntimeSdkIntegrityVerifier,
   loadVerifiedE2BRuntimeSdk,
 } from '../src/e2b-qualification.mjs';
-import { createE2BRuntimeSdkProcessBoundary } from '../src/e2b-sdk-process.mjs';
+import {
+  createE2BRuntimeSdkProcessBoundary,
+  isE2BRuntimeSdkProcessPreEntryFailure,
+  isE2BRuntimeSdkProcessSandboxClass,
+} from '../src/e2b-sdk-process.mjs';
 import { sha256Ref } from '../src/canonical.mjs';
 import { createForkIdentity, createSavepointCapsule } from '../src/contracts.mjs';
 import { E2BRiskForkAdapter } from '../src/adapters/e2b.mjs';
@@ -39,7 +43,7 @@ function syntheticSdk() {
       log('create');
       if (template === 'throw') throw new Error('synthetic private error must not cross IPC');
       if (template === 'hang') return new Promise(() => {});
-      const value = new Sandbox(template, options);
+      const value = new Sandbox(template);
       if (template === 'throw-after-effect') {
         fs.writeFileSync(orphanFile, JSON.stringify({ sandboxId: value.sandboxId, templateId: template, metadata: options.metadata }));
         throw new Error('synthetic allocation response lost after effect');
@@ -69,6 +73,10 @@ function syntheticSdk() {
         async remove(target) { log('remove'); if (!files.delete(target)) throw new FileNotFoundError(); },
         async read(target, options) {
           if (target === '/hang') return new ReadableStream({ pull() { return new Promise(() => {}); }, cancel() { log('read_cancel'); } });
+          if (target === '/delayed-open') return new Promise((resolve) => setTimeout(() => resolve(new ReadableStream({
+            pull(controller) { controller.enqueue(Buffer.from('must-not-be-readable-after-kill')); },
+            cancel() { log('delayed_read_cancel'); },
+          })), 100));
           if (target === '/truncated') {
             let delivered = false;
             return new ReadableStream({ pull(controller) {
@@ -129,6 +137,61 @@ if (mode === '--prepare') {
     const { module } = await loadVerifiedE2BRuntimeSdk(binding, verifier);
     return { boundary, Sandbox: module.Sandbox, binding };
   };
+  let workspaceInspectionTail = Promise.resolve();
+  const inspectInStateHome = async (stateHome, source, maxBytes = 32 * 1024 * 1024) => {
+    let release;
+    const predecessor = workspaceInspectionTail;
+    workspaceInspectionTail = new Promise((resolve) => { release = resolve; });
+    await predecessor;
+    try {
+      process.env.XDG_STATE_HOME = stateHome;
+      await mkdir(path.join(stateHome, 'agoragentic-risk-fork', 'standalone'), { recursive: true, mode: 0o700 });
+      return await inspectLocalWorkspace({ source_workspace: source, max_bytes: maxBytes });
+    } finally {
+      release();
+    }
+  };
+  const adapterFixture = async (t, Sandbox, { fileBytes = [['input.txt', Buffer.from('synthetic bounded input\\n')],], maxBytes = 64 * 1024 * 1024 } = {}) => {
+    const root = await mkdtemp('/tmp/risk-fork-sdk-process-adapter-');
+    const stateHome = '/tmp/risk-fork-sdk-process-shared-state';
+    process.env.XDG_STATE_HOME = stateHome;
+    await mkdir(path.join(stateHome, 'agoragentic-risk-fork', 'standalone'), { recursive: true, mode: 0o700 });
+    t.after(() => rm(root, { recursive: true, force: true }));
+    const source = path.join(root, 'source'); await mkdir(source);
+    for (const [name, bytes] of fileBytes) {
+      const target = path.join(source, name); await mkdir(path.dirname(target), { recursive: true }); await writeFile(target, bytes);
+    }
+    const { workspace_digest: digest } = await inspectInStateHome(stateHome, source, maxBytes);
+    const hash = sha256Ref; const now = new Date();
+    const capsule = createSavepointCapsule({
+      created_at: now, expires_at: new Date(now.getTime() + 60_000),
+      parent: { agent_id: 'synthetic-parent', session_id: 'synthetic-session', state_hash: hash('parent'), lineage_ref: 'lineage:synthetic', lineage_hash: hash('lineage') },
+      agent_configuration: { model_version_hash: hash('model'), system_instruction_hash: hash('system'), tool_manifest_hash: hash('tools') },
+      checkpoint: { goal_ref: 'goal:synthetic', goal_hash: hash('goal'), task_graph_ref: 'graph:synthetic', task_graph_hash: hash('graph') },
+      memory_roots: [], workspace: { snapshot_ref: 'workspace:synthetic', digest },
+      governance: { policy_ref: 'policy:synthetic', policy_version: '1', policy_hash: hash('policy'), mandate_ref: 'mandate:synthetic', mandate_version: '1', mandate_hash: hash('mandate'), budget_policy_ref: 'budget:synthetic', budget_version: '1', budget_hash: hash('budget'), epoch: 'epoch:synthetic' },
+      receipt_chain_head: hash('receipts'), proposed_interaction: { mcp_server_ref: 'mcp:synthetic', mcp_server_origin: 'https://synthetic.invalid/', mcp_method: 'tools/call', tool_name: 'synthetic_tool', effective_arguments_hash: hash({}), target_ref: 'target:synthetic' },
+      execution_authorization: { ref: 'authorization:synthetic', hash: hash('authorization') },
+      allowed_commit_types: ['TYPED_RESULT'], authorized_result_schema_hash: hash({ type: 'object', additionalProperties: false }), runtime_snapshot: { mode: 'none' },
+    });
+    const bootstrap = hash('synthetic-bootstrap'), runner = hash('synthetic-runner');
+    const adapter = new E2BRiskForkAdapter({ SandboxClass: Sandbox, offlineConformance: true, maxBytes,
+      cleanTemplateId: 'normal', cleanTemplateHash: hash('template'), cleanTemplateProvenanceHash: hash('provenance'),
+      workspaceExportDirectory: path.join(root, 'exports'), cleanupJournalDirectory: path.join(root, 'journal'),
+      trustedBootstrapArtifactHash: bootstrap, trustedRunnerArtifactHash: runner,
+      verifyAuthorityFreeSource: async (request) => ({
+        schema: 'agoragentic.risk-fork.authority-free-source-attestation.v1', status: 'verified', request_hash: request.request_hash,
+        evidence_ref: 'attestation:synthetic', evidence_hash: hash('synthetic'), workspace_digest: request.workspace_digest,
+        workspace_manifest_hash: request.workspace_manifest_hash, trusted_bootstrap_artifact_hash: bootstrap, trusted_runner_artifact_hash: runner,
+        claims: Object.fromEntries(['authority_free', 'credentials_absent', 'wallet_material_absent', 'execution_authority_absent', 'workspace_manifest_verified', 'immutable_export_verified', 'trusted_runtime_artifacts_verified'].map((key) => [key, true])),
+      }),
+    });
+    const savepoint = await adapter.createSavepoint({ capsule, source_workspace: source });
+    const request = { savepoint_ref: savepoint.savepoint_ref,
+      fork_identity: createForkIdentity({ parent_agent_id: capsule.parent.agent_id, parent_session_id: capsule.parent.session_id, issued_at: now }),
+      network_policy: { mode: 'blocked', allowlist: [] }, ttl_ms: 30_000 };
+    return { root, source, adapter, request };
+  };
   test('fresh SDK worker ignores parent CJS/ESM preloads and ambient environment', async (t) => {
     globalThis.syntheticSdkPoison = true;
     process.env.SYNTHETIC_PROVIDER_KEY_SENTINEL = 'not-a-real-key';
@@ -163,6 +226,138 @@ if (mode === '--prepare') {
     await child.setTimeout(1_000);
     assert.equal(await child.kill(), true);
     await assert.rejects(Sandbox.getInfo(child.sandboxId), { name: 'SandboxNotFoundError' });
+  });
+  test('actual worker capacity rejects the 33rd create before SDK entry and recovers after release', async (t) => {
+    const { boundary, Sandbox } = await opened(t, { lifetimeMs: 30_000 });
+    const children = [];
+    try {
+      for (let count = 0; count < 32; count += 1) {
+        children.push(await Sandbox.create('normal', {}));
+      }
+      const before = boundary.metrics();
+      let preEntryError;
+      await assert.rejects(Sandbox.create('normal', {}), (error) => {
+        preEntryError = error;
+        return error.code === 'E2B_SDK_PROCESS_NOT_ENTERED';
+      });
+      assert.equal(isE2BRuntimeSdkProcessSandboxClass(Sandbox), true);
+      assert.equal(isE2BRuntimeSdkProcessPreEntryFailure(preEntryError, Sandbox), true);
+      assert.equal(isE2BRuntimeSdkProcessPreEntryFailure(new Error(preEntryError.message), Sandbox), false);
+      assert.equal(isE2BRuntimeSdkProcessPreEntryFailure(preEntryError, new Proxy(Sandbox, {})), false);
+      const secondScope = await opened(t);
+      assert.equal(isE2BRuntimeSdkProcessSandboxClass(secondScope.Sandbox), true);
+      assert.equal(isE2BRuntimeSdkProcessPreEntryFailure(preEntryError, secondScope.Sandbox), false);
+      const rejected = boundary.metrics();
+      assert.equal(
+        rejected.requests_rejected_before_sdk,
+        before.requests_rejected_before_sdk + 1,
+      );
+      assert.equal(
+        rejected.effectful_outcomes_unknown,
+        before.effectful_outcomes_unknown,
+        'pre-entry capacity rejection is not an ambiguous provider effect',
+      );
+      assert.equal(await children.shift().kill(), true);
+      const recovered = await Sandbox.create('normal', {});
+      assert.ok(recovered.sandboxId, 'a later allocation is possible after release');
+      children.push(recovered);
+    } finally {
+      for (const child of children) await child.kill().catch(() => {});
+    }
+  });
+  test('adapter preserves a reusable savepoint across authenticated pre-entry capacity rejection', async (t) => {
+    const { boundary, Sandbox } = await opened(t, { lifetimeMs: 30_000 });
+    const fixture = await adapterFixture(t, Sandbox);
+    const held = [];
+    try {
+      for (let count = 0; count < 32; count += 1) held.push(await Sandbox.create('normal', {}));
+      const effectsBefore = (await effects()).filter((value) => value === 'create').length;
+      const metricsBefore = boundary.metrics();
+      let releaseCleanup; let cleanupStarted;
+      const cleanupStartedPromise = new Promise((resolve) => { cleanupStarted = resolve; });
+      const cleanupGate = new Promise((resolve) => { releaseCleanup = resolve; });
+      const originalMarkAbsent = fixture.adapter.cleanupJournal.markSandboxVerifiedAbsent.bind(fixture.adapter.cleanupJournal);
+      fixture.adapter.cleanupJournal.markSandboxVerifiedAbsent = async (...args) => {
+        cleanupStarted(); await cleanupGate; return originalMarkAbsent(...args);
+      };
+      const firstAttempt = fixture.adapter.createFork(fixture.request);
+      await cleanupStartedPromise;
+      await assert.rejects(fixture.adapter.createFork(fixture.request), /one-use|poison|already attempted/);
+      releaseCleanup();
+      await assert.rejects(firstAttempt, { code: 'E2B_SDK_PROCESS_NOT_ENTERED' });
+      fixture.adapter.cleanupJournal.markSandboxVerifiedAbsent = originalMarkAbsent;
+      const metricsAfter = boundary.metrics();
+      assert.equal(metricsAfter.requests_rejected_before_sdk, metricsBefore.requests_rejected_before_sdk + 1);
+      assert.equal(metricsAfter.effectful_outcomes_unknown, metricsBefore.effectful_outcomes_unknown);
+      assert.equal((await effects()).filter((value) => value === 'create').length, effectsBefore, 'pre-entry rejection never entered provider create');
+      await assert.rejects(fixture.adapter.createFork(fixture.request), { code: 'E2B_SDK_PROCESS_NOT_ENTERED' });
+      assert.equal((await effects()).filter((value) => value === 'create').length, effectsBefore);
+      assert.equal(await held.shift().kill(), true);
+      await assert.rejects(fixture.adapter.createFork(fixture.request), (error) => {
+        assert.doesNotMatch(String(error), /one-use|poison|already attempted/);
+        return true;
+      });
+      assert.equal((await effects()).filter((value) => value === 'create').length, effectsBefore + 1, 'retry reached provider create after release');
+    } finally {
+      for (const child of held) await child.kill().catch(() => {});
+      await fixture.adapter.destroySavepoint({ savepoint_ref: fixture.request.savepoint_ref }).catch(() => {});
+      await boundary.close();
+    }
+  });
+  test('authenticated process class rejects an oversized individual file before allocation while allowing a bounded aggregate', async (t) => {
+    const { boundary, Sandbox } = await opened(t);
+    // The immutable export's canonical JSON envelope intentionally has a much
+    // smaller serialization ceiling than the 64 MiB workspace budget. Keep
+    // the filesystem fixture compact, then use the adapter's owned record to
+    // represent the already-recorded 40 MiB file sizes that the process guard
+    // must reject before provider create.
+    const large = await adapterFixture(t, Sandbox, { maxBytes: 64 * 1024 * 1024 });
+    const largeRecord = large.adapter.savepoints.get(large.request.savepoint_ref);
+    largeRecord.export_record = { ...largeRecord.export_record, files: [{ ...largeRecord.export_record.files[0], bytes: 40 * 1024 * 1024 }] };
+    const effectsBefore = (await effects()).filter((value) => value === 'create').length;
+    await assert.rejects(large.adapter.createFork(large.request), /each file must be at most 33554432 bytes/);
+    assert.equal((await effects()).filter((value) => value === 'create').length, effectsBefore, 'file-size preflight precedes provider allocation');
+    await assert.rejects(large.adapter.createFork(large.request), /each file must be at most 33554432 bytes/);
+    await large.adapter.destroySavepoint({ savepoint_ref: large.request.savepoint_ref });
+    await rm(large.root, { recursive: true, force: true });
+    const small = await adapterFixture(t, Sandbox, { maxBytes: 64 * 1024 * 1024 });
+    const smallRecord = small.adapter.savepoints.get(small.request.savepoint_ref);
+    const smallFile = { ...smallRecord.export_record.files[0], bytes: 20 * 1024 * 1024 };
+    smallRecord.export_record = { ...smallRecord.export_record, files: [smallFile, { ...smallFile, path: 'second.bin', bytes: 20 * 1024 * 1024 }] };
+    assert.ok(small.request.savepoint_ref, 'multiple small files within the aggregate budget remain admissible');
+    const smallEffectsBefore = (await effects()).filter((value) => value === 'create').length;
+    await assert.rejects(small.adapter.createFork(small.request), (error) => {
+      assert.doesNotMatch(String(error), /each file must be at most 33554432 bytes/);
+      return true;
+    });
+    assert.equal((await effects()).filter((value) => value === 'create').length, smallEffectsBefore + 1, 'bounded aggregate reached provider create');
+    await small.adapter.destroySavepoint({ savepoint_ref: small.request.savepoint_ref });
+    await boundary.close();
+  });
+  test('a real 40 MiB source fails at the existing canonical export ceiling before provider allocation', async (t) => {
+    const { boundary, Sandbox } = await opened(t);
+    const before = (await effects()).filter((value) => value === 'create').length;
+    await assert.rejects(
+      adapterFixture(t, Sandbox, { fileBytes: [['large.bin', Buffer.alloc(40 * 1024 * 1024, 7)]], maxBytes: 64 * 1024 * 1024 }),
+      /Canonical JSON string is too large/,
+    );
+    assert.equal((await effects()).filter((value) => value === 'create').length, before);
+    await boundary.close();
+  });
+  test('four 10 MiB files fit the 64 MiB aggregate and reach provider create', async (t) => {
+    const { boundary, Sandbox } = await opened(t);
+    const fixture = await adapterFixture(t, Sandbox, {
+      fileBytes: Array.from({ length: 4 }, (_, index) => [`part-${index}.bin`, Buffer.alloc(10 * 1024 * 1024, index + 1)]),
+      maxBytes: 64 * 1024 * 1024,
+    });
+    const before = (await effects()).filter((value) => value === 'create').length;
+    await assert.rejects(fixture.adapter.createFork(fixture.request), (error) => {
+      assert.doesNotMatch(String(error), /each file must be at most 33554432 bytes/);
+      return true;
+    });
+    assert.equal((await effects()).filter((value) => value === 'create').length, before + 1);
+    await fixture.adapter.destroySavepoint({ savepoint_ref: fixture.request.savepoint_ref }).catch(() => {});
+    await boundary.close();
   });
   for (const command of ['throw', 'error', 'oversize', 'exit', 'hang']) {
     test(`effectful command ${command} retires its process, retains unknown outcome and never replays`, async (t) => {
@@ -204,6 +399,28 @@ if (mode === '--prepare') {
     }
     assert.equal(boundary.metrics().sdk_process_retired, false);
     assert.ok((await effects()).includes('read_cancel'));
+  });
+  test('kill during delayed read opening cancels the late stream before cursor registration', async (t) => {
+    const { Sandbox } = await opened(t);
+    const child = await Sandbox.create('normal', {});
+    const opening = child.files.read('/delayed-open', { format: 'stream' });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(await child.kill(), true);
+    await assert.rejects(opening);
+    await assert.rejects(child.files.read('/delayed-open', { format: 'stream' }));
+    assert.ok((await effects()).includes('delayed_read_cancel'));
+  });
+  test('provider timeout accepts fifteen minutes, rejects above the twenty-four-hour bound before SDK dispatch', async (t) => {
+    const { Sandbox } = await opened(t);
+    const child = await Sandbox.create('normal', {});
+    await child.setTimeout(15 * 60 * 1_000);
+    const before = await effects();
+    await assert.rejects(child.setTimeout(24 * 60 * 60 * 1_000 + 1));
+    assert.deepEqual(await effects(), before);
+  });
+  test('SDK worker opens with a lifetime above the former ten-minute cap without waiting for expiry', async (t) => {
+    const { boundary } = await opened(t, { lifetimeMs: 10 * 60 * 1_000 + 1 });
+    assert.equal(boundary.metrics().process_starts, 1);
   });
   test('concurrent mutations reject before SDK; emergency kill can interrupt a hung command', async (t) => {
     const { boundary, Sandbox } = await opened(t);
@@ -282,12 +499,13 @@ if (mode === '--prepare') {
   });
   test('actual adapter journals lost allocation and needs fresh recovery plus independent absence', async (t) => {
     const root = await mkdtemp('/tmp/risk-fork-sdk-process-journal-');
-    process.env.XDG_STATE_HOME = path.join(root, 'state');
-    await mkdir(process.env.XDG_STATE_HOME, { mode: 0o700 });
+    const stateHome = '/tmp/risk-fork-sdk-process-shared-state';
+    process.env.XDG_STATE_HOME = stateHome;
+    await mkdir(path.join(stateHome, 'agoragentic-risk-fork', 'standalone'), { recursive: true, mode: 0o700 });
     t.after(() => rm(root, { recursive: true, force: true }));
     const source = path.join(root, 'source'); await mkdir(source);
     await writeFile(path.join(source, 'input.txt'), 'synthetic bounded input\n');
-    const { workspace_digest: digest } = await inspectLocalWorkspace({ source_workspace: source });
+    const { workspace_digest: digest } = await inspectInStateHome(stateHome, source);
     const hash = sha256Ref; const now = new Date();
     const capsule = createSavepointCapsule({
       created_at: now, expires_at: new Date(now.getTime() + 60_000),
