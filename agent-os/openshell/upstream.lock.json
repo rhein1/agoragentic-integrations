@@ -1,0 +1,16 @@
+{
+  "schema": "agoragentic.openshell.upstream-lock.v1",
+  "reviewedAt": "2026-09-28",
+  "repository": "https://github.com/NVIDIA/OpenShell",
+  "release": "v0.1.2",
+  "commit": "6648bd0c290efbc41ba131ee9831ee45cd431f94",
+  "sdk": "@nvidia/openshell-sdk",
+  "sdkDistribution": "GitHub Packages at the reviewed release; no package installation performed",
+  "license": "Apache-2.0",
+  "runtimeTested": false,
+  "sourceFiles": [
+    { "path": "sdk/typescript/README.md", "gitBlob": "99c4fac9d4d9dfe0904f6fb2510e22154e5b206f" },
+    { "path": "sdk/typescript/src/client.ts", "gitBlob": "93ad8ba6d163f409e522a7e9bde53f13eafa9338", "reviewedLines": "1-280" },
+    { "path": "proto/sandbox.proto", "gitBlob": "1d837b7f0e1d4e0e9d82763252f214804027c5b6", "reviewedLines": "1-260,300-430" }
+  ]
+}

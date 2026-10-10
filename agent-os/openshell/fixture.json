@@ -1,0 +1,11 @@
+{
+  "schema": "agoragentic.openshell.request.v1",
+  "role": "cartographer",
+  "runId": "offline-demo",
+  "workspace": "agoragentic-lab",
+  "image": "registry.example.com/agoragentic/worker@sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "readEndpoints": [
+    { "host": "docs.example.com", "paths": ["/robots.txt", "/.well-known/agent-card.json"] }
+  ],
+  "maxRuntimeSeconds": 60
+}
