@@ -1,0 +1,287 @@
+{
+  "source_commit": "3c2f17d82476d22996377ea7c07cb601ed625483",
+  "scope": {
+    "project_id": "agoragentic",
+    "repo_id": "rhein1/example"
+  },
+  "stage": {
+    "schema": "agoragentic.memory.skillopt-stage.v1",
+    "stage_id": "skillopt_stage_73f53da3106ea951049a78d384a771ac",
+    "created_at": "2026-09-30T10:00:00.000Z",
+    "stage_request_id": "fixture-stage-request-001",
+    "scope": {
+      "project_id": "agoragentic",
+      "repo_id": "rhein1/example"
+    },
+    "candidate": {
+      "candidate_id": "skill_0123456789abcdef0123456789abcdef",
+      "slug": "reviewed-procedure",
+      "trigger_terms": [
+        "review"
+      ],
+      "support_count": 2,
+      "distinct_occurrence_count": 2,
+      "repo_ids": [
+        "rhein1/example"
+      ],
+      "source_claim_ids": [
+        "mem_0123456789abcdef0123456789abcdef",
+        "mem_fedcba9876543210fedcba9876543210"
+      ],
+      "evidence_ids": [
+        "evidence-1"
+      ],
+      "candidate_hash": "sha256:900d45fb6f2266549b065532a0b0685e2186f29ac7c03d72a54eae0d8b72043a"
+    },
+    "skillopt_project": "agoragentic-memory",
+    "target_skill_path": "skills/example/SKILL.md",
+    "baseline": {
+      "ref": "owner://baseline/example",
+      "hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "rollback": {
+      "ref": "owner://baseline/example",
+      "hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "action": "owner_mediated_restore_only"
+    },
+    "redaction": {
+      "state": "redacted_structured_only",
+      "excluded_material": [
+        "transcript",
+        "tool_output",
+        "repository_content",
+        "credentials"
+      ]
+    },
+    "authority": {
+      "optimization": "not_invoked",
+      "adoption": "not_performed",
+      "publication": "not_performed",
+      "spend": "not_incurred"
+    }
+  },
+  "task": {
+    "schema": "agoragentic.memory.skillopt-reviewed-task.v1",
+    "skillopt_wire_format": "skillopt_sleep.tasks.v1",
+    "compatibility_state": "review_aware_consumer_required",
+    "stage_id": "skillopt_stage_73f53da3106ea951049a78d384a771ac",
+    "project": "agoragentic-memory",
+    "target_skill_path": "skills/example/SKILL.md",
+    "reviewed": true,
+    "active": false,
+    "tasks": [
+      {
+        "id": "memory-0123456789abcdef0123456789abcdef",
+        "project": "agoragentic-memory",
+        "intent": "Refine the owner-reviewed procedure represented by skillopt_stage_73f53da3106ea951049a78d384a771ac.",
+        "context_excerpt": "A redacted, evidence-linked Memory candidate was selected. This task intentionally excludes transcripts, tool output, repository contents, and credentials.",
+        "system": "",
+        "attempted_solution": "",
+        "outcome": "unknown",
+        "reference_kind": "none",
+        "reference": "",
+        "judge": {},
+        "tags": [
+          "agoragentic-memory",
+          "reviewed-candidate"
+        ],
+        "source_sessions": [],
+        "split": "train",
+        "origin": "redacted_memory_candidate",
+        "derived_from": "",
+        "skill_hint": "reviewed-procedure"
+      },
+      {
+        "id": "memory-fedcba9876543210fedcba9876543210",
+        "project": "agoragentic-memory",
+        "intent": "Refine the owner-reviewed procedure represented by skillopt_stage_73f53da3106ea951049a78d384a771ac.",
+        "context_excerpt": "A redacted, evidence-linked Memory candidate was selected. This task intentionally excludes transcripts, tool output, repository contents, and credentials.",
+        "system": "",
+        "attempted_solution": "",
+        "outcome": "unknown",
+        "reference_kind": "none",
+        "reference": "",
+        "judge": {},
+        "tags": [
+          "agoragentic-memory",
+          "reviewed-candidate"
+        ],
+        "source_sessions": [],
+        "split": "test",
+        "origin": "redacted_memory_candidate",
+        "derived_from": "",
+        "skill_hint": "reviewed-procedure"
+      }
+    ],
+    "provenance": {
+      "candidate_id": "skill_0123456789abcdef0123456789abcdef",
+      "candidate_hash": "sha256:900d45fb6f2266549b065532a0b0685e2186f29ac7c03d72a54eae0d8b72043a",
+      "source_claim_ids": [
+        "mem_0123456789abcdef0123456789abcdef",
+        "mem_fedcba9876543210fedcba9876543210"
+      ],
+      "evidence_ids": [
+        "evidence-1"
+      ],
+      "repo_ids": [
+        "rhein1/example"
+      ],
+      "redaction_state": "redacted_structured_only"
+    },
+    "baseline": {
+      "ref": "owner://baseline/example",
+      "hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "rollback": {
+      "ref": "owner://baseline/example",
+      "hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "action": "owner_mediated_restore_only"
+    },
+    "authority": {
+      "optimization": "not_invoked",
+      "adoption": "not_performed",
+      "publication": "not_performed",
+      "spend": "not_incurred"
+    }
+  },
+  "review_claim": {
+    "schema": "agoragentic.memory.skillopt-finalization-claim.v1",
+    "operation": "review",
+    "stage_id": "skillopt_stage_73f53da3106ea951049a78d384a771ac",
+    "request_id": "fixture-review-request-001",
+    "owner_review_id": "local-owner-review-001",
+    "reviewed_at": "2026-09-30T11:00:00.000Z",
+    "confirmation": "REVIEWED",
+    "stage_digest": "sha256:e827f01e14106e9839ae3eb1c1b9e88592b4a1ae44952a159ab884236bbbb805",
+    "task_digest": "sha256:9445bfadad53665ec5da345ede510b647882526df5797a306a4f6b3e50307c33",
+    "claim_boundary": "local_owner_assertion_pending_immutable_finalization"
+  },
+  "review": {
+    "schema": "agoragentic.memory.skillopt-review.v1",
+    "stage_id": "skillopt_stage_73f53da3106ea951049a78d384a771ac",
+    "request_id": "fixture-review-request-001",
+    "owner_review_id": "local-owner-review-001",
+    "reviewed_at": "2026-09-30T11:00:00.000Z",
+    "confirmation": "REVIEWED",
+    "task_digest": "sha256:9445bfadad53665ec5da345ede510b647882526df5797a306a4f6b3e50307c33",
+    "evaluation_receipt_digest": "sha256:f773baeee9db9066d3d2d4c5d4efbe09155671ca70c3c796e74d3d9920bbb2f8",
+    "review_claim_digest": "sha256:3d1f0834c5cdfca4fe41b74762abebfd7ca6190c6184f31cf85625cec2053b18",
+    "review_boundary": "local_owner_assertion_no_external_identity_verification"
+  },
+  "receipt": {
+    "schema": "agoragentic.memory.skillopt-evaluation-receipt.v1",
+    "receipt_id": "skillopt_eval_c380c1fdbf5da224238f2d9eb65d0336",
+    "stage_id": "skillopt_stage_73f53da3106ea951049a78d384a771ac",
+    "created_at": "2026-09-30T11:00:00.000Z",
+    "evaluation_state": "not_run",
+    "baseline": {
+      "ref": "owner://baseline/example",
+      "hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "candidate": {
+      "task_hash": "sha256:9445bfadad53665ec5da345ede510b647882526df5797a306a4f6b3e50307c33",
+      "stage_hash": "sha256:e827f01e14106e9839ae3eb1c1b9e88592b4a1ae44952a159ab884236bbbb805"
+    },
+    "provider": {
+      "state": "not_invoked",
+      "name": null,
+      "model": null
+    },
+    "spend": {
+      "state": "not_incurred",
+      "amount": 0,
+      "currency": null
+    },
+    "validation": {
+      "state": "not_run",
+      "harness_core": "not_invoked",
+      "held_out_split_present": true
+    },
+    "approval": {
+      "owner_reviewed_for_external_evaluation": true,
+      "adoption_approved": false,
+      "publication_approved": false,
+      "active": false
+    }
+  },
+  "stage_view": {
+    "stage_id": "skillopt_stage_73f53da3106ea951049a78d384a771ac",
+    "status": "reviewed_staged_not_active",
+    "created_at": "2026-09-30T10:00:00.000Z",
+    "stage_path": "/synthetic-memory/stage.json",
+    "candidate": {
+      "candidate_id": "skill_0123456789abcdef0123456789abcdef",
+      "candidate_hash": "sha256:900d45fb6f2266549b065532a0b0685e2186f29ac7c03d72a54eae0d8b72043a",
+      "trigger_terms": [
+        "review"
+      ],
+      "source_claim_ids": [
+        "mem_0123456789abcdef0123456789abcdef",
+        "mem_fedcba9876543210fedcba9876543210"
+      ],
+      "evidence_ids": [
+        "evidence-1"
+      ],
+      "repo_ids": [
+        "rhein1/example"
+      ]
+    },
+    "redaction": {
+      "state": "redacted_structured_only",
+      "excluded_material": [
+        "transcript",
+        "tool_output",
+        "repository_content",
+        "credentials"
+      ]
+    },
+    "baseline": {
+      "ref": "owner://baseline/example",
+      "hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "rollback": {
+      "ref": "owner://baseline/example",
+      "hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "action": "owner_mediated_restore_only"
+    },
+    "review": {
+      "status": "owner_reviewed",
+      "owner_review_id": "local-owner-review-001",
+      "reviewed_at": "2026-09-30T11:00:00.000Z",
+      "task_path": "/synthetic-memory/task.json",
+      "task_digest": "sha256:9445bfadad53665ec5da345ede510b647882526df5797a306a4f6b3e50307c33",
+      "evaluation_receipt_path": "/synthetic-memory/receipt.json",
+      "evaluation_receipt_digest": "sha256:f773baeee9db9066d3d2d4c5d4efbe09155671ca70c3c796e74d3d9920bbb2f8",
+      "eligible_for_external_evaluation": true,
+      "active": false
+    },
+    "rollback_record": null,
+    "evaluation_receipt": {
+      "evaluation_state": "not_run",
+      "provider_state": "not_invoked",
+      "validation_state": "not_run",
+      "spend_state": "not_incurred",
+      "adoption_approved": false,
+      "eligible_for_external_evaluation": true
+    },
+    "eligibility": {
+      "external_evaluation": true,
+      "active": false,
+      "reason": null
+    },
+    "authority": {
+      "optimization": "not_invoked",
+      "adoption": "not_performed",
+      "publication": "not_performed",
+      "spend": "not_incurred"
+    }
+  },
+  "fixture_provenance": {
+    "kind": "synthetic_artifacts_generated_by_pinned_memory_source",
+    "source_commit": "3c2f17d82476d22996377ea7c07cb601ed625483",
+    "bridge_git_blob": "501d0fbb6d72255e8d9073ed7664fc6a13113f5e",
+    "canonical_git_blob": "b44283a945a01826c7e863e7bb8fa4bb3714b007",
+    "path_projection": "absolute scratch paths replaced; all digest-bound artifacts unchanged",
+    "live_authority": false
+  }
+}
