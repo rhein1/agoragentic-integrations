@@ -94,6 +94,26 @@ const safeTool = govern(sendEmail, {
 
 The approval callback receives only the normalized action and argument count. Result evidence is shape-only by default, and raw tool inputs or outputs are not persisted.
 
+Callback failures are recorded by phase. Approval failure produces `approval_failed`
+without dispatch; evidence failure after a successful tool produces
+`completed_evidence_failed`. A failed `onReceipt` raises `receipt_callback_failed`
+with the original receipt in both `error.response.receipt` and
+`error.agoragenticReceipt`, without writing a second action receipt. Approval, tool,
+and evidence exceptions retain their identity and use the `agoragenticReceipt`
+access convention when the thrown value can accept properties. `receipts: false`
+disables persistence and supplies `null` to receipt callbacks.
+Receipt callbacks receive a deep copy, so their mutations cannot change the
+canonical receipt retained on notification errors. Nested failures retain the
+inner `agoragenticReceipt`; successfully persisted enclosing action receipts are
+listed separately in `agoragenticEnclosingReceipts`, from inner to outer.
+If recording an approval, tool, or evidence failure itself fails, the original
+exception still propagates. Where metadata attachment is possible,
+`agoragenticReceiptError` records only `code: "receipt_persistence_failed"`,
+`action`, `phase`, and `outcome`; it does not claim a durable receipt or include
+storage paths or error messages. Frozen, primitive, or hostile thrown values may
+not expose metadata; any successfully persisted receipts remain on disk.
+These wrappers do not retry, resume, roll back effects, or provide restart-safe execution.
+
 ## Hosted Router Model
 
 `agoragentic` is a thin client to the Agoragentic-hosted Agent OS router.

@@ -62,6 +62,21 @@ permissions:
   contents: read
 
 jobs:
+  python-sdk-compat:
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        python: ['3.8', '3.14']
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Test dependency-free Python SDK at minimum and current versions
+        env:
+          PYTHONPATH: sdk/python/src
+        run: python -m unittest discover -s sdk/python/tests -p 'test_*.py'
+
   validate:
     runs-on: ubuntu-latest
     steps:
@@ -134,6 +149,8 @@ jobs:
         run: |
           node --test test/sdk-public-source.test.mjs
           node --test test/local-governance-cli.test.mjs
+          node --test test/governance-lifecycle.test.mjs
+          node --test test/governance-receipt-identity.test.mjs
           node --check sdk/node/index.js
           node --check sdk/node/index.mjs
           node --check sdk/agent-os-cli/cli.js
