@@ -24,6 +24,89 @@ export function testLeaseToken(label = 'lease') {
   return `lease_${label}_${'x'.repeat(48)}`;
 }
 
+export async function createStablePostgresClock(rawPool, schemaName, options = {}) {
+  if (!rawPool || typeof rawPool.connect !== 'function') throw new TypeError('rawPool is required');
+  if (typeof schemaName !== 'string' || !/^[a-z_][a-z0-9_]*$/.test(schemaName)) {
+    throw new TypeError('schemaName must be a lowercase PostgreSQL identifier');
+  }
+  if (!options || typeof options !== 'object' || Array.isArray(options)) {
+    throw new TypeError('clock options must be an object');
+  }
+  const advanceClock = options.advanceClock ?? true;
+  if (typeof advanceClock !== 'boolean') throw new TypeError('advanceClock must be a boolean');
+  const logicalStart = options.logicalStart ?? null;
+  if (logicalStart !== null
+    && (typeof logicalStart !== 'string'
+      || !Number.isFinite(Date.parse(logicalStart))
+      || new Date(Date.parse(logicalStart)).toISOString() !== logicalStart)) {
+    throw new TypeError('logicalStart must be a canonical ISO timestamp');
+  }
+  const schema = `"${schemaName}"`;
+  await rawPool.query(`CREATE TABLE ${schema}.managed_test_clock (
+    singleton boolean PRIMARY KEY CHECK (singleton),
+    real_started_at timestamptz NOT NULL,
+    logical_started_at timestamptz NOT NULL,
+    advance_clock boolean NOT NULL
+  )`);
+  await rawPool.query(`WITH current_clock AS (
+    SELECT pg_catalog.clock_timestamp() AS real_started_at
+  )
+  INSERT INTO ${schema}.managed_test_clock
+    (singleton, real_started_at, logical_started_at, advance_clock)
+  SELECT true, real_started_at,
+    COALESCE($1::timestamptz,
+      date_trunc('day', real_started_at AT TIME ZONE 'UTC')
+        AT TIME ZONE 'UTC' + interval '12 hours'),
+    $2
+  FROM current_clock`, [logicalStart, advanceClock]);
+  await rawPool.query(`CREATE FUNCTION ${schema}.clock_timestamp()
+    RETURNS timestamptz
+    LANGUAGE sql VOLATILE
+    AS $fixture_clock$
+      SELECT logical_started_at
+        + CASE WHEN advance_clock
+          THEN (pg_catalog.clock_timestamp() - real_started_at)
+          ELSE interval '0'
+          END
+        FROM ${schema}.managed_test_clock
+       WHERE singleton
+    $fixture_clock$`);
+  const started = await rawPool.query(
+    `SELECT real_started_at, logical_started_at, advance_clock
+       FROM ${schema}.managed_test_clock WHERE singleton`,
+  );
+  if (started.rowCount !== 1) throw new Error('stable PostgreSQL test clock was not initialized');
+  const realStartedAt = Date.parse(started.rows[0].real_started_at);
+  const logicalStartedAt = Date.parse(started.rows[0].logical_started_at);
+  if (!Number.isFinite(realStartedAt) || !Number.isFinite(logicalStartedAt)) {
+    throw new TypeError('stable PostgreSQL test clock returned invalid timestamps');
+  }
+  const monotonicStartedAt = performance.now();
+  const clock = () => new Date(logicalStartedAt + (advanceClock
+    ? performance.now() - monotonicStartedAt
+    : 0));
+  const connect = async () => {
+    const client = await rawPool.connect();
+    try {
+      await client.query(`SET search_path TO ${schema}, pg_catalog`);
+      return client;
+    } catch (error) {
+      client.release();
+      throw error;
+    }
+  };
+  const pool = {
+    async connect() { return connect(); },
+    async query(...args) {
+      const client = await connect();
+      try { return await client.query(...args); }
+      finally { client.release(); }
+    },
+    async end() { return rawPool.end(); },
+  };
+  return Object.freeze({ advanceClock, clock, pool, realStartedAt, logicalStartedAt });
+}
+
 export class TestProvider extends RiskForkProvider {
   constructor(id = 'local-test-provider') {
     super({

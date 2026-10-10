@@ -18,6 +18,7 @@ import {
   OTHER_TOKEN,
   TestProvider,
   TEST_TOKEN,
+  createStablePostgresClock,
 } from './helpers.mjs';
 
 const connectionString = process.env.RISK_FORK_MANAGED_TEST_POSTGRES_URL ?? null;
@@ -51,20 +52,22 @@ const scopes = [
   'worker:recovery:claim', 'worker:recovery:write',
 ];
 
-async function fixture(t) {
+async function fixture(t, clockOptions = {}) {
   const schemaName = `risk_fork_audit_projection_${randomUUID().replaceAll('-', '')}`;
   const schema = quotePostgresAuthorityIdentifier(schemaName);
-  const pool = await createPostgresAuthorityPool({
+  const rawPool = await createPostgresAuthorityPool({
     connectionString,
     requireTls: false,
     maxConnections: 8,
     applicationName: 'risk-fork-managed-audit-projection-test',
   });
   t.after(async () => {
-    try { await pool.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`); }
-    finally { await pool.end(); }
+    try { await rawPool.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`); }
+    finally { await rawPool.end(); }
   });
-  await migrateManagedServicePostgres({ pool, schemaName, requireTls: false });
+  await migrateManagedServicePostgres({ pool: rawPool, schemaName, requireTls: false });
+  const stableClock = await createStablePostgresClock(rawPool, schemaName, clockOptions);
+  const pool = stableClock.pool;
   await pool.query(`INSERT INTO ${schema}.managed_tenants
     (tenant_id, status, daily_budget_micros, max_invocation_cost_micros, max_concurrent_invocations)
     VALUES ('tenant_alpha', 'active', 1000000, 500000, 16),
@@ -91,7 +94,7 @@ async function fixture(t) {
     verify_cleanup_evidence: async () => true,
     verify_recovery_absence: async () => false,
   }]);
-  const authenticator = createManagedAuthenticator({ store });
+  const authenticator = createManagedAuthenticator({ store, clock: stableClock.clock });
   const refs = ['rfi_Z', 'rfi_a', 'rfi_z', 'rfi_A', 'rfi_zz', 'rfi_other'];
   const controlPlane = createManagedRiskForkControlPlane({
     config: createManagedServiceConfig({
@@ -102,11 +105,13 @@ async function fixture(t) {
     store,
     providerRegistry,
     requirePrincipal: authenticator.requirePrincipal,
+    clock: stableClock.clock,
     invocationRef: () => refs.shift(),
   });
   const principal = await authenticator.authenticate(`Bearer ${TEST_TOKEN}`, 'invocations:write');
   const otherPrincipal = await authenticator.authenticate(`Bearer ${OTHER_TOKEN}`, 'invocations:write');
-  return { controlPlane, otherPrincipal, pool, principal, schema, schemaName, store };
+  const leaseMs = 120_000;
+  return { controlPlane, leaseMs, otherPrincipal, pool, principal, schema, schemaName, store };
 }
 
 async function admit(fixture, idempotencyKey, principal = fixture.principal) {
@@ -161,7 +166,7 @@ test('PostgreSQL audit windows verify exact continuation and reject checkpoint/h
       invocation_ref: ref,
       lease_token: `lease_audit_projection_${'x'.repeat(48)}`,
       worker_id: 'audit_projection_worker',
-      lease_ms: 120_000,
+      lease_ms: f.leaseMs,
     });
     const second = await f.controlPlane.readAuditWindow(f.principal, ref, {
       after_sequence: first.next_after_sequence,
@@ -212,7 +217,7 @@ test('PostgreSQL audit window snapshot is repeatable while a later append commit
             // pinned its snapshot, before it queries following audit events.
             await f.controlPlane.claimExecution(f.principal, { invocation_ref: ref,
               lease_token: `lease_audit_snapshot_${'x'.repeat(48)}`,
-              worker_id: 'audit_snapshot_worker', lease_ms: 120_000 });
+              worker_id: 'audit_snapshot_worker', lease_ms: f.leaseMs });
             committedDuringRead = true;
           }
           return result;
@@ -269,3 +274,25 @@ test('PostgreSQL audit projection is tenant-scoped and revocation takes effect b
       (error) => ['AUTHENTICATION_FAILED', 'AUTHORIZATION_DENIED'].includes(error.code),
     );
   });
+
+for (const [label, logicalStart, expectedCode] of [
+  ['before midnight', '2026-09-05T23:57:59.999Z', null],
+  ['at midnight', '2026-09-05T23:58:00.000Z', null],
+  ['after midnight', '2026-09-05T23:58:00.001Z', 'LEASE_CROSSES_BUDGET_DAY'],
+]) {
+  test(`PostgreSQL execution lease boundary is exact ${label}`, { skip: skipReason }, async (t) => {
+    const f = await fixture(t, { logicalStart, advanceClock: false });
+    const admitted = await admit(f, `audit-pg-budget-boundary-${label.replaceAll(' ', '-')}`);
+    const claim = () => f.controlPlane.claimExecution(f.principal, {
+      invocation_ref: admitted.invocation.invocation_ref,
+      lease_token: `lease_audit_boundary_${label.replaceAll(' ', '_')}_${'x'.repeat(48)}`,
+      worker_id: `audit_boundary_${label.replaceAll(' ', '_')}`,
+      lease_ms: f.leaseMs,
+    });
+    if (expectedCode === null) {
+      await claim();
+    } else {
+      await assert.rejects(claim(), (error) => error.code === expectedCode);
+    }
+  });
+}
