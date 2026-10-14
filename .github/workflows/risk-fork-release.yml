@@ -117,7 +117,7 @@ jobs:
           --record "${{ runner.temp }}/risk-fork-client-verification-${{ runner.os }}.json"
       - name: Upload immutable candidate files and Linux conformance record
         if: runner.os == 'Linux'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: risk-fork-release-candidate-${{ env.RISK_FORK_RELEASE_SOURCE_SHA }}
           if-no-files-found: error
@@ -129,7 +129,7 @@ jobs:
             ${{ runner.temp }}/risk-fork-release-output/*/risk-fork-hackathon-demo-*.spdx.json
             ${{ runner.temp }}/risk-fork-release-output/*/risk-fork-hackathon-demo-*.build.json
       - name: Upload platform MCP client-verification record
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: risk-fork-client-verification-${{ runner.os }}-${{ env.RISK_FORK_RELEASE_SOURCE_SHA }}
           if-no-files-found: error

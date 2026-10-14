@@ -476,7 +476,7 @@ jobs:
           npm run test:cli
       - name: Upload conformance evidence
         if: always()
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: adapter-conformance-${{ github.sha }}
           path: ${{ runner.temp }}/adapter-conformance-report.json
