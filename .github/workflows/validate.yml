@@ -85,7 +85,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Node
-        uses: actions/setup-node@v7.0.0
+        uses: actions/setup-node@v7.1.0
         with:
           node-version: '20'
 
@@ -218,7 +218,7 @@ jobs:
           npm pack --dry-run
 
       - name: Setup Node 24 for n8n toolchain
-        uses: actions/setup-node@v7.0.0
+        uses: actions/setup-node@v7.1.0
         with:
           node-version: '24'
 
@@ -418,7 +418,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7.0.1
       - name: Setup Node 24 for native TypeScript contract tests
-        uses: actions/setup-node@v7.0.0
+        uses: actions/setup-node@v7.1.0
         with:
           node-version: '24'
       - name: Test payment safety contracts
@@ -441,7 +441,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7.0.1
       - name: Setup Node 24 for TypeScript syntax checks
-        uses: actions/setup-node@v7.0.0
+        uses: actions/setup-node@v7.1.0
         with:
           node-version: '24'
       - name: Setup Python
